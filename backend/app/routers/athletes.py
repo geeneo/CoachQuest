@@ -102,7 +102,9 @@ def athlete_summary(athlete: str, user: User = Depends(current_user), db: DbSess
     a = db.get(User, athlete_id)
     out = {"id": a.id, "display_name": a.display_name, "scopes": sorted(scopes), "is_me": a.id == user.id}
     out.update(profile_out(a, scopes))
-    conns = db.scalars(select(Connection).where(Connection.user_id == a.id)).all()
+    conns = db.scalars(
+        select(Connection).where(Connection.user_id == a.id, Connection.provider.in_(("strava", "garmin")))
+    ).all()
     out["sources"] = [{"provider": c.provider, "last_sync_at": c.last_sync_at} for c in conns]
     return out
 

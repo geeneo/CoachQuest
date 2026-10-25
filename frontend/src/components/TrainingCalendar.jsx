@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
@@ -40,6 +40,13 @@ export default function TrainingCalendar({ id, isMe }) {
   const days = data ? shownDates.map((d) => data.days.find((x) => x.date === d)).filter(Boolean) : [];
   const allWorkouts = data ? data.days.flatMap((d) => d.workouts) : [];
   const current = allWorkouts.find((w) => w.id === selected);
+  // Sending happens just after a change is saved: look again shortly while anything is still on its way.
+  const sending = allWorkouts.some((w) => w.delivery.some((d) => d.state === "queued" || d.state === "running"));
+  useEffect(() => {
+    if (!sending) return;
+    const timer = setTimeout(cal.reload, 3000);
+    return () => clearTimeout(timer);
+  }, [sending, cal.data, cal.reload]);
 
   const run = async (fn) => {
     setError(null);
@@ -187,6 +194,7 @@ export default function TrainingCalendar({ id, isMe }) {
                   {duration(w.estimate.duration_s)} · TSS {w.estimate.tss ?? "–"}
                 </span>
                 <span className={`status ${STATUS[w.status].cls}`}>{STATUS[w.status].label}</span>
+                {w.delivery.length > 0 && <DeliveryBadge delivery={w.delivery} />}
                 {view === "day" && <WorkoutChart blocks={w.blocks} height={60} compact />}
               </button>
             ))}
@@ -206,6 +214,7 @@ export default function TrainingCalendar({ id, isMe }) {
           edit={edit}
           remove={remove}
           onError={setError}
+          reload={cal.reload}
           close={() => setSelected(null)}
         />
       )}
@@ -236,13 +245,21 @@ function PlatformLine({ platforms, isMe }) {
         .filter((p) => p.status !== "not_available")
         .map((p) => `${p.name} ${text[p.status]}`)
         .join(" · ")}
-      . Workouts are not sent to Zwift or MyWhoosh automatically yet; download them as .zwo files.{" "}
+      .{" "}
+      {platforms.some((p) => p.auto_sync)
+        ? "Scheduled workouts are sent automatically to: " +
+          platforms
+            .filter((p) => p.auto_sync)
+            .map((p) => p.name)
+            .join(", ") +
+          ". "
+        : "Workouts aren't sent anywhere automatically; download them as .zwo files, or connect Intervals.icu. "}
       {isMe && <Link to="/connections">Connected platforms</Link>}
     </p>
   );
 }
 
-function WorkoutDetail({ w, ftp, id, edit, remove, onError, close }) {
+function WorkoutDetail({ w, ftp, id, edit, remove, onError, close, reload }) {
   const est = w.estimate;
   const act = w.actual;
   const plannedW = est.avg_watts;
@@ -314,8 +331,9 @@ function WorkoutDetail({ w, ftp, id, edit, remove, onError, close }) {
             ? `Matched to: ${act.activities.map((a) => `${a.name} (${a.source})`).join(", ")}. `
             : "Ridden. Ride details are shown only with the Activities permission. "}
         {w.assigned_by && `Assigned by ${w.assigned_by}. `}
-        Delivery: manual download (.zwo) — not sent to any platform.
+        {w.delivery.length ? "" : "Delivery: download (.zwo) — not sent to any platform."}
       </p>
+      {w.delivery.length > 0 && <DeliveryList w={w} id={id} onError={onError} reload={reload} />}
       <div className="row wrap">
         <button
           className="btn small primary"
@@ -349,5 +367,59 @@ function WorkoutDetail({ w, ftp, id, edit, remove, onError, close }) {
         </button>
       </div>
     </section>
+  );
+}
+
+const DELIVERY = {
+  sent: { icon: "✓", label: "Sent" },
+  queued: { icon: "…", label: "Queued" },
+  running: { icon: "…", label: "Sending" },
+  retrying: { icon: "↻", label: "Retrying" },
+  failed: { icon: "✗", label: "Failed" },
+  blocked: { icon: "⚠", label: "Reconnect needed" },
+};
+const PLATFORM = { intervals_icu: "Intervals.icu", zwift: "Zwift", mywhoosh: "MyWhoosh" };
+
+function DeliveryBadge({ delivery }) {
+  return (
+    <span className="delivery small">
+      {delivery.map((d) => (
+        <span key={d.provider} className={`delivery-${d.state}`} title={d.message || ""}>
+          {DELIVERY[d.state]?.icon} {PLATFORM[d.provider] || d.provider}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function DeliveryList({ w, id, onError, reload }) {
+  const retry = async (jobId) => {
+    try {
+      await api(`/api/athletes/${id}/sync/${jobId}/retry`, { method: "POST" });
+      reload();
+    } catch (err) {
+      onError(err.message);
+    }
+  };
+  return (
+    <ul className="delivery-list small">
+      {w.delivery.map((d) => (
+        <li key={d.provider}>
+          {DELIVERY[d.state]?.icon} {PLATFORM[d.provider] || d.provider}: {DELIVERY[d.state]?.label}
+          {d.action === "delete" ? " (removing)" : ""}
+          {d.at ? ` · ${new Date(d.at.endsWith("Z") ? d.at : d.at + "Z").toLocaleString()}` : ""}
+          {d.message && <span className="muted"> — {d.message}</span>}
+          {d.state === "blocked" && <Link to="/connections#platforms"> Reconnect</Link>}
+          {d.state === "failed" && d.job_id && (
+            <button className="btn small" onClick={() => retry(d.job_id)}>
+              Retry
+            </button>
+          )}
+          {d.provider === "intervals_icu" && d.state === "sent" && (
+            <span className="muted"> — appears in Zwift if Zwift is linked in Intervals.icu</span>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -22,4 +22,4 @@ def options(conn: Connection) -> dict[str, bool]:
 def hidden_sources(db: DbSession, user_id: int, kind: str) -> set[str]:
     """Providers whose `kind` data the user switched off."""
     conns = db.scalars(select(Connection).where(Connection.user_id == user_id)).all()
-    return {c.provider for c in conns if kind in KINDS[c.provider] and not options(c)[kind]}
+    return {c.provider for c in conns if kind in KINDS.get(c.provider, ()) and not options(c)[kind]}

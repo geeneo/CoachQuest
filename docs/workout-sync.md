@@ -397,9 +397,92 @@ again against the code before building.
   timezones, access control, rescheduling, statuses, plan ZIP and
   platforms.
 
+### Phase 2 — done (25 Oct 2026)
+
+- **Intervals.icu investigation:** Intervals.icu has a documented API and
+  is an approved Zwift Training API partner. Workouts planned on an
+  athlete's Intervals.icu calendar are uploaded to Zwift (the coming week,
+  under Workouts > Custom > Intervals.icu) once the athlete links Zwift in
+  Intervals.icu. This gives CoachQuest an authorised automatic route to
+  Zwift without its own Zwift partnership. Sources:
+  - [Intervals.icu and Zwift integration](https://forum.intervals.icu/t/intervals-icu-and-zwift-integration-is-live/81764)
+  - [Intervals.icu OAuth support](https://forum.intervals.icu/t/intervals-icu-oauth-support/2759)
+  - [Uploading planned workouts](https://forum.intervals.icu/t/uploading-planned-workouts-to-intervals-icu/63624)
+  - [API cookbook](https://forum.intervals.icu/t/intervals-icu-api-integration-cookbook/80090)
+- **Intervals.icu adapter** (`backend/app/delivery/intervals_icu.py`):
+  - Connects through OAuth with the `CALENDAR:WRITE` scope.
+  - Sends each workout as a .zwo file to the events bulk upsert, keyed by
+    our own `external_id` ("cq-<id>"). Removals use the bulk delete.
+  - Disconnecting revokes the app's access through `disconnect-app`.
+  - The token is encrypted at rest and never sent to the browser.
+  - Intervals.icu requires OAuth for apps, so personal API keys aren't
+    accepted.
+- **Provider adapters** (`backend/app/delivery/`): one interface (`upsert`,
+  `delete`, `revoke`), with errors classified as transient, rate-limited,
+  auth failed, forbidden, rejected or not supported.
+  - Zwift (direct) and MyWhoosh adapters exist, but make no calls and enable
+    no operations.
+  - MyWhoosh is behind `MYWHOOSH_EXPERIMENTAL`. No reverse-engineered login
+    is implemented.
+- **Sync engine** (`backend/app/sync_engine.py`, tables `sync_jobs`,
+  `sync_log` and `external_workouts`):
+  - **Triggers:** assign, change, reschedule, skip or cancel, remove,
+    connect or reconnect, switching auto-send on, and manual retry.
+  - **Queue:** one open job per workout and platform; a burst of edits
+    sends once.
+  - **Duplicates:** the stable external id prevents them, and a content hash
+    skips unchanged sends.
+  - **Retries:** transient errors back off 1, 2, 4 … 60 minutes and give up
+    after 6 tries. Rate limits wait as long as the platform asks, without
+    using up attempts.
+  - **Lost authorisation (401/403):** the job is blocked and the connection
+    marked "Needs attention". It isn't retried until the athlete
+    reconnects; reconnecting re-sends the blocked jobs. Rejected workouts
+    wait for a change or a Retry.
+  - **Account change:** linking a different Intervals.icu account sends
+    everything again.
+  - **When it runs:** right after each change, and every minute from the
+    scheduler. Jobs left "running" by a restart are re-queued at start-up.
+  - **Scope:** only workouts from today on are sent. Workouts already sent
+    stay in step even if auto-send is switched off later.
+- **History and errors in the UI:**
+  - Connections → Connected platforms → Workout delivery shows open jobs
+    (with Retry or "reconnect") and the attempt history.
+  - Each calendar workout shows where it was sent (✓, retrying, failed,
+    reconnect).
+  - Coaches with Training plans access can view the history.
+- **Settings:** `INTERVALS_CLIENT_ID` and `INTERVALS_CLIENT_SECRET` (or Admin
+  → Settings → Intervals.icu). `INTERVALS_BASE_URL` exists only for
+  development against `scripts/fake_intervals.py`.
+- **Tests:** `backend/tests/test_sync.py` runs against a mocked Intervals.icu
+  and makes no real calls. It covers:
+  - OAuth (state, missing scope, not configured) and that tokens never
+    reach the browser.
+  - Upsert, update in place, unchanged changes, cancel and delete,
+    coalescing, and past workouts.
+  - Backoff and giving up, network errors, rate limits, and 401 blocking
+    until reconnect.
+  - Rejected workouts, disconnect and revocation, account change, coach
+    access, the Zwift and MyWhoosh adapters doing nothing, and account
+    deletion.
+
+### Setting up Intervals.icu (once, by the admin)
+
+1. Sign in to intervals.icu and apply for an app at
+   https://intervals.icu/oauth/apply. Use the redirect URL
+   `https://coachquest.mmc24.com/api/connections/intervals/callback`.
+2. Once the app is approved, copy the Client ID and secret from
+   intervals.icu/settings/apps into Admin → Settings → Intervals.icu.
+3. Each athlete:
+   - Clicks Connect on Intervals.icu and ticks "Auto-send workouts".
+   - In Intervals.icu, opens Settings → Zwift and links their Zwift
+     account.
+   - Keeps their FTP the same in CoachQuest, Intervals.icu and Zwift.
+
 ### Still depends on others
 
 - **Zwift:** Training API partner approval (Mode A).
 - **MyWhoosh:** an official API, or a check of the community API's terms.
 - **Garmin:** the official developer program, for sending workouts.
-- **Intervals.icu:** Phase 2 investigation.
+- **Intervals.icu:** approval of CoachQuest's OAuth app (until then
+  "Connect" can't complete).

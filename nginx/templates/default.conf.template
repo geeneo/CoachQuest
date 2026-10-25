@@ -95,8 +95,8 @@ server {
         proxy_pass http://cq_api;
     }
 
-    # ---- Strava sends the browser back here; without a session, show a page, not JSON ----
-    location = /api/connections/strava/callback {
+    # ---- Strava and Intervals.icu send the browser back here; without a session, show a page, not JSON ----
+    location ~ ^/api/connections/(strava|intervals)/callback$ {
         auth_request /_auth;
         auth_request_set $cq_user_id $upstream_http_x_auth_user_id;
         error_page 401 = @strava_no_session;

@@ -1313,3 +1313,49 @@ table.platforms td:first-child {
     min-height: 0;
   }
 }
+
+/* ---- Workout delivery ---- */
+.delivery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.delivery-sent {
+  color: var(--accent);
+}
+.delivery-failed,
+.delivery-blocked {
+  color: var(--danger);
+}
+.delivery-retrying,
+.delivery-queued,
+.delivery-running {
+  color: var(--warn);
+}
+.delivery-list {
+  padding-left: 1rem;
+}
+.delivery-list .btn,
+.sync-job .btn {
+  margin-left: 0.5rem;
+}
+.sync-history {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.sync-history h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.sync-open {
+  padding-left: 1rem;
+}
+.sync-job.failed,
+.sync-job.blocked {
+  color: var(--danger);
+}
+.sync-job.failed .muted,
+.sync-job.blocked .muted {
+  color: var(--muted);
+}

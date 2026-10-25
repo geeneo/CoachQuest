@@ -70,6 +70,21 @@ EDITABLE: dict[str, Editable] = {
         help="The 40-character Client Secret. Not 'Your Access Token' or 'Your Refresh Token'.",
         error="Client secret should be the 40-character Client Secret from your Strava API page.",
     ),
+    "intervals_client_id": Editable(
+        "Client ID",
+        "Intervals.icu",
+        pattern=r"[A-Za-z0-9_\-]{1,64}",
+        help="Lets athletes send scheduled workouts to Intervals.icu, which forwards them to Zwift. Apply for an app "
+        "at intervals.icu/oauth/apply, then copy the Client ID from intervals.icu/settings/apps. Redirect URL: "
+        "<your address>/api/connections/intervals/callback.",
+    ),
+    "intervals_client_secret": Editable(
+        "Client secret",
+        "Intervals.icu",
+        secret=True,
+        pattern=r"\S{8,200}",
+        help="From the same Manage App page on Intervals.icu.",
+    ),
     "registration_mode": Editable(
         "Registration",
         "Accounts",

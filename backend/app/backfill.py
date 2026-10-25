@@ -109,7 +109,7 @@ def refresh(db: DbSession, conn: Connection) -> dict:
 def refresh_outdated(db: DbSession) -> list[int]:
     """At startup: start a one-time refresh for connections imported before the current fields existed."""
     started = []
-    for conn in db.scalars(select(Connection)).all():
+    for conn in db.scalars(select(Connection).where(Connection.provider.in_(("strava", "garmin")))).all():
         if (conn.options or {}).get("fields_version", 0) >= FIELDS_VERSION:
             continue
         try:

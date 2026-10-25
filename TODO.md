@@ -194,7 +194,7 @@
         TSS/IF estimate and preview chart), the training calendar (built on
         the existing plan tracker), ZWO and plan-ZIP export, and the
         Settings → Connected Platforms page.
-      - [ ] **Phase 2 — integration framework:** provider adapters, a
+      - [x] **Phase 2 — integration framework:** provider adapters, a
         background sync queue with retries and history, sync errors shown
         to the athlete, Intervals.icu investigation, tests against mocked
         platform APIs.

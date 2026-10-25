@@ -1,4 +1,4 @@
-"""Link and unlink Strava and Garmin."""
+"""Link and unlink Strava and Garmin (data sources) and Intervals.icu (workout delivery)."""
 
 import logging
 import secrets
@@ -11,11 +11,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import backfill, runtime, sync_options
+from .. import backfill, runtime, sync_engine, sync_options
 from ..db import Activity, Connection, OAuthState, SessionLocal, User, UserStravaApp, WellnessDay, get_db, utcnow
+from ..delivery import intervals_icu
 from ..deps import current_user
 from ..providers import garmin, strava
-from ..security import encrypt_json
+from ..security import decrypt_json, encrypt_json
 
 log = logging.getLogger("coachquest.connections")
 
@@ -49,7 +50,9 @@ async def run_sync(conn_id: int) -> None:
 
 @router.get("")
 def list_connections(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    conns = db.scalars(select(Connection).where(Connection.user_id == user.id)).all()
+    conns = db.scalars(
+        select(Connection).where(Connection.user_id == user.id, Connection.provider.in_(PROVIDERS))
+    ).all()
     own = strava.own_app(db, user.id)
     return {
         "connections": [conn_out(c) for c in conns],
@@ -114,7 +117,12 @@ async def strava_callback(
     db: DbSession = Depends(get_db),
 ):
     saved = db.get(OAuthState, state) if state else None
-    if saved is None or saved.user_id != user.id or saved.created_at < utcnow() - timedelta(minutes=15):
+    if (
+        saved is None
+        or saved.user_id != user.id
+        or saved.provider != "strava"
+        or saved.created_at < utcnow() - timedelta(minutes=15)
+    ):
         return RedirectResponse("/connections?error=state", status_code=303)
     db.delete(saved)
     db.commit()
@@ -132,6 +140,80 @@ async def strava_callback(
         return RedirectResponse(f"/connections?{urlencode(query)}", status_code=303)
     background.add_task(run_sync, conn.id)
     return RedirectResponse("/connections?connected=strava", status_code=303)
+
+
+# ---- Intervals.icu (workout delivery, see delivery/intervals_icu.py) ----
+
+
+@router.post("/intervals/authorize")
+def intervals_authorize(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    if not intervals_icu.configured():
+        raise HTTPException(status_code=503, detail="Intervals.icu isn't set up on this server yet (Admin > Settings)")
+    db.execute(delete(OAuthState).where(OAuthState.created_at < utcnow() - timedelta(minutes=15)))
+    state = secrets.token_urlsafe(24)
+    db.add(OAuthState(state=state, user_id=user.id, provider="intervals_icu"))
+    db.commit()
+    return {"url": intervals_icu.authorize_url(state)}
+
+
+@router.get("/intervals/callback")
+async def intervals_callback(
+    background: BackgroundTasks,
+    state: str = "",
+    code: str = "",
+    error: str = "",
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    saved = db.get(OAuthState, state) if state else None
+    if (
+        saved is None
+        or saved.user_id != user.id
+        or saved.provider != "intervals_icu"
+        or saved.created_at < utcnow() - timedelta(minutes=15)
+    ):
+        return RedirectResponse("/connections?error=state#platforms", status_code=303)
+    db.delete(saved)
+    db.commit()
+    if error or not code:
+        return RedirectResponse("/connections?error=intervals_denied#platforms", status_code=303)
+    try:
+        token = await intervals_icu.exchange_code(code)
+    except intervals_icu.LinkError as exc:
+        log.warning("Intervals.icu link failed for user %s: %s", user.id, exc)
+        query = {"error": "intervals", "detail": str(exc)[:200]}
+        return RedirectResponse(f"/connections?{urlencode(query)}#platforms", status_code=303)
+    conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "intervals_icu"))
+    if conn is None:
+        conn = Connection(user_id=user.id, provider="intervals_icu", token_enc="")
+        db.add(conn)
+    if conn.external_id and token["athlete_id"] and conn.external_id != token["athlete_id"]:
+        sync_engine.forget_sent(db, user.id, "intervals_icu")  # a different Intervals.icu account
+    conn.external_id = token["athlete_id"] or None
+    conn.token_enc = encrypt_json({"access_token": token["access_token"], "scope": token["scope"]})
+    conn.status, conn.last_error = "active", None
+    db.commit()
+    if "intervals_icu" in sync_engine.auto_providers(db, user):
+        sync_engine.send_upcoming(db, user, "intervals_icu", "reconnected")
+        background.add_task(sync_engine.run_due)
+    return RedirectResponse("/connections?connected=intervals#platforms", status_code=303)
+
+
+@router.delete("/intervals")
+async def intervals_unlink(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Stop sending workouts. Workouts already on the Intervals.icu calendar stay there."""
+    conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "intervals_icu"))
+    if conn is None:
+        raise HTTPException(status_code=404, detail="Not connected")
+    await intervals_icu.IntervalsIcu().revoke(decrypt_json(conn.token_enc))
+    db.delete(conn)
+    db.commit()
+    sync_engine.disconnected(db, user.id, "intervals_icu")
+    prefs = dict(user.platform_prefs or {})
+    prefs["auto"] = {**(prefs.get("auto") or {}), "intervals_icu": False}
+    user.platform_prefs = prefs
+    db.commit()
+    return {"ok": True}
 
 
 class GarminLogin(BaseModel):

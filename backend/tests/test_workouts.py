@@ -195,7 +195,7 @@ def test_coach_assigns_and_athlete_sees(make_user):
     r = coach.post(f"/api/athletes/{athlete_id}/workouts", json={"day": day.isoformat(), "template_id": tpl["id"]})
     assert r.status_code == 200, r.text
     sw = r.json()
-    assert sw["status"] == "planned" and sw["assigned_by"] == "Coach" and sw["delivery"] == "manual"
+    assert sw["status"] == "planned" and sw["assigned_by"] == "Coach" and sw["delivery"] == []
     # The athlete can't use the coach's library, but sees the workout on their calendar.
     assert (
         athlete.post("/api/athletes/me/workouts", json={"day": day.isoformat(), "template_id": tpl["id"]}).status_code

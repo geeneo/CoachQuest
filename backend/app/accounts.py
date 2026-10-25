@@ -16,16 +16,21 @@ from .db import (
     Assessment,
     CoachChat,
     Connection,
+    ExternalWorkout,
     Grant,
     OAuthState,
     PasswordReset,
     PendingMfa,
     Plan,
     Race,
+    ScheduledWorkout,
     Session,
+    SyncJob,
+    SyncLog,
     User,
     UserStravaApp,
     WellnessDay,
+    Workout,
     utcnow,
 )
 from .security import hash_password, hash_token
@@ -100,6 +105,11 @@ def delete_account(db: DbSession, user: User) -> None:
         (Plan, Plan.athlete_id),
         (Race, Race.user_id),
         (Assessment, Assessment.athlete_id),
+        (ScheduledWorkout, ScheduledWorkout.athlete_id),
+        (Workout, Workout.owner_id),
+        (ExternalWorkout, ExternalWorkout.athlete_id),
+        (SyncJob, SyncJob.athlete_id),
+        (SyncLog, SyncLog.athlete_id),
     ):
         db.execute(delete(model).where(column == uid))
     db.execute(delete(Grant).where(or_(Grant.athlete_id == uid, Grant.coach_id == uid)))
@@ -108,6 +118,8 @@ def delete_account(db: DbSession, user: User) -> None:
     db.execute(delete(CoachChat).where(or_(CoachChat.athlete_id == uid, CoachChat.viewer_id == uid)))
     # Plans this user wrote for other athletes stay with those athletes.
     db.execute(update(Plan).where(Plan.author_id == uid).values(author_id=None))
+    # Workouts this user assigned to others stay on their calendars.
+    db.execute(update(ScheduledWorkout).where(ScheduledWorkout.assigned_by == uid).values(assigned_by=None))
     db.delete(user)
     db.commit()
     log.info("Deleted user %s", uid)

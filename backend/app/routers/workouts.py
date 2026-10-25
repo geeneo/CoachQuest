@@ -7,15 +7,15 @@ work like plans: the athlete and coaches holding the plans scope.
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import localtime, platforms, workouts, zwo
+from .. import localtime, platforms, sync_engine, workouts, zwo
 from ..activity_types import category
-from ..db import Plan, ScheduledWorkout, User, Workout, get_db, utcnow
+from ..db import Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..plan_tracker import GOAL_SHARE
 from ..queries import activities_since
@@ -168,6 +168,7 @@ def scheduled_out(
     rides: list[dict],
     names: dict[int, str],
     scopes: set[str],
+    delivery: list[dict] | None = None,
 ) -> dict:
     """A calendar workout with its status and, once ridden, planned vs actual.
 
@@ -210,8 +211,8 @@ def scheduled_out(
         "status": status,
         "actual": actual,
         "assigned_by": names.get(sw.assigned_by),
-        # Phase 1 has no automatic delivery: every workout is a manual download.
-        "delivery": "manual",
+        # Where it was sent automatically, if anywhere; it can always be downloaded by hand.
+        "delivery": delivery or [],
     }
 
 
@@ -280,6 +281,7 @@ def calendar(
 
     ids = {sw.assigned_by for sw in rows if sw.assigned_by}
     names = {u.id: u.display_name for u in db.scalars(select(User).where(User.id.in_(ids)))} if ids else {}
+    delivery = sync_engine.status_for(db, [sw.id for sw in rows])
     plan_days = _plan_days(db, target.id, start, end)
     days = []
     for i in range((end - start).days + 1):
@@ -293,7 +295,7 @@ def calendar(
                 "is_today": d == today,
                 "plan": plan_days.get(key),
                 "workouts": [
-                    scheduled_out(sw, target, today, matched.get(sw.id, []), names, scopes)
+                    scheduled_out(sw, target, today, matched.get(sw.id, []), names, scopes, delivery.get(sw.id))
                     for sw in by_day.get(key, [])
                 ],
                 "activities": acts if "activities" in scopes else [],
@@ -318,7 +320,13 @@ class Schedule(BaseModel):
 
 
 @router.post("/athletes/{athlete}/workouts")
-def schedule_workout(athlete: str, body: Schedule, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+def schedule_workout(
+    athlete: str,
+    body: Schedule,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
     """Put a workout on the athlete's calendar: from your library (template_id) or written here."""
     target = _athlete(db, user, athlete)
     if body.template_id is not None:
@@ -343,8 +351,12 @@ def schedule_workout(athlete: str, body: Schedule, user: User = Depends(current_
     )
     db.add(sw)
     db.commit()
+    if sync_engine.workout_changed(db, sw, "assigned"):
+        background.add_task(sync_engine.run_due)
     scopes = allowed_scopes(db, user, target.id)
-    return scheduled_out(sw, target, localtime.today(target), [], {user.id: user.display_name}, scopes)
+    out = scheduled_out(sw, target, localtime.today(target), [], {user.id: user.display_name}, scopes)
+    out["delivery"] = sync_engine.status_for(db, [sw.id]).get(sw.id, [])
+    return out
 
 
 def _scheduled(db: DbSession, target: User, workout_id: int) -> ScheduledWorkout:
@@ -375,6 +387,7 @@ def edit_scheduled(
     athlete: str,
     workout_id: int,
     body: ScheduledEdit,
+    background: BackgroundTasks,
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),
 ):
@@ -389,16 +402,27 @@ def edit_scheduled(
             setattr(sw, k, v)
     sw.updated_at = utcnow()
     db.commit()
+    reason = "cancelled" if changes.get("status") in ("cancelled", "skipped") else "changed"
+    if sync_engine.workout_changed(db, sw, reason):
+        background.add_task(sync_engine.run_due)
     return {"ok": True, "id": sw.id}
 
 
 @router.delete("/athletes/{athlete}/workouts/{workout_id}")
 def delete_scheduled(
-    athlete: str, workout_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+    athlete: str,
+    workout_id: int,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
 ):
     target = _athlete(db, user, athlete)
-    db.delete(_scheduled(db, target, workout_id))
+    sw = _scheduled(db, target, workout_id)
+    name = sw.name
+    db.delete(sw)
     db.commit()
+    if sync_engine.workout_removed(db, target.id, workout_id, name):
+        background.add_task(sync_engine.run_due)
     return {"ok": True}
 
 
@@ -466,17 +490,106 @@ class PlatformPrefs(BaseModel):
 
 
 @router.put("/me/platforms")
-def set_platform_prefs(body: PlatformPrefs, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+def set_platform_prefs(
+    body: PlatformPrefs,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
     """Preferred platforms, and automatic delivery where an integration supports it."""
     unknown = (set(body.preferred) | set(body.auto)) - set(platforms.IDS)
     if unknown:
         raise HTTPException(status_code=422, detail=f"Unknown platform: {', '.join(sorted(unknown))}")
     current = {p["id"]: p for p in platforms.platforms_out(db, user)}
     for pid, on in body.auto.items():
-        if on and not current[pid]["auto_sync_available"]:
+        if on and not current[pid]["auto_sync_available"] and not current[pid]["auto_sync"]:
             raise HTTPException(
                 status_code=409, detail=f"{current[pid]['name']} can't receive workouts automatically yet"
             )
+    was_on = {pid for pid, p in current.items() if p["auto_sync"]}
     user.platform_prefs = {"preferred": body.preferred, "auto": body.auto}
     db.commit()
+    # Switching auto-send on sends the upcoming workouts; switching it off leaves what was sent.
+    for pid in {pid for pid, on in body.auto.items() if on} - was_on:
+        if sync_engine.send_upcoming(db, user, pid, "auto_on"):
+            background.add_task(sync_engine.run_due)
     return platforms.platforms_out(db, user)
+
+
+# ---- Sync history ----
+
+
+def _job_out(j: SyncJob) -> dict:
+    return {
+        "id": j.id,
+        "provider": j.provider,
+        "workout_id": j.scheduled_workout_id,
+        "workout": j.workout_name,
+        "action": j.action,
+        "status": j.status,
+        "reason": j.reason,
+        "attempts": j.attempts,
+        "next_attempt_at": j.next_attempt_at if j.status == "queued" else None,
+        "error": j.last_error,
+        "updated_at": j.updated_at,
+    }
+
+
+@router.get("/athletes/{athlete}/sync")
+def sync_history(
+    athlete: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Open jobs (queued, retrying, failed, blocked) and the latest attempts."""
+    target = _athlete(db, user, athlete)
+    jobs = db.scalars(
+        select(SyncJob)
+        .where(SyncJob.athlete_id == target.id, SyncJob.status.in_(("queued", "running", "failed", "blocked")))
+        .order_by(SyncJob.updated_at.desc())
+    ).all()
+    entries = db.scalars(
+        select(SyncLog)
+        .where(SyncLog.athlete_id == target.id)
+        .order_by(SyncLog.at.desc(), SyncLog.id.desc())
+        .limit(limit)
+    ).all()
+    return {
+        "open": [_job_out(j) for j in jobs],
+        "log": [
+            {
+                "at": e.at,
+                "provider": e.provider,
+                "workout": e.workout_name,
+                "workout_id": e.scheduled_workout_id,
+                "action": e.action,
+                "outcome": e.outcome,
+                "message": e.message,
+            }
+            for e in entries
+        ],
+    }
+
+
+@router.post("/athletes/{athlete}/sync/{job_id}/retry")
+def retry_job(
+    athlete: str,
+    job_id: int,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Try a failed or blocked job again now. A blocked job needs the athlete to reconnect first."""
+    target = _athlete(db, user, athlete)
+    job = db.get(SyncJob, job_id)
+    if job is None or job.athlete_id != target.id:
+        raise HTTPException(status_code=404, detail="Sync job not found")
+    if job.status not in ("failed", "blocked", "queued"):
+        raise HTTPException(status_code=409, detail="This job has already finished")
+    conn = db.scalar(select(Connection).where(Connection.user_id == target.id, Connection.provider == job.provider))
+    if conn is None or conn.status == "error":
+        raise HTTPException(status_code=409, detail="Reconnect the platform first (Connections page), then retry")
+    sync_engine.retry(db, job)
+    background.add_task(sync_engine.run_due)
+    return _job_out(job)

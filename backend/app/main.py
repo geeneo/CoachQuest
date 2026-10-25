@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from . import assessments, backfill, runtime
+from . import assessments, backfill, runtime, sync_engine
 from .config import check_required, settings
 from .db import Connection, SessionLocal, init_db
 from .routers import admin, athletes, auth, coach_ai, connections, grants, plans, preferences, races, workouts
@@ -40,9 +40,12 @@ async def lifespan(app: FastAPI):
         if settings.enable_scheduler:
             backfill.refresh_outdated(db)  # picked up by the backfill job below
     if settings.enable_scheduler:
+        sync_engine.reset_stuck()
+    if settings.enable_scheduler:
         scheduler.add_job(sync_all, "interval", hours=6, args=["strava"], id="strava")
         scheduler.add_job(sync_all, "cron", hour="6,18", minute=15, args=["garmin"], id="garmin")
         scheduler.add_job(backfill.resume_due, "interval", minutes=15, id="backfill")
+        scheduler.add_job(sync_engine.run_due, "interval", minutes=1, id="workout-sync")
         # After the morning Garmin sync window, so last night's sleep and HRV are in.
         scheduler.add_job(assessments.run_scheduled, "cron", hour=6, minute=40, args=["daily"], id="ai-daily")
         # Runs daily; each athlete gets their review on the first day of their own week.

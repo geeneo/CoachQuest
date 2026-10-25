@@ -279,6 +279,65 @@ class ScheduledWorkout(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class ExternalWorkout(Base):
+    """What a platform has of a scheduled workout. Our key there is "cq-<scheduled id>", so
+    sending the same workout twice updates it instead of creating a duplicate."""
+
+    __tablename__ = "external_workouts"
+    __table_args__ = (UniqueConstraint("scheduled_workout_id", "provider"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # No foreign key: the row must outlive a deleted workout until the platform has deleted it too.
+    scheduled_workout_id: Mapped[int] = mapped_column(Integer, index=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(20))
+    external_id: Mapped[str] = mapped_column(String(64))
+    remote_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    content_hash: Mapped[str] = mapped_column(String(64))  # what was sent; unchanged = nothing to do
+    synced_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class SyncJob(Base):
+    """One pending change for one platform: send (upsert) or remove (delete) a workout.
+
+    At most one open job per workout and platform; a newer change replaces the
+    queued one, so a burst of edits sends once."""
+
+    __tablename__ = "sync_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(20))
+    scheduled_workout_id: Mapped[int] = mapped_column(Integer, index=True)
+    workout_name: Mapped[str] = mapped_column(String(120), default="")
+    action: Mapped[str] = mapped_column(String(10))  # upsert | delete
+    # queued | running | done | failed (gave up or rejected; Retry) | blocked (reconnect needed)
+    status: Mapped[str] = mapped_column(String(10), default="queued", index=True)
+    reason: Mapped[str] = mapped_column(String(40), default="")  # assigned, changed, cancelled, connected, retry
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class SyncLog(Base):
+    """Audit history: every attempt and its outcome."""
+
+    __tablename__ = "sync_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(20))
+    scheduled_workout_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    workout_name: Mapped[str] = mapped_column(String(120), default="")
+    action: Mapped[str] = mapped_column(String(10))
+    outcome: Mapped[str] = mapped_column(String(20))  # sent, deleted, unchanged, retrying, failed, blocked, ...
+    message: Mapped[str] = mapped_column(Text, default="")
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
 class Assessment(Base):
     """AI coach note: a daily readiness check or a weekly review."""
 

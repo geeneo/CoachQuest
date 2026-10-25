@@ -40,6 +40,11 @@ class Settings:
     strava_client_id: str = os.getenv("STRAVA_CLIENT_ID", "")
     strava_client_secret: str = os.getenv("STRAVA_CLIENT_SECRET", "")
 
+    intervals_client_id: str = os.getenv("INTERVALS_CLIENT_ID", "")
+    intervals_client_secret: str = os.getenv("INTERVALS_CLIENT_SECRET", "")
+    # Only for development against scripts/fake_intervals.py; leave unset in production.
+    intervals_base_url: str = os.getenv("INTERVALS_BASE_URL", "https://intervals.icu").rstrip("/")
+
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
     anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "high")

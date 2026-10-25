@@ -19,6 +19,8 @@ const ERRORS = {
   code: "Strava's one-time code had already been used or expired. Click Connect with Strava again (don't reload the return page).",
   network: "The server could not reach strava.com. Check the server's internet access and try again.",
   no_app: "No Strava API app is set up yet. Add one below, then connect.",
+  intervals: "Intervals.icu didn't link.",
+  intervals_denied: "Intervals.icu access was not granted.",
   session:
     `Strava sent you back, but you weren't signed in on ${window.location.host} at that moment. ` +
     "Make sure you sign in on this exact address (not the server's IP), then click Connect with Strava again.",
@@ -47,7 +49,12 @@ export default function Connections() {
         Link your accounts so CoachQuest can import your training. Nothing is shared with anyone until you add them on the{" "}
         <Link to="/sharing">Sharing</Link> page.
       </p>
-      {params.get("connected") && <div className="ok">Strava connected. Your first sync is running.</div>}
+      {params.get("connected") === "strava" && <div className="ok">Strava connected. Your first sync is running.</div>}
+      {params.get("connected") === "intervals" && (
+        <div className="ok">
+          Intervals.icu connected. Tick "Auto-send workouts" for Intervals.icu below to send your scheduled workouts there.
+        </div>
+      )}
       {params.get("error") && (
         <div className="error">
           {ERRORS[params.get("error")] || "Linking failed."}
@@ -80,6 +87,7 @@ const PLATFORM_STATUS = {
   not_connected: { label: "Not connected", cls: "" },
   export_only: { label: "File download only", cls: "" },
   not_available: { label: "Not available yet", cls: "" },
+  not_configured: { label: "Not set up on this server", cls: "" },
 };
 
 // Settings > Connected platforms: every training platform, what CoachQuest can do with it
@@ -104,14 +112,31 @@ function ConnectedPlatforms() {
   const togglePreferred = (id, on) =>
     savePrefs((preferred) => ({ preferred: on ? [...preferred, id] : preferred.filter((x) => x !== id) }));
   const toggleAuto = (id, on) => savePrefs((_, auto) => ({ auto: { ...auto, [id]: on } }));
+  const connectIntervals = async () => {
+    setError(null);
+    try {
+      window.location.href = (await api("/api/connections/intervals/authorize", { method: "POST" })).url;
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const disconnectIntervals = async () => {
+    if (!window.confirm("Disconnect Intervals.icu? Workouts already on your Intervals.icu calendar stay there.")) return;
+    try {
+      await api("/api/connections/intervals", { method: "DELETE" });
+      platforms.reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   return (
     <section className="card" id="platforms">
       <h2>Connected platforms</h2>
       <p className="muted small">
-        Where your workouts go and where your rides come from. Workouts you or your coach schedule can be downloaded as
-        Zwift files (.zwo) from the calendar today. Automatic delivery to an account is only switched on for an official,
-        authorised integration, and none is available yet.
+        Where your workouts go and where your rides come from. Every scheduled workout can be downloaded as a Zwift file
+        (.zwo) from the calendar. Automatic delivery is only offered through an official, authorised integration: today
+        that is Intervals.icu, which passes workouts on to Zwift when you link Zwift there.
       </p>
       {error && <div className="error">{error}</div>}
       {platforms.error && <div className="error">{platforms.error.message}</div>}
@@ -139,6 +164,19 @@ function ConnectedPlatforms() {
                 <td>
                   <span className={`badge ${PLATFORM_STATUS[p.status].cls}`}>{PLATFORM_STATUS[p.status].label}</span>
                   {p.last_error && <div className="small error-text">{p.last_error}</div>}
+                  {p.id === "intervals_icu" && ["not_connected", "error"].includes(p.status) && (
+                    <button className="btn small primary" onClick={connectIntervals}>
+                      {p.status === "error" ? "Reconnect" : "Connect"}
+                    </button>
+                  )}
+                  {p.id === "intervals_icu" && ["connected", "error"].includes(p.status) && (
+                    <button className="link-btn small" onClick={disconnectIntervals}>
+                      Disconnect
+                    </button>
+                  )}
+                  {p.status === "not_configured" && (
+                    <div className="small muted">An admin adds the Intervals.icu app keys in Admin → Settings.</div>
+                  )}
                 </td>
                 <td className="small">{p.account || "–"}</td>
                 <td className="small">{p.last_sync_at ? dateTime(p.last_sync_at) : "–"}</td>
@@ -156,7 +194,7 @@ function ConnectedPlatforms() {
                     type="checkbox"
                     aria-label={`Send workouts to ${p.name} automatically`}
                     checked={p.auto_sync}
-                    disabled={!p.auto_sync_available}
+                    disabled={!p.auto_sync_available && !p.auto_sync}
                     title={p.auto_sync_available ? "" : "Not available for this platform yet"}
                     onChange={(e) => toggleAuto(p.id, e.target.checked)}
                   />
@@ -167,10 +205,92 @@ function ConnectedPlatforms() {
         </table>
       </div>
       <p className="small muted">
-        Strava and Garmin are connected and disconnected with their cards above. CoachQuest never asks for your password
-        on another platform.
+        Strava and Garmin are connected and disconnected with their cards above. Intervals.icu uses its own sign-in
+        (OAuth): CoachQuest never asks for your password on another platform.
       </p>
+      <SyncHistory />
     </section>
+  );
+}
+
+const OUTCOME = {
+  sent: "✓ Sent",
+  deleted: "✓ Removed",
+  unchanged: "Up to date",
+  skipped: "Nothing to remove",
+  retrying: "↻ Will retry",
+  rate_limited: "↻ Waiting (rate limit)",
+  failed: "✗ Failed",
+  blocked: "⚠ Blocked",
+  unavailable: "✗ Not available",
+  disconnected: "Disconnected",
+};
+const JOB_STATUS = { queued: "Queued", running: "Sending", failed: "Failed", blocked: "Needs reconnect" };
+const PLATFORM_NAME = { intervals_icu: "Intervals.icu", zwift: "Zwift", mywhoosh: "MyWhoosh" };
+
+// What was sent where, what is waiting, and what failed (with Retry).
+export function SyncHistory({ id = "me" }) {
+  const hist = useApi(`/api/athletes/${id}/sync?limit=30`);
+  const [error, setError] = useState(null);
+  const retry = async (job) => {
+    setError(null);
+    try {
+      await api(`/api/athletes/${id}/sync/${job.id}/retry`, { method: "POST" });
+      hist.reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const data = hist.data;
+  if (!data || (!data.open.length && !data.log.length)) return null;
+  return (
+    <div className="sync-history">
+      <div className="row between">
+        <h3>Workout delivery</h3>
+        <button className="btn small" onClick={hist.reload}>
+          <RefreshCw size={14} /> Refresh
+        </button>
+      </div>
+      {error && <div className="error">{error}</div>}
+      {data.open.length > 0 && (
+        <ul className="sync-open">
+          {data.open.map((j) => (
+            <li key={j.id} className={`sync-job ${j.status}`}>
+              <strong>{j.workout || "Workout"}</strong> → {PLATFORM_NAME[j.provider] || j.provider}:{" "}
+              {j.attempts && j.status === "queued" ? "Retrying" : JOB_STATUS[j.status]}
+              {j.action === "delete" ? " (remove)" : ""}
+              {j.error && <span className="small muted"> — {j.error}</span>}
+              {j.status === "failed" && (
+                <button className="btn small" onClick={() => retry(j)}>
+                  Retry
+                </button>
+              )}
+              {j.status === "blocked" && <span className="small"> Reconnect above; it is sent again then.</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {data.log.length > 0 && (
+        <details>
+          <summary className="small">History ({data.log.length} latest)</summary>
+          <div className="table-wrap">
+            <table className="compact">
+              <tbody>
+                {data.log.map((e, i) => (
+                  <tr key={i}>
+                    <td className="small muted">{dateTime(e.at)}</td>
+                    <td className="small">{PLATFORM_NAME[e.provider] || e.provider}</td>
+                    <td className="small">{e.workout}</td>
+                    <td className="small">{OUTCOME[e.outcome] || e.outcome}</td>
+                    <td className="small muted">{e.message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+    </div>
   );
 }
 

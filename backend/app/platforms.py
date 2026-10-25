@@ -2,21 +2,24 @@
 
 Capabilities are facts about the integration CoachQuest actually has, not what
 the platform could do one day. Automatic workout delivery is offered only where
-an authorised integration exists; none does yet (Zwift's Training API needs
-partner approval, MyWhoosh has no official API, and Garmin workout delivery
-needs Garmin's official developer program).
+an authorised integration exists: today that is Intervals.icu (OAuth), which
+forwards planned workouts to Zwift. Zwift's own Training API needs partner
+approval, MyWhoosh has no official API, and Garmin workout delivery needs
+Garmin's official developer program.
 """
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from .db import Connection, User
+from .delivery import adapter
 
 CAPABILITIES = {
     "import_activities": "Import activities",
     "import_wellness": "Import sleep, HRV and other wellness",
     "export_files": "Download workout files to load by hand",
     "deliver_workouts": "Send workouts to the athlete's account automatically",
+    "update_workouts": "Update and remove workouts it was sent",
 }
 
 PLATFORMS = [
@@ -25,8 +28,9 @@ PLATFORMS = [
         "name": "Zwift",
         "integration": "export",
         "capabilities": ["export_files"],
-        "note": "Download workouts as .zwo files and copy them into Zwift. Sending them to Zwift "
-        "automatically needs Zwift's official Training API, which requires partner approval.",
+        "note": "Download workouts as .zwo files and copy them into Zwift, or connect Intervals.icu (below) and "
+        "link Zwift there: Intervals.icu forwards planned workouts to Zwift. A direct link needs Zwift's "
+        "official Training API, which requires partner approval.",
     },
     {
         "id": "mywhoosh",
@@ -55,9 +59,12 @@ PLATFORMS = [
     {
         "id": "intervals_icu",
         "name": "Intervals.icu",
-        "integration": "unavailable",
-        "capabilities": [],
-        "note": "Not connected yet. Its API is being looked at as a way to get workouts into Zwift.",
+        "integration": "connection",
+        "requires_setup": True,
+        "capabilities": ["deliver_workouts", "update_workouts"],
+        "note": "Scheduled workouts go onto your Intervals.icu calendar. Link Zwift in Intervals.icu "
+        "(Settings > Zwift) and the coming week's workouts appear in Zwift under Workouts > Custom > "
+        "Intervals.icu. Power is % of FTP, so keep FTP the same in both.",
     },
 ]
 IDS = [p["id"] for p in PLATFORMS]
@@ -72,11 +79,18 @@ def platforms_out(db: DbSession, athlete: User, full: bool = True) -> list[dict]
     out = []
     for p in PLATFORMS:
         conn = conns.get(p["id"])
-        if p["integration"] == "connection":
+        delivery = adapter(p["id"])
+        if p.get("requires_setup") and not (delivery and delivery.available()):
+            status = "not_configured"  # the admin hasn't added the platform's app keys
+        elif p["integration"] == "connection":
             status = "not_connected" if conn is None else ("error" if conn.status == "error" else "connected")
         else:
             status = {"export": "export_only", "unavailable": "not_available"}[p["integration"]]
         can_auto = "deliver_workouts" in p["capabilities"] and status == "connected"
+        # The athlete's choice stays on while a connection needs fixing; nothing is sent meanwhile.
+        auto_on = (
+            bool(auto.get(p["id"])) and "deliver_workouts" in p["capabilities"] and status in ("connected", "error")
+        )
         out.append(
             {
                 "id": p["id"],
@@ -89,7 +103,7 @@ def platforms_out(db: DbSession, athlete: User, full: bool = True) -> list[dict]
                 "capabilities": [{"id": c, "label": CAPABILITIES[c]} for c in p["capabilities"]],
                 "note": p["note"],
                 "preferred": p["id"] in preferred,
-                "auto_sync": bool(auto.get(p["id"])) and can_auto,
+                "auto_sync": auto_on,
                 "auto_sync_available": can_auto,
             }
         )
