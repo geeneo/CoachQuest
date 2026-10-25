@@ -58,12 +58,16 @@ Athletes grant a coach any combination of these scopes (Sharing page):
 | `activities` | Activity list (name, sport, time, distance, HR, power, TSS) |
 | `fitness` | CTL / ATL / TSB curve and weekly volume |
 | `wellness` | Garmin sleep, HRV, resting HR, Body Battery, stress, steps |
+| `profile` | FTP, lactate threshold HR, max HR, goal |
+| `weight` | Body weight (separate because it is more personal) |
 | `plans` | View plans and generate new ones with the AI coach |
 
 - An invitation is `pending` until the coach accepts. Only an `active` grant
   gives access.
 - The athlete can change scopes or revoke at any time, and the coach can
   leave. The check runs on every request, so changes apply immediately.
+- The AI coach only gets the profile numbers and weight when those scopes are
+  granted. Without `profile` it plans from the data alone.
 - A missing scope returns `404`, not `403`, so a coach can't probe user ids.
 - Every read by someone other than the athlete is written to an access log,
   which the athlete sees on the Sharing page.

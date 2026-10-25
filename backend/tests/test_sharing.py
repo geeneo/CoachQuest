@@ -98,3 +98,43 @@ def test_plans_need_plans_scope(make_user):
     coach.post(f"/api/grants/{grant_id}/accept")
     r = coach.post(f"/api/athletes/{athlete_id}/plans", json={"title": "x", "goal": "y"})
     assert r.status_code == 404
+
+
+def _profile_setup(make_user, scopes):
+    athlete, coach, athlete_id, grant_id = _setup(make_user, scopes)
+    athlete.patch("/api/me", json={"ftp_watts": 260, "weight_kg": 72.5, "goal": "Gran fondo"})
+    coach.post(f"/api/grants/{grant_id}/accept")
+    return athlete, coach, athlete_id
+
+
+def test_profile_and_weight_hidden_by_default(make_user):
+    _, coach, athlete_id = _profile_setup(make_user, ["activities", "plans"])
+    summary = coach.get(f"/api/athletes/{athlete_id}").json()
+    assert "ftp_watts" not in summary and "weight_kg" not in summary and "goal" not in summary
+
+
+def test_profile_without_weight(make_user):
+    _, coach, athlete_id = _profile_setup(make_user, ["activities", "profile"])
+    summary = coach.get(f"/api/athletes/{athlete_id}").json()
+    assert summary["ftp_watts"] == 260 and summary["goal"] == "Gran fondo"
+    assert "weight_kg" not in summary
+
+
+def test_ai_prompt_respects_profile_and_weight(make_user, monkeypatch):
+    seen = {}
+
+    async def fake_generate(db, viewer, athlete, facts):
+        seen.update(facts)
+        return "# Plan", "claude-test"
+
+    monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
+    _, coach, athlete_id = _profile_setup(make_user, ["profile", "plans"])
+    coach.post(f"/api/athletes/{athlete_id}/plans", json={"title": "t", "goal": "g"})
+    assert seen["athlete"]["ftp_watts"] == 260
+    assert "weight_kg" not in seen["athlete"]
+
+
+def test_athlete_sees_own_weight(make_user):
+    p = make_user("solo@example.com")
+    p.patch("/api/me", json={"weight_kg": 70})
+    assert p.get("/api/athletes/me").json()["weight_kg"] == 70

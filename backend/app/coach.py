@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session as DbSession
 from . import runtime
 from .db import AiCall, User
 from .fitness import avg, readiness_flags, weekly_volume
-from .queries import load_curve, wellness_since
+from .queries import load_curve, profile_out, wellness_since
 
 log = logging.getLogger("coachquest.ai")
 
@@ -47,14 +47,7 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
     facts: dict = {
         "today": today.isoformat(),
         "shared_data": sorted(scopes),
-        "athlete": {
-            "name": athlete.display_name,
-            "ftp_watts": athlete.ftp_watts,
-            "lthr_bpm": athlete.lthr_bpm,
-            "max_hr_bpm": athlete.max_hr_bpm,
-            "weight_kg": athlete.weight_kg,
-            "goal": athlete.goal,
-        },
+        "athlete": {"name": athlete.display_name, **profile_out(athlete, scopes)},
         "request": request,
     }
     curve, acts, wellness = [], [], []

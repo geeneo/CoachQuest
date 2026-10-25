@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session as DbSession
 from .db import AccessLog, Grant, User, get_db
 from .security import proxy_secret_ok
 
-SCOPES = ("activities", "fitness", "wellness", "plans")
+# "profile" = FTP, threshold/max HR and goal; "weight" is separate because it is more personal.
+SCOPES = ("activities", "fitness", "wellness", "profile", "weight", "plans")
 
 
 def current_user(

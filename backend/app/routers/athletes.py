@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session as DbSession
 from ..db import Connection, Grant, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..fitness import estimate_tss
-from ..queries import activities_since, activity_out, load_curve, wellness_out, wellness_since
+from ..queries import activities_since, activity_out, load_curve, profile_out, wellness_out, wellness_since
 from .auth import user_out
 
 router = APIRouter(prefix="/api", tags=["athletes"])
@@ -66,10 +66,7 @@ def athlete_summary(athlete: str, user: User = Depends(current_user), db: DbSess
         require_scope(db, user, athlete_id, "activities")  # raises 404
     a = db.get(User, athlete_id)
     out = {"id": a.id, "display_name": a.display_name, "scopes": sorted(scopes), "is_me": a.id == user.id}
-    if a.id == user.id or "plans" in scopes:
-        out.update(
-            ftp_watts=a.ftp_watts, lthr_bpm=a.lthr_bpm, max_hr_bpm=a.max_hr_bpm, weight_kg=a.weight_kg, goal=a.goal
-        )
+    out.update(profile_out(a, scopes))
     conns = db.scalars(select(Connection).where(Connection.user_id == a.id)).all()
     out["sources"] = [{"provider": c.provider, "last_sync_at": c.last_sync_at} for c in conns]
     return out

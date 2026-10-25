@@ -44,6 +44,21 @@ def load_curve(db: DbSession, athlete_id: int, days: int, today: date | None = N
     return curve[-days:], acts
 
 
+def profile_out(athlete, scopes: set[str]) -> dict:
+    """The athlete's profile numbers that `scopes` allow (an athlete holds every scope on themself)."""
+    out = {}
+    if "profile" in scopes:
+        out.update(
+            ftp_watts=athlete.ftp_watts,
+            lthr_bpm=athlete.lthr_bpm,
+            max_hr_bpm=athlete.max_hr_bpm,
+            goal=athlete.goal,
+        )
+    if "weight" in scopes:
+        out["weight_kg"] = athlete.weight_kg
+    return out
+
+
 def activity_out(a: Activity) -> dict:
     return {
         "id": a.id,

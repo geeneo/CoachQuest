@@ -184,7 +184,10 @@ async def sync_now(provider: str, user: User = Depends(current_user), db: DbSess
     if conn is None:
         raise HTTPException(status_code=404, detail="Not connected")
     if conn.last_sync_at and conn.last_sync_at > utcnow() - timedelta(minutes=5):
-        raise HTTPException(status_code=429, detail="Already synced in the last 5 minutes. New activities will come in on the next sync.")
+        raise HTTPException(
+            status_code=429,
+            detail="Already synced in the last 5 minutes. New activities will come in on the next sync.",
+        )
     count = await (strava.sync if provider == "strava" else garmin.sync)(db, conn)
     return {"fetched": count, "connection": conn_out(conn)}
 

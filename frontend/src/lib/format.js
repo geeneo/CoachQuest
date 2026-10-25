@@ -2,6 +2,8 @@ export const SCOPE_LABELS = {
   activities: "Activities",
   fitness: "Fitness & load (CTL/ATL/TSB)",
   wellness: "Wellness (sleep, HRV, resting HR)",
+  profile: "Profile (FTP, threshold and max HR, goal)",
+  weight: "Weight",
   plans: "Training plans (view and create with the AI coach)",
 };
 
