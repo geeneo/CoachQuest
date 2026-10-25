@@ -48,7 +48,7 @@
         from the activity list (kJ ≈ kcal for cycling); otherwise leave blank
         rather than guess.
       - Coaches see it only with the activities scope.
-- [ ] **My training: Recent activities table** (like the old hub).
+- [x] **My training: Recent activities table** (like the old hub).
       - Period: Date range (7d, 30d, 90d, 180d, 1/2/3/5/10 years, All time),
         Month or Year view.
       - Type chips (All, Road, Zwift / Virtual, E-MTB, MTB, Run, Swim, Walk,

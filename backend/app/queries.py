@@ -121,6 +121,16 @@ def activity_out(a: Activity) -> dict:
         "norm_power": a.norm_power,
         "tss": a.tss,
         "tss_method": a.tss_method,
+        "category": category(a),
+        "type_override": a.type_override,
+        "indoor": a.indoor,
+        "is_race": a.is_race or a.race_id is not None,
+        "avg_speed_kmh": round(a.avg_speed_ms * 3.6, 1) if a.avg_speed_ms else None,
+        "avg_cadence": round(a.avg_cadence) if a.avg_cadence else None,
+        "calories": round(calories(a)) if calories(a) else None,
+        "relative_effort": a.relative_effort,
+        "race_id": a.race_id,
+        "note_tag": a.note_tag,
     }
 
 

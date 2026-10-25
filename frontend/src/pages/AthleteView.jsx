@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import ActivitiesTable from "../components/ActivitiesTable.jsx";
+import Activities from "../components/ActivitiesTable.jsx";
 import FitnessChart from "../components/FitnessChart.jsx";
 import UpcomingRaces from "../components/UpcomingRaces.jsx";
 import VolumeStats from "../components/VolumeStats.jsx";
@@ -51,7 +51,7 @@ export default function AthleteView({ self }) {
         ))}
       </div>
       {current === "overview" && <Overview id={id} scopes={scopes} isMe={!!self} />}
-      {current === "activities" && <Activities id={id} />}
+      {current === "activities" && <Activities id={id} editable={!!self} />}
       {current === "plans" && <PlansPanel id={id} athlete={s} />}
     </>
   );
@@ -84,25 +84,5 @@ function Overview({ id, scopes, isMe }) {
         </section>
       )}
     </>
-  );
-}
-
-function Activities({ id }) {
-  const [days, setDays] = useState(42);
-  const acts = useApi(`/api/athletes/${id}/activities?days=${days}`);
-  return (
-    <section className="card">
-      <div className="row between">
-        <h2>Activities</h2>
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-          {[14, 42, 90, 180, 365].map((d) => (
-            <option key={d} value={d}>
-              Last {d} days
-            </option>
-          ))}
-        </select>
-      </div>
-      {acts.error ? <div className="error">{acts.error.message}</div> : <ActivitiesTable rows={acts.data} />}
-    </section>
   );
 }

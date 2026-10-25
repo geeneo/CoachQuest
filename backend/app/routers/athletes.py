@@ -5,13 +5,14 @@
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import profile_sync
-from ..db import Connection, Grant, User, get_db, utcnow
+from ..activity_types import CHOICES
+from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..queries import (
     activities_since,
@@ -23,6 +24,7 @@ from ..queries import (
     wellness_since,
 )
 from .auth import user_out
+from .preferences import preferences_out
 
 router = APIRouter(prefix="/api", tags=["athletes"])
 
@@ -84,14 +86,57 @@ def athlete_summary(athlete: str, user: User = Depends(current_user), db: DbSess
 @router.get("/athletes/{athlete}/activities")
 def activities(
     athlete: str,
-    days: int = Query(default=42, ge=1, le=730),
+    days: int | None = Query(default=42, ge=1, le=36600),
+    since: date | None = None,
+    until: date | None = None,
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),
 ):
+    """Newest first. Either the last `days`, or `since`..`until` (inclusive) for a month or year view."""
     athlete_id = resolve_athlete_id(athlete, user)
     require_scope(db, user, athlete_id, "activities")
-    acts = activities_since(db, athlete_id, datetime.now() - timedelta(days=days))
+    start = datetime.combine(since, datetime.min.time()) if since else datetime.now() - timedelta(days=days or 42)
+    acts = activities_since(db, athlete_id, start)
+    if until:
+        end = datetime.combine(until + timedelta(days=1), datetime.min.time())
+        acts = [a for a in acts if a.start_time < end]
     return [activity_out(a) for a in reversed(acts)]
+
+
+@router.get("/activity-types")
+def activity_types(_: User = Depends(current_user)):
+    return CHOICES
+
+
+class ActivityEdit(BaseModel):
+    type_override: str | None = None
+    race_id: int | None = None
+    note_tag: str | None = None
+
+
+@router.patch("/activities/{activity_id}")
+def edit_activity(
+    activity_id: int, body: ActivityEdit, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """The athlete's own labels on an activity. Stored in CoachQuest only, never sent to Strava or Garmin."""
+    act = db.get(Activity, activity_id)
+    if act is None or act.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    changes = body.model_dump(exclude_unset=True)
+    if changes.get("type_override") and changes["type_override"] not in CHOICES:
+        raise HTTPException(status_code=422, detail=f"Type must be one of: {', '.join(CHOICES)}")
+    if changes.get("race_id") is not None:
+        race = db.get(Race, changes["race_id"])
+        if race is None or race.user_id != user.id:
+            raise HTTPException(status_code=422, detail="Unknown race")
+    if changes.get("note_tag"):
+        changes["note_tag"] = changes["note_tag"].strip().lower()
+        if changes["note_tag"] not in preferences_out(user)["note_tags"]:
+            raise HTTPException(status_code=422, detail="Add that tag under Profile → Activity note tags first")
+    for key, value in changes.items():
+        setattr(act, key, value or None)
+    db.commit()
+    return activity_out(act)
 
 
 @router.get("/athletes/{athlete}/summary")

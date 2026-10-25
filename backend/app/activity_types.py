@@ -60,6 +60,9 @@ CATEGORIES = {
     "rowing": "Rowing",
 }
 
+# What an athlete can pick as a type override, in display order.
+CHOICES = sorted(set(CATEGORIES.values()) | {"Other"}, key=lambda c: (c == "Other", c))
+
 RIDES = {"Road", "Virtual", "MTB", "E-MTB", "E-Bike", "Gravel"}
 INDOOR = {"Virtual", "Treadmill run"}
 

@@ -140,7 +140,7 @@ h2 {
 }
 .content {
   padding: 1.5rem 2rem 3rem;
-  max-width: 1100px;
+  max-width: 1400px;
   width: 100%;
   min-width: 0;
 }
@@ -749,4 +749,47 @@ code {
 }
 .weekday-grid .chips {
   gap: 0.25rem;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.inline-input {
+  max-width: 260px;
+}
+.summary-line {
+  margin: 0.25rem 0 0.75rem;
+}
+table.activities select {
+  padding: 0.2rem 0.35rem;
+  font-size: 0.82rem;
+  width: auto;
+}
+table.activities .name-cell {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.re-badge {
+  display: inline-block;
+  min-width: 2.4rem;
+  text-align: center;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  border: 1px solid currentColor;
+}
+.re-low {
+  color: var(--accent);
+}
+.re-mid {
+  color: var(--warn);
+}
+.re-high {
+  color: var(--danger);
 }
