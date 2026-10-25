@@ -2,11 +2,11 @@
 
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import runtime
+from .. import mailer, runtime
 from ..config import settings
 from ..db import AiCall, Connection, Session, User, get_db
 from ..deps import admin_user
@@ -82,6 +82,24 @@ async def test_anthropic(_: User = Depends(admin_user)):
     except anthropic.APIConnectionError:
         return {"ok": False, "message": "Could not reach api.anthropic.com from the server."}
     return {"ok": True, "message": f"Key works. Model: {info.display_name or info.id}."}
+
+
+class TestEmail(BaseModel):
+    to: EmailStr | None = None
+
+
+@router.post("/settings/test-email")
+async def test_email(body: TestEmail, admin: User = Depends(admin_user)):
+    to = body.to or admin.email
+    try:
+        await mailer.send(
+            to,
+            "CoachQuest test email",
+            f"This is a test from CoachQuest ({settings.public_base_url}).\n\nIf you can read this, email works.",
+        )
+    except mailer.MailError as exc:
+        return {"ok": False, "message": str(exc)}
+    return {"ok": True, "message": f"Sent to {to}. Check the inbox (and spam folder)."}
 
 
 # ---- users ----

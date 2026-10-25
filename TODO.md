@@ -5,7 +5,7 @@
 - [x] **Dark mode toggle.** The app already follows the operating system's
       light/dark setting. Add a Light / Dark / System switch in Profile,
       remembered per browser.
-- [ ] **Email (SMTP).** Admin → Settings: host, port, username, password
+- [x] **Email (SMTP).** Admin → Settings: host, port, username, password
       (encrypted, write-only like the other secrets), from address, TLS.
       Include a "Send test email" button. Password reset depends on this.
 - [x] **Users change their own password.** Profile: current password + new

@@ -76,6 +76,27 @@ EDITABLE: dict[str, Editable] = {
         choices=("open", "closed"),
         help="Closed: only emails in ADMIN_EMAILS can create accounts.",
     ),
+    "smtp_host": Editable(
+        "SMTP server", "Email", pattern=r"[A-Za-z0-9.\-]{1,253}", help="e.g. smtp.gmail.com or smtp.office365.com."
+    ),
+    "smtp_port": Editable("Port", "Email", pattern=r"[0-9]{1,5}", help="587 for STARTTLS, 465 for SSL."),
+    "smtp_security": Editable(
+        "Security",
+        "Email",
+        choices=("starttls", "ssl", "none"),
+        help="Use starttls or ssl; none only on a trusted LAN.",
+    ),
+    "smtp_username": Editable("Username", "Email", help="Usually the full email address."),
+    "smtp_password": Editable(
+        "Password", "Email", secret=True, help="For Gmail or Microsoft 365, use an app password, not your normal one."
+    ),
+    "smtp_from": Editable(
+        "From address",
+        "Email",
+        pattern=r"[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+|.{1,60}<[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+>",
+        help='e.g. coach@mmc24.com or "CoachQuest <coach@mmc24.com>".',
+        error="From address must be an email address, optionally with a name in front.",
+    ),
 }
 
 _overrides: dict[str, str] = {}

@@ -44,6 +44,13 @@ class Settings:
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
     anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "high")
 
+    smtp_host: str = os.getenv("SMTP_HOST", "")
+    smtp_port: str = os.getenv("SMTP_PORT", "587")
+    smtp_security: str = os.getenv("SMTP_SECURITY", "starttls")
+    smtp_username: str = os.getenv("SMTP_USERNAME", "")
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    smtp_from: str = os.getenv("SMTP_FROM", "")
+
     build_commit: str = os.getenv("BUILD_COMMIT", "dev")
     build_time: str = os.getenv("BUILD_TIME", "")
     enable_scheduler: bool = _bool("ENABLE_SCHEDULER", True)

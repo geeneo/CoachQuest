@@ -43,6 +43,7 @@ function Settings() {
   const [draft, setDraft] = useState({});
   const [msg, setMsg] = useState(null);
   const [test, setTest] = useState(null);
+  const [mailTest, setMailTest] = useState(null);
   const [busy, setBusy] = useState(false);
 
   if (res.loading) return <section className="card muted">Loading settings…</section>;
@@ -77,6 +78,15 @@ function Settings() {
     }
   };
 
+  const testMail = async () => {
+    setMailTest({ message: "Sending…" });
+    try {
+      setMailTest(await api("/api/admin/settings/test-email", { method: "POST", body: {} }));
+    } catch (err) {
+      setMailTest({ ok: false, message: err.message });
+    }
+  };
+
   return (
     <section className="card">
       <h2>
@@ -102,6 +112,19 @@ function Settings() {
               {test && (
                 <span className={`small ${test.ok ? "text-ok" : test.ok === false ? "text-bad" : "muted"}`}>
                   {test.ok ? <CheckCircle2 size={14} /> : test.ok === false ? <XCircle size={14} /> : null} {test.message}
+                </span>
+              )}
+            </div>
+          )}
+          {g === "Email" && (
+            <div className="row">
+              <button type="button" className="btn" onClick={testMail} disabled={dirty}>
+                Send test email to me
+              </button>
+              {mailTest && (
+                <span className={`small ${mailTest.ok ? "text-ok" : mailTest.ok === false ? "text-bad" : "muted"}`}>
+                  {mailTest.ok ? <CheckCircle2 size={14} /> : mailTest.ok === false ? <XCircle size={14} /> : null}{" "}
+                  {mailTest.message}
                 </span>
               )}
             </div>
