@@ -290,7 +290,7 @@
       a download: the .zwo file for Zwift / MyWhoosh, straight from the plan
       day, also for days before the workout reached the calendar. Plus
       "Download this week's indoor workouts" (ZIP) on each week card.
-- [ ] **Coach dashboard: all athletes' training week at a glance.** One page
+- [x] **Coach dashboard: all athletes' training week at a glance.** (Done.) One page
       for a coach (My athletes, as a table), a row per athlete with this week:
       - Workouts done / planned, compliance % and time ridden vs planned,
         today's session and whether it's done.

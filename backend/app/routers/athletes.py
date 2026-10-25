@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import localtime, profile_sync
+from .. import dashboard, localtime, profile_sync
 from ..activity_types import CHOICES
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -92,6 +92,12 @@ def my_athletes(user: User = Depends(current_user), db: DbSession = Depends(get_
             row["today"] = {"ctl": curve[-1].ctl, "atl": curve[-1].atl, "tsb": curve[-1].tsb}
         out.append(row)
     return out
+
+
+@router.get("/coach/dashboard")
+def coach_dashboard(me: bool = False, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Every athlete's training week on one page, those needing attention first (see dashboard.py)."""
+    return dashboard.coach_dashboard(db, user, include_self=me)
 
 
 @router.get("/athletes/{athlete}")
