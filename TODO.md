@@ -156,7 +156,7 @@
       - The user is emailed when approved, with a link to sign in.
 - [x] **"Walk" as a session type** in weekday preferences and plan days (and
       "Hike"), so walks can be planned and the AI coach can suggest them.
-- [ ] **Email updates for sharing invitations.**
+- [x] **Email updates for sharing invitations.**
   - The coach is emailed when an athlete invites them, with a link to
     Sharing.
   - The athlete is emailed when the coach accepts or leaves.

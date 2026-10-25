@@ -101,7 +101,7 @@ function AddCoach({ scopes, onDone }) {
       <h2>Share with a coach</h2>
       <form className="stack" onSubmit={submit}>
         <label>
-          Coach's email (they need a CoachQuest account)
+          Coach's email (they need a CoachQuest account; we email them the invitation)
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </label>
         <ScopePicker scopes={scopes} value={picked} onChange={setPicked} />

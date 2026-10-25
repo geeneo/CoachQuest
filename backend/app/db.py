@@ -41,6 +41,8 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # False while waiting for an admin (registration mode "approval").
     approved: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Email me when someone invites me, accepts, or changes or stops sharing.
+    notify_sharing: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     # Athlete profile, used for TSS and by the AI coach
@@ -346,6 +348,7 @@ _ADDED_COLUMNS = {
         "ai_settings": "JSON",
         "week_start": "INTEGER NOT NULL DEFAULT 0",
         "approved": "BOOLEAN NOT NULL DEFAULT 1",
+        "notify_sharing": "BOOLEAN NOT NULL DEFAULT 1",
     },
 }
 

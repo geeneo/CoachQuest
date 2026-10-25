@@ -38,6 +38,7 @@ class ProfileUpdate(BaseModel):
     weight_kg: float | None = Field(default=None, ge=30, le=200)
     goal: str | None = Field(default=None, max_length=2000)
     week_start: int | None = Field(default=None, ge=0, le=6)
+    notify_sharing: bool | None = None
 
 
 @router.patch("/me")

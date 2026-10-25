@@ -27,6 +27,7 @@ export default function Profile() {
     display_name: user.display_name,
     goal: user.goal || "",
     week_start: user.week_start ?? 0,
+    notify_sharing: user.notify_sharing ?? true,
     ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, user[k] ?? ""])),
   }));
   const [msg, setMsg] = useState(null);
@@ -35,7 +36,12 @@ export default function Profile() {
   const save = async (e) => {
     e.preventDefault();
     setMsg(null);
-    const body = { display_name: form.display_name, goal: form.goal || null, week_start: Number(form.week_start) };
+    const body = {
+      display_name: form.display_name,
+      goal: form.goal || null,
+      week_start: Number(form.week_start),
+      notify_sharing: form.notify_sharing,
+    };
     for (const [k] of NUMBER_FIELDS) body[k] = form[k] === "" ? null : Number(form[k]);
     try {
       setUser(await api("/api/me", { method: "PATCH", body }));
@@ -77,6 +83,14 @@ export default function Profile() {
             ))}
           </select>
           <span className="hint">Weekly totals, charts, plans and weekly reviews use this.</span>
+        </label>
+        <label className="check wide">
+          <input
+            type="checkbox"
+            checked={form.notify_sharing}
+            onChange={(e) => setForm({ ...form, notify_sharing: e.target.checked })}
+          />
+          Email me when someone invites me as their coach, accepts my invitation, or changes or stops sharing
         </label>
         <label className="wide">
           Goal

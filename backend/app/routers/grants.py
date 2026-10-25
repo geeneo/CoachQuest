@@ -1,12 +1,13 @@
 """Athletes share selected data with coaches."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session as DbSession
 
 from ..db import AccessLog, Grant, User, get_db, utcnow
 from ..deps import SCOPES, current_user
+from ..notifications import notify, scopes_text
 
 router = APIRouter(prefix="/api/grants", tags=["sharing"])
 
@@ -61,7 +62,9 @@ def list_grants(user: User = Depends(current_user), db: DbSession = Depends(get_
 
 
 @router.post("")
-def create_grant(body: GrantCreate, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+def create_grant(
+    body: GrantCreate, background: BackgroundTasks, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
     coach = db.scalar(select(User).where(User.email == body.coach_email.lower(), User.is_active))
     if coach is None:
         raise HTTPException(
@@ -76,11 +79,28 @@ def create_grant(body: GrantCreate, user: User = Depends(current_user), db: DbSe
         existing.scopes = body.scopes
         existing.updated_at = utcnow()
         db.commit()
+        _tell_coach_about_scopes(background, existing, user, coach)
         return grant_out(existing, db)
     grant = Grant(athlete_id=user.id, coach_id=coach.id, scopes=body.scopes, status="pending")
     db.add(grant)
     db.commit()
+    notify(
+        background,
+        coach,
+        f"{user.display_name} invited you as their coach",
+        f"{user.display_name} wants to share their training with you on CoachQuest: "
+        f"{scopes_text(body.scopes)}.\n\nAccept or decline the invitation on the Sharing page.",
+    )
     return grant_out(grant, db)
+
+
+def _tell_coach_about_scopes(background: BackgroundTasks, g: Grant, athlete: User, coach: User) -> None:
+    notify(
+        background,
+        coach,
+        f"{athlete.display_name} changed what they share with you",
+        f"{athlete.display_name} now shares: {scopes_text(g.scopes)}.",
+    )
 
 
 def _own(db: DbSession, grant_id: int, user: User) -> Grant:
@@ -92,7 +112,11 @@ def _own(db: DbSession, grant_id: int, user: User) -> Grant:
 
 @router.patch("/{grant_id}")
 def update_scopes(
-    grant_id: int, body: GrantUpdate, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+    grant_id: int,
+    body: GrantUpdate,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
 ):
     g = _own(db, grant_id, user)
     if g.athlete_id != user.id:
@@ -100,27 +124,55 @@ def update_scopes(
     g.scopes = body.scopes
     g.updated_at = utcnow()
     db.commit()
+    if g.status == "active":
+        _tell_coach_about_scopes(background, g, user, db.get(User, g.coach_id))
     return grant_out(g, db)
 
 
 @router.post("/{grant_id}/accept")
-def accept(grant_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+def accept(
+    grant_id: int, background: BackgroundTasks, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
     g = _own(db, grant_id, user)
     if g.coach_id != user.id or g.status != "pending":
         raise HTTPException(status_code=400, detail="Only the invited coach can accept a pending invitation")
     g.status = "active"
     g.updated_at = utcnow()
     db.commit()
+    notify(
+        background,
+        db.get(User, g.athlete_id),
+        f"{user.display_name} accepted your invitation",
+        f"{user.display_name} is now your coach on CoachQuest and can see: {scopes_text(g.scopes)}.",
+    )
     return grant_out(g, db)
 
 
 @router.delete("/{grant_id}")
-def revoke(grant_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+def revoke(
+    grant_id: int, background: BackgroundTasks, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
     """Either side can end the relationship at any time. Takes effect on the next request."""
     g = _own(db, grant_id, user)
+    was = g.status
     g.status = "revoked"
     g.updated_at = utcnow()
     db.commit()
+    if user.id == g.athlete_id:
+        notify(
+            background,
+            db.get(User, g.coach_id),
+            f"{user.display_name} stopped sharing with you",
+            f"{user.display_name} no longer shares their training with you on CoachQuest.",
+        )
+    else:
+        what = "declined your invitation" if was == "pending" else "is no longer your coach"
+        notify(
+            background,
+            db.get(User, g.athlete_id),
+            f"{user.display_name} {what}",
+            f"{user.display_name} {what} on CoachQuest. Nothing is shared with them any more.",
+        )
     return {"ok": True}
 
 
