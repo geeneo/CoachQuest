@@ -44,6 +44,8 @@ def user_out(user: User) -> dict:
         "lthr_bpm": user.lthr_bpm,
         "max_hr_bpm": user.max_hr_bpm,
         "weight_kg": user.weight_kg,
+        "weight_source": user.weight_source,
+        "weight_updated_at": user.weight_updated_at,
         "goal": user.goal,
     }
 

@@ -12,7 +12,7 @@ multi-tenant service, apply to the Garmin Connect Developer Program
 
 import asyncio
 import logging
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import garminconnect
 from sqlalchemy import select
@@ -104,7 +104,33 @@ def _num(d: dict | None, *path):
     return cur if isinstance(cur, (int, float)) else None
 
 
-def _fetch(tokens: str, days: list[date], want_wellness: bool, want_activities: bool):
+def latest_weight(data) -> tuple[float, datetime] | None:
+    """(kg, measured_at) from Garmin's latest-weight reply, or None.
+
+    Garmin reports weight in grams. The reply shape varies a little between
+    accounts, so look for the weigh-in in the usual places.
+    """
+    if isinstance(data, list):
+        data = data[-1] if data else None
+    if isinstance(data, dict) and isinstance(data.get("dateWeightList"), list):
+        data = data["dateWeightList"][-1] if data["dateWeightList"] else None
+    if not isinstance(data, dict):
+        return None
+    grams = data.get("weight")
+    if not isinstance(grams, (int, float)) or grams <= 0:
+        return None
+    kg = round(grams / 1000, 1) if grams > 1000 else round(float(grams), 1)
+    when = None
+    for key in ("timestampGMT", "date", "samplePk"):
+        if isinstance(data.get(key), (int, float)):
+            when = datetime.fromtimestamp(data[key] / 1000, tz=UTC).replace(tzinfo=None)
+            break
+    if when is None and isinstance(data.get("calendarDate"), str):
+        when = datetime.fromisoformat(data["calendarDate"])
+    return (kg, when or datetime.now(UTC).replace(tzinfo=None)) if 20 <= kg <= 300 else None
+
+
+def _fetch(tokens: str, days: list[date], want_wellness: bool, want_activities: bool, want_weight: bool):
     """Blocking Garmin calls; runs in a thread."""
     api = garminconnect.Garmin()
     api.login(tokenstore=tokens)
@@ -135,10 +161,16 @@ def _fetch(tokens: str, days: list[date], want_wellness: bool, want_activities: 
         except Exception as exc:
             log.debug("hrv %s failed: %s", iso, exc)
         wellness.append(row)
+    weight = None
+    if want_weight:
+        try:
+            weight = latest_weight(api.get_latest_weight())
+        except Exception as exc:
+            log.debug("latest weight failed: %s", exc)
     activities = []
     if want_activities:
         activities = api.get_activities_by_date(days[0].isoformat(), days[-1].isoformat())
-    return api.client.dumps(), wellness, activities
+    return api.client.dumps(), wellness, activities, weight
 
 
 def _upsert_activity(db: DbSession, user: User, item: dict) -> None:
@@ -172,8 +204,8 @@ async def sync(db: DbSession, conn: Connection) -> int:
     try:
         tokens = decrypt_json(conn.token_enc)["tokens"]
         opts = sync_options.options(conn)
-        new_tokens, wellness, activities = await asyncio.to_thread(
-            _fetch, tokens, days, opts["wellness"], opts["activities"]
+        new_tokens, wellness, activities, weight = await asyncio.to_thread(
+            _fetch, tokens, days, opts["wellness"], opts["activities"], opts["weight"]
         )
     except Exception as exc:
         conn.status = "error"
@@ -190,6 +222,10 @@ async def sync(db: DbSession, conn: Connection) -> int:
         for key, value in row.items():
             if key != "day" and value is not None:
                 setattr(day, key, value)
+    if weight:
+        kg, measured_at = weight
+        if user.weight_updated_at is None or measured_at > user.weight_updated_at:
+            user.weight_kg, user.weight_source, user.weight_updated_at = kg, "garmin", measured_at
     for item in activities or []:
         if item.get("activityId") and item.get("startTimeGMT"):
             _upsert_activity(db, user, item)

@@ -121,6 +121,7 @@ function Status({ conn, provider, reload }) {
 const KIND_LABELS = {
   activities: "Activities (rides, runs, swims)",
   wellness: "Wellness (sleep, HRV, resting HR, Body Battery, stress, steps)",
+  weight: "Weight → Profile (latest weigh-in from Garmin or a Garmin Index scale)",
 };
 
 function SyncChoices({ conn, provider, run, busy }) {
@@ -128,7 +129,7 @@ function SyncChoices({ conn, provider, run, busy }) {
   const toggle = (kind, on) =>
     run(async () => {
       await api(`/api/connections/${provider}/options`, { method: "PATCH", body: { [kind]: on } });
-      if (!on && confirm(`Stopped importing ${kind} from ${name}, and hid what was already imported.\n\nAlso delete those ${kind} from CoachQuest? Cancel keeps them hidden; switching back on shows them again.`)) {
+      if (!on && kind !== "weight" && confirm(`Stopped importing ${kind} from ${name}, and hid what was already imported.\n\nAlso delete those ${kind} from CoachQuest? Cancel keeps them hidden; switching back on shows them again.`)) {
         await api(`/api/connections/${provider}/data/${kind}`, { method: "DELETE" });
       }
     });

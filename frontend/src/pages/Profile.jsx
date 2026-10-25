@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
+import { dateTime } from "../lib/format.js";
 
 const NUMBER_FIELDS = [
   ["ftp_watts", "FTP (watts)", "Used for power-based TSS"],
   ["lthr_bpm", "Lactate threshold HR (bpm)", "Used for heart-rate TSS when there is no power"],
   ["max_hr_bpm", "Max HR (bpm)", ""],
-  ["weight_kg", "Weight (kg)", ""],
+  ["weight_kg", "Weight (kg)", "Updated from Garmin when the Weight option is on under Connections"],
 ];
 
 export default function Profile() {
@@ -51,6 +52,9 @@ export default function Profile() {
             {label}
             <input type="number" value={form[k]} onChange={set(k)} step="any" />
             {hint && <span className="hint">{hint}</span>}
+            {k === "weight_kg" && user.weight_source === "garmin" && (
+              <span className="hint">From Garmin, weighed {dateTime(user.weight_updated_at)}</span>
+            )}
           </label>
         ))}
         <label className="wide">

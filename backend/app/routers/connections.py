@@ -236,6 +236,13 @@ def delete_data(provider: str, kind: str, user: User = Depends(current_user), db
     """Delete already-imported data of one type from one provider."""
     if kind not in sync_options.KINDS.get(provider, ()):
         raise HTTPException(status_code=404, detail="Unknown data type")
+    if kind == "weight":
+        # Weight lives on the profile; clear it only if it came from this provider.
+        if user.weight_source == provider:
+            user.weight_kg = user.weight_source = user.weight_updated_at = None
+            db.commit()
+            return {"deleted": 1}
+        return {"deleted": 0}
     if kind == "activities":
         result = db.execute(delete(Activity).where(Activity.user_id == user.id, Activity.source == provider))
     else:

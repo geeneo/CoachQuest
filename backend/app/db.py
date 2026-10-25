@@ -47,6 +47,9 @@ class User(Base):
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Where weight_kg came from ("garmin" | "manual") and when it was measured or entered.
+    weight_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    weight_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Session(Base):
@@ -230,7 +233,10 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 # Columns added after the first release. create_all() only creates missing
 # tables, so add missing columns to existing ones here.
-_ADDED_COLUMNS = {"connections": {"options": "JSON"}}
+_ADDED_COLUMNS = {
+    "connections": {"options": "JSON"},
+    "users": {"weight_source": "VARCHAR(20)", "weight_updated_at": "DATETIME"},
+}
 
 
 def init_db() -> None:
