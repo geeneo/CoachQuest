@@ -634,3 +634,30 @@ code {
 .sync-choices > .btn {
   align-self: flex-start;
 }
+
+.chart-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 1rem;
+}
+.chart-pair figure {
+  margin: 0;
+  min-width: 0;
+}
+.chart-pair figcaption {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+@media (max-width: 768px) {
+  .chart-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-sub {
+  color: var(--muted);
+  font-size: 0.75rem;
+}

@@ -142,6 +142,16 @@ class Activity(Base):
     relative_effort: Mapped[float | None] = mapped_column(Float, nullable=True)
     tss: Mapped[float] = mapped_column(Float, default=0)
     tss_method: Mapped[str] = mapped_column(String(20), default="duration")
+    avg_cadence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_speed_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    kilojoules: Mapped[float | None] = mapped_column(Float, nullable=True)
+    calories: Mapped[float | None] = mapped_column(Float, nullable=True)
+    indoor: Mapped[bool] = mapped_column(Boolean, default=False)  # trainer / virtual
+    is_race: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Set by the athlete in CoachQuest; never written back to the provider.
+    type_override: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    race_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note_tag: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
 class WellnessDay(Base):
@@ -252,6 +262,17 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 # tables, so add missing columns to existing ones here.
 _ADDED_COLUMNS = {
     "connections": {"options": "JSON", "backfill": "JSON"},
+    "activities": {
+        "avg_cadence": "FLOAT",
+        "avg_speed_ms": "FLOAT",
+        "kilojoules": "FLOAT",
+        "calories": "FLOAT",
+        "indoor": "BOOLEAN NOT NULL DEFAULT 0",
+        "is_race": "BOOLEAN NOT NULL DEFAULT 0",
+        "type_override": "VARCHAR(40)",
+        "race_id": "INTEGER",
+        "note_tag": "VARCHAR(40)",
+    },
     "users": {"weight_source": "VARCHAR(20)", "weight_updated_at": "DATETIME", "profile_sources": "JSON"},
 }
 

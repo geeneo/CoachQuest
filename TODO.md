@@ -37,7 +37,7 @@
       - Show where each value came from and when, e.g. "FTP 265 W · Garmin ·
         3 days ago".
       - When FTP or LTHR changes, recalculate TSS (Save already does this).
-- [ ] **My training: volume summary** (like the old hub's Volume stats).
+- [x] **My training: volume summary** (like the old hub's Volume stats).
       - 7 / 30 / 90 day switch.
       - Cards: distance (with activity count), elevation, moving time,
         calories, average effort per ride (Strava relative effort).

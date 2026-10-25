@@ -13,7 +13,15 @@ from sqlalchemy.orm import Session as DbSession
 from .. import profile_sync
 from ..db import Connection, Grant, User, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
-from ..queries import activities_since, activity_out, load_curve, profile_out, wellness_out, wellness_since
+from ..queries import (
+    activities_since,
+    activity_out,
+    load_curve,
+    profile_out,
+    volume_summary,
+    wellness_out,
+    wellness_since,
+)
 from .auth import user_out
 
 router = APIRouter(prefix="/api", tags=["athletes"])
@@ -84,6 +92,21 @@ def activities(
     require_scope(db, user, athlete_id, "activities")
     acts = activities_since(db, athlete_id, datetime.now() - timedelta(days=days))
     return [activity_out(a) for a in reversed(acts)]
+
+
+@router.get("/athletes/{athlete}/summary")
+def summary(
+    athlete: str,
+    days: int = Query(default=30, ge=1, le=3660),
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Volume stats for the period, activity mix and 12 weeks of elevation."""
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "activities")
+    today = date.today()
+    since = datetime.combine(min(today - timedelta(days=days), today - timedelta(weeks=12)), datetime.min.time())
+    return volume_summary(activities_since(db, athlete_id, since), days, today)
 
 
 @router.get("/athletes/{athlete}/fitness")

@@ -197,6 +197,13 @@ def _upsert(db: DbSession, user: User, item: dict) -> None:
     act.avg_power = item.get("average_watts") if item.get("device_watts") else None
     act.norm_power = item.get("weighted_average_watts") if item.get("device_watts") else None
     act.relative_effort = item.get("suffer_score")
+    act.avg_cadence = item.get("average_cadence")
+    act.avg_speed_ms = item.get("average_speed")
+    act.kilojoules = item.get("kilojoules")
+    act.calories = item.get("calories")  # only on detailed activities; usually empty here
+    act.indoor = bool(item.get("trainer")) or act.sport in ("VirtualRide", "VirtualRun")
+    # Strava's workout_type: 1 = race (runs), 11 = race (rides)
+    act.is_race = item.get("workout_type") in (1, 11)
     act.tss, act.tss_method = estimate_tss(
         act.duration_s,
         act.norm_power,

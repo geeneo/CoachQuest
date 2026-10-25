@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ActivitiesTable from "../components/ActivitiesTable.jsx";
 import FitnessChart from "../components/FitnessChart.jsx";
+import VolumeStats from "../components/VolumeStats.jsx";
 import WellnessPanel, { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { dateTime, formLabel } from "../lib/format.js";
 import PlansPanel from "./PlansPanel.jsx";
 
 const TABS = [
-  { id: "overview", label: "Overview", needs: ["fitness", "wellness"] },
+  { id: "overview", label: "Overview", needs: ["activities", "fitness", "wellness"] },
   { id: "activities", label: "Activities", needs: ["activities"] },
   { id: "plans", label: "Plans & AI coach", needs: ["plans"] },
 ];
@@ -61,6 +62,7 @@ function Overview({ id, scopes }) {
   const today = fitness.data?.[fitness.data.length - 1];
   return (
     <>
+      {scopes.has("activities") && <VolumeStats id={id} />}
       {scopes.has("fitness") && (
         <section className="card">
           <h2>Training load</h2>

@@ -33,13 +33,14 @@ export default function WellnessPanel({ rows }) {
   );
 }
 
-export function Stat({ label, value, unit }) {
+export function Stat({ label, value, unit, sub }) {
   return (
     <div className="stat">
       <div className="stat-label">{label}</div>
       <div className="stat-value">
         {value ?? "–"} {value != null && unit ? <span className="muted small">{unit}</span> : null}
       </div>
+      {sub && <div className="stat-sub">{sub}</div>}
     </div>
   );
 }

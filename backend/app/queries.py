@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from .activity_types import category, is_outdoor, is_ride
 from .db import Activity, WellnessDay
 from .fitness import daily_tss, dedupe, pmc
 from .sync_options import hidden_sources
@@ -42,6 +43,52 @@ def load_curve(db: DbSession, athlete_id: int, days: int, today: date | None = N
     acts = activities_since(db, athlete_id, datetime.combine(warmup_start, datetime.min.time()))
     curve = pmc(daily_tss([(a.start_time, a.tss) for a in acts]), warmup_start, today)
     return curve[-days:], acts
+
+
+def calories(a: Activity) -> float | None:
+    """Calories as recorded, else cycling kilojoules (≈ kcal burned, by the ~24% efficiency rule of thumb)."""
+    if a.calories:
+        return a.calories
+    if a.kilojoules and is_ride(a):
+        return a.kilojoules
+    return None
+
+
+def volume_summary(acts: list[Activity], days: int, today: date) -> dict:
+    """Totals for the last `days`, activity mix, and weekly elevation for the last 12 weeks."""
+    since = datetime.combine(today - timedelta(days=days - 1), datetime.min.time())
+    period = [a for a in acts if a.start_time >= since]
+    cals = [c for c in (calories(a) for a in period) if c]
+    efforts = [a.relative_effort for a in period if a.relative_effort and is_ride(a)]
+    mix: dict[str, dict] = {}
+    for a in period:
+        m = mix.setdefault(category(a), {"category": category(a), "count": 0, "hours": 0.0, "km": 0.0})
+        m["count"] += 1
+        m["hours"] += a.duration_s / 3600
+        m["km"] += a.distance_m / 1000
+    monday = today - timedelta(days=today.weekday())
+    weeks = [monday - timedelta(weeks=i) for i in range(11, -1, -1)]
+    elevation = {w: 0.0 for w in weeks}
+    for a in acts:
+        d = a.start_time.date()
+        week = d - timedelta(days=d.weekday())
+        if week in elevation:
+            elevation[week] += a.elevation_m
+    return {
+        "days": days,
+        "count": len(period),
+        "distance_km": round(sum(a.distance_m for a in period) / 1000, 1),
+        "elevation_m": round(sum(a.elevation_m for a in period)),
+        "outdoor_elevation_m": round(sum(a.elevation_m for a in period if is_outdoor(a))),
+        "moving_hours": round(sum(a.duration_s for a in period) / 3600, 1),
+        "calories": round(sum(cals)) if cals else None,
+        "avg_relative_effort": round(sum(efforts) / len(efforts)) if efforts else None,
+        "mix": sorted(
+            ({**m, "hours": round(m["hours"], 1), "km": round(m["km"], 1)} for m in mix.values()),
+            key=lambda m: -m["count"],
+        ),
+        "weekly_elevation": [{"week_start": w.isoformat(), "elevation_m": round(elevation[w])} for w in weeks],
+    }
 
 
 def profile_out(athlete, scopes: set[str]) -> dict:

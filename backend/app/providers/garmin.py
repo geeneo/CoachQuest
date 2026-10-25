@@ -245,6 +245,12 @@ def _upsert_activity(db: DbSession, user: User, item: dict) -> None:
     act.max_hr = item.get("maxHR")
     act.avg_power = item.get("avgPower")
     act.norm_power = item.get("normPower")
+    act.avg_cadence = item.get("averageBikingCadenceInRevPerMinute") or item.get(
+        "averageRunningCadenceInStepsPerMinute"
+    )
+    act.avg_speed_ms = item.get("averageSpeed")
+    act.calories = item.get("calories")
+    act.indoor = act.sport in ("virtual_ride", "indoor_cycling", "treadmill_running", "indoor_running")
     act.tss, act.tss_method = estimate_tss(
         act.duration_s, act.norm_power, act.avg_power, act.avg_hr, None, user.ftp_watts, user.lthr_bpm
     )
