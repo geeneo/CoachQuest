@@ -1,5 +1,5 @@
 import { RefreshCw, Unlink } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
@@ -28,6 +28,15 @@ export default function Connections() {
   const conns = useApi("/api/connections");
   const [params] = useSearchParams();
   const byProvider = Object.fromEntries((conns.data?.connections || []).map((c) => [c.provider, c]));
+  const firstSyncRunning = (conns.data?.connections || []).some((c) => !c.last_sync_at && c.status === "active");
+
+  // A first sync runs in the background; refresh until it has finished (max ~3 minutes).
+  useEffect(() => {
+    if (!firstSyncRunning) return;
+    let polls = 0;
+    const timer = setInterval(() => (++polls > 45 ? clearInterval(timer) : conns.reload()), 4000);
+    return () => clearInterval(timer);
+  }, [firstSyncRunning, conns.reload]);
 
   return (
     <>
@@ -73,6 +82,7 @@ function Status({ conn, provider, reload }) {
       reload();
     } catch (err) {
       setMsg(err.message);
+      reload();
     } finally {
       setBusy(false);
     }
@@ -88,7 +98,7 @@ function Status({ conn, provider, reload }) {
     <>
       <p className="small">
         <span className={`badge ${conn.status === "active" ? "ok" : "bad"}`}>{conn.status}</span> Last sync:{" "}
-        {dateTime(conn.last_sync_at)}
+        {conn.last_sync_at ? dateTime(conn.last_sync_at) : conn.status === "active" ? "first sync running…" : "never"}
       </p>
       {conn.last_error && <p className="error small">{conn.last_error}</p>}
       <SyncChoices conn={conn} provider={provider} run={run} busy={busy} />
