@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -245,15 +246,19 @@ class Plan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
-class PlanComment(Base):
-    """A comment on a training plan, or on one day of it, by the athlete or a coach."""
+class Comment(Base):
+    """A comment by the athlete or a coach on a plan (or one of its days), an AI coach note
+    (assessment) or a calendar workout. See comments.py."""
 
-    __tablename__ = "plan_comments"
+    __tablename__ = "comments"
+    __table_args__ = (Index("ix_comments_target", "target", "target_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id", ondelete="CASCADE"), index=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    target: Mapped[str] = mapped_column(String(12))  # plan | assessment | workout
+    target_id: Mapped[int] = mapped_column(Integer)
+    day: Mapped[date | None] = mapped_column(Date, nullable=True)  # plan comments about one day
     author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    day: Mapped[date | None] = mapped_column(Date, nullable=True)  # None = about the whole plan
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     edited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -458,7 +463,6 @@ _ADDED_COLUMNS = {
     "connections": {"options": "JSON", "backfill": "JSON"},
     "plans": {"start_date": "DATE", "weeks": "JSON"},
     "wellness_days": {"source": "VARCHAR(20) NOT NULL DEFAULT 'garmin'"},
-    "plan_comments": {"edited_by": "INTEGER"},
     "scheduled_workouts": {
         "plan_id": "INTEGER",
         "plan_managed": "BOOLEAN NOT NULL DEFAULT 0",
@@ -503,6 +507,16 @@ def init_db() -> None:
             for name, sql_type in columns.items():
                 if name not in have:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"))
+        # Plan comments briefly had their own table; move them into comments once.
+        if existing.has_table("plan_comments"):
+            conn.execute(
+                text(
+                    "INSERT INTO comments (athlete_id, target, target_id, day, author_id, body, created_at, edited_at) "
+                    "SELECT p.athlete_id, 'plan', c.plan_id, c.day, c.author_id, c.body, c.created_at, c.edited_at "
+                    "FROM plan_comments c JOIN plans p ON p.id = c.plan_id"
+                )
+            )
+            conn.execute(text("DROP TABLE plan_comments"))
 
 
 def get_db():

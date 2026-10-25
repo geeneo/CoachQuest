@@ -1414,3 +1414,13 @@ tr.sub-row td {
   font-size: 0.7rem;
   margin-left: 2px;
 }
+.comments-toggle {
+  margin: 0.6rem 0;
+}
+.comments-toggle .comment-thread {
+  margin-top: 0.5rem;
+}
+.btn.has-comments {
+  border-color: var(--c1);
+  color: var(--c1);
+}

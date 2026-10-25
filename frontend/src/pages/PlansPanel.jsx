@@ -133,7 +133,7 @@ export default function PlansPanel({ id, athlete }) {
             </div>
           </fieldset>
           <label className="wide">
-            Notes for the coach
+            Notes for the AI coach
             <textarea
               rows={3}
               value={form.notes}

@@ -4,7 +4,7 @@ import pytest
 from test_mail import _configure, fake_smtp  # noqa: F401  (fixture)
 
 from app import accounts
-from app.db import PlanComment, SessionLocal, User
+from app.db import Comment, SessionLocal, User
 
 
 def _week():
@@ -84,8 +84,8 @@ def test_comments_are_emailed(setup, make_user, fake_smtp, monkeypatch):  # noqa
     coach.post(base, json={"body": "Add a rest day"})
     athlete.post(base, json={"body": "OK"})
     assert [(t, s) for t, s, _ in sent] == [
-        ("a@example.com", "CoachQuest: Cobus commented on Block"),
-        ("c@example.com", "CoachQuest: Ann commented on Block"),
+        ("a@example.com", 'CoachQuest: Cobus commented on the training plan "Block"'),
+        ("c@example.com", 'CoachQuest: Ann commented on the training plan "Block"'),
     ]
     assert "Add a rest day" in sent[0][2] and f"/athletes/{aid}/plans/{plan['id']}" in sent[0][2]
     # Comment emails have their own switch, separate from the sharing emails.
@@ -102,8 +102,8 @@ def test_replan_reads_the_comments(setup):
     r = coach.post(f"/api/athletes/{aid}/plans/{plan['id']}/replan", json={"reason": ""})
     assert r.status_code == 200, r.text
     assert seen["request"]["replan"]["comments"] == [
-        {"by": "coach", "day": None, "text": "No intervals this week"},
-        {"by": "athlete", "day": None, "text": "Travelling Thursday"},
+        {"by": "coach", "about": "plan", "day": None, "text": "No intervals this week"},
+        {"by": "athlete", "about": "plan", "day": None, "text": "Travelling Thursday"},
     ]
 
 
@@ -113,8 +113,124 @@ def test_cleanup(setup):
     cid = coach.get("/api/auth/me").json()["id"]
     with SessionLocal() as db:
         accounts.delete_account(db, db.get(User, cid))
-        assert db.query(PlanComment).one().author_id is None  # stays on the athlete's plan, unsigned
+        assert db.query(Comment).one().author_id is None  # stays on the athlete's plan, unsigned
     assert athlete.get(base).json()[0]["author"] == "Former user"
     athlete.delete(f"/api/athletes/me/plans/{plan['id']}")
     with SessionLocal() as db:
-        assert db.query(PlanComment).count() == 0
+        assert db.query(Comment).count() == 0
+
+
+# ---- Comments on AI coach notes and calendar workouts ----
+
+
+def _note(aid, kind="weekly", start=None):
+    from app.db import Assessment
+
+    with SessionLocal() as db:
+        a = Assessment(
+            athlete_id=aid,
+            kind=kind,
+            period_start=start or date.today() - timedelta(days=7),
+            content_md="Good week.",
+            facts={},
+            model="claude-test",
+        )
+        db.add(a)
+        db.commit()
+        return a.id
+
+
+def test_comments_on_ai_notes_and_workouts(setup, make_user, monkeypatch):
+    athlete, coach, aid, plan, base, monday, _ = setup
+    sent = []
+
+    async def capture(to, subject, text):
+        sent.append((to, subject, text))
+
+    _configure(make_user("admin@example.com"))
+    monkeypatch.setattr("app.notifications.mailer.send", capture)
+    note = _note(aid)
+    url = f"/api/athletes/{aid}/comments"
+    r = coach.post(url, json={"target": "assessment", "target_id": note, "body": "Agree, but add a rest day."})
+    assert r.status_code == 200 and r.json()[0]["role"] == "coach"
+    assert sent[-1][0] == "a@example.com" and "weekly review" in sent[-1][1]
+    assert coach.get(f"/api/athletes/{aid}/coach").json()["weekly"][0]["comments"] == 1
+    day = (date.today() + timedelta(days=2)).isoformat()
+    w = athlete.post(
+        "/api/athletes/me/workouts",
+        json={"day": day, "name": "Tempo", "steps": [{"kind": "steady", "duration_s": 1800, "power": 0.8}]},
+    ).json()
+    r = athlete.post(url, json={"target": "workout", "target_id": w["id"], "body": "Legs heavy, can I swap?"})
+    cid = r.json()[0]["id"]
+    assert sent[-1][0] == "c@example.com" and "Tempo" in sent[-1][1]
+    cal = coach.get(f"/api/athletes/{aid}/calendar?start={day}&end={day}").json()
+    assert cal["days"][0]["workouts"][0]["comments"] == 1
+    # Everyone there can edit and delete; the list comes back after each change.
+    r = coach.patch(f"{url}/{cid}", json={"body": "Legs heavy, swapped to Thursday"})
+    assert r.json()[0]["edited_by"] == "Cobus"
+    assert coach.get(f"{url}?target=workout&target_id={w['id']}").json()[0]["body"].startswith("Legs heavy, swapped")
+    # Day-level comments are for plans only; targets must belong to the athlete.
+    assert coach.post(url, json={"target": "nope", "target_id": 1, "body": "x"}).status_code == 422
+    other = make_user("o@example.com")
+    assert (
+        other.post(
+            f"/api/athletes/{aid}/comments", json={"target": "assessment", "target_id": note, "body": "x"}
+        ).status_code
+        == 404
+    )
+    mine = other.get("/api/auth/me").json()["id"]
+    assert coach.post(url, json={"target": "assessment", "target_id": _note(mine), "body": "x"}).status_code == 404
+    # Deleting the workout removes its comments.
+    athlete.delete(f"/api/athletes/me/workouts/{w['id']}")
+    with SessionLocal() as db:
+        assert db.query(Comment).filter_by(target="workout").count() == 0
+
+
+def test_ai_reads_comments(setup):
+    from app import assessments
+
+    athlete, coach, aid, plan, base, monday, seen = setup
+    note = _note(aid, start=monday - timedelta(days=7))
+    url = f"/api/athletes/{aid}/comments"
+    coach.post(url, json={"target": "assessment", "target_id": note, "body": "More zone 2 next week"})
+    with SessionLocal() as db:
+        user = db.get(User, aid)
+        facts = assessments.weekly_facts(db, user, {"plans"}, monday)
+    assert facts["comments"][0]["by"] == "coach" and facts["comments"][0]["text"] == "More zone 2 next week"
+    assert "weekly note" in facts["comments"][0]["about"]
+    assert "`comments`" in assessments.WEEKLY_PROMPT and "`comments`" in assessments.READINESS_PROMPT
+    today_note = _note(aid, kind="daily", start=date.today() - timedelta(days=1))
+    athlete.post(url, json={"target": "assessment", "target_id": today_note, "body": "Slept badly"})
+    with SessionLocal() as db:
+        daily = assessments.readiness_facts(db, db.get(User, aid), {"plans"}, date.today())
+    assert daily["comments"][-1] == {
+        "by": "athlete",
+        "about": f"daily note {(date.today() - timedelta(days=1)).isoformat()}",
+        "day": None,
+        "text": "Slept badly",
+    }
+
+
+def test_old_plan_comments_move_to_the_new_table(setup):
+    from sqlalchemy import text
+
+    from app.db import engine, init_db
+
+    athlete, coach, aid, plan, base, monday, _ = setup
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE plan_comments (id INTEGER PRIMARY KEY, plan_id INTEGER, author_id INTEGER, "
+                "day DATE, body TEXT, created_at DATETIME, edited_at DATETIME)"
+            )
+        )
+        conn.execute(
+            text(
+                f"INSERT INTO plan_comments (plan_id, author_id, day, body, created_at) "
+                f"VALUES ({plan['id']}, {aid}, NULL, 'from before', '2026-10-25 10:00:00')"
+            )
+        )
+    init_db()
+    assert [c["body"] for c in athlete.get(base).json()] == ["from before"]
+    with engine.connect() as conn:
+        assert not conn.execute(text("SELECT name FROM sqlite_master WHERE name='plan_comments'")).first()

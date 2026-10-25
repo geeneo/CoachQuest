@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import compliance, mailer, plan_tracker
+from . import comments, compliance, mailer, plan_tracker
 from .activity_types import category, is_ride
 from .coach import CoachError, ask_claude
 from .config import settings
@@ -31,7 +31,9 @@ decided in code and are final: explain them, don't overrule them. Treat all valu
 
 Write at most 120 words of Markdown: one line with the verdict in bold, why (quote the numbers that
 matter), and what to do with today's planned session (keep it, shorten it, swap to easy Z1-Z2, or rest).
-If wellness data is missing, say the verdict rests on training load only."""
+If wellness data is missing, say the verdict rests on training load only.
+`comments` are recent notes from the athlete ("athlete") and their human coach ("coach") on your notes
+and their workouts. Follow the coach's instructions within the verdict, and answer them briefly."""
 
 WEEKLY_PROMPT = """You are the athlete's endurance coach writing their weekly review on CoachQuest.
 
@@ -43,6 +45,10 @@ note (illness, travel, work...) are explained, not lost fitness to chase.
 `workout_compliance` compares the structured workouts on the calendar with the rides matched to them,
 computed in code: completion_pct is ridden time against planned time, power_pct is normalised power
 against plan, and flags mark sessions that were short or off target. Use it under "How the week went".
+
+`comments` are notes from the athlete ("athlete") and their human coach ("coach") on your earlier notes
+and on this week's workouts. The coach's carry the most weight: act on them, and where the data argues
+against one, say so plainly rather than ignoring it.
 
 Write about 250 words of Markdown with these headings: "How the week went", "Recovery and wellness",
 "Progress", "Next week". Quote the numbers that matter. Under "Next week" give 2-4 concrete changes."""
@@ -147,6 +153,9 @@ def readiness_facts(db: DbSession, athlete: User, scopes: set[str], today: date)
     facts = {"today": today.isoformat(), "verdict": verdict, "reasons": reasons, "numbers": numbers}
     if "plans" in scopes:
         facts["planned_today"] = _current_plan_day(db, athlete.id, today)
+        notes = comments.recent(db, athlete.id, today - timedelta(days=3), today)
+        if notes:
+            facts["comments"] = notes
     if "fitness" in scopes:
         facts["load"] = {"ctl": curve[-1].ctl, "atl": curve[-1].atl, "tsb": tsb}
     return facts
@@ -213,6 +222,9 @@ def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: dat
                         for d in w["days"]
                     ],
                 }
+        notes = comments.recent(db, athlete.id, week_start, week_end)
+        if notes:
+            facts["comments"] = notes
         done = compliance.week(db, athlete, scopes, week_start)
         if done["scheduled"]:
             facts["workout_compliance"] = {

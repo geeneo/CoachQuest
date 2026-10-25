@@ -10,12 +10,12 @@ from datetime import date, datetime, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import completion, compliance, localtime, platforms, sync_engine, workouts, zwo
+from .. import comments, completion, compliance, localtime, platforms, sync_engine, workouts, zwo
 from ..activity_types import category
-from ..db import Activity, Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
+from ..db import Activity, Comment, Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..plan_tracker import GOAL_SHARE
 from ..queries import activities_since
@@ -168,6 +168,7 @@ def scheduled_out(
     names: dict[int, str],
     scopes: set[str],
     delivery: list[dict] | None = None,
+    comment_count: int = 0,
 ) -> dict:
     """A calendar workout with its status and, once ridden, planned vs actual.
 
@@ -212,6 +213,7 @@ def scheduled_out(
         "assigned_by": names.get(sw.assigned_by),
         # Where it was sent automatically, if anywhere; it can always be downloaded by hand.
         "delivery": delivery or [],
+        "comments": comment_count,
         "match": sw.match,  # auto | manual | none
         "plan_id": sw.plan_id,
         "from_plan": sw.plan_managed,
@@ -286,6 +288,7 @@ def calendar(
     ids = {sw.assigned_by for sw in rows if sw.assigned_by}
     names = {u.id: u.display_name for u in db.scalars(select(User).where(User.id.in_(ids)))} if ids else {}
     delivery = sync_engine.status_for(db, [sw.id for sw in rows])
+    n_comments = comments.counts(db, "workout", [sw.id for sw in rows])
     plan_days = _plan_days(db, target.id, start, end)
     days = []
     for i in range((end - start).days + 1):
@@ -298,7 +301,16 @@ def calendar(
                 "is_today": d == today,
                 "plan": plan_days.get(key),
                 "workouts": [
-                    scheduled_out(sw, target, today, _rides(sw, briefs), names, scopes, delivery.get(sw.id))
+                    scheduled_out(
+                        sw,
+                        target,
+                        today,
+                        _rides(sw, briefs),
+                        names,
+                        scopes,
+                        delivery.get(sw.id),
+                        n_comments.get(sw.id, 0),
+                    )
                     for sw in by_day.get(key, [])
                 ],
                 "activities": acts if "activities" in scopes else [],
@@ -448,6 +460,7 @@ def delete_scheduled(
     sw = _scheduled(db, target, workout_id)
     name = sw.name
     db.delete(sw)
+    db.execute(delete(Comment).where(Comment.target == "workout", Comment.target_id == workout_id))
     db.commit()
     if sync_engine.workout_removed(db, target.id, workout_id, name):
         background.add_task(sync_engine.run_due)

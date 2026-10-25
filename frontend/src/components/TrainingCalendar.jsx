@@ -5,6 +5,7 @@ import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
 import { duration } from "../lib/format.js";
 import { addDays, localToday } from "../lib/workout.js";
+import { CommentsToggle } from "./PlanComments.jsx";
 import WorkoutChart from "./WorkoutChart.jsx";
 
 const STATUS = {
@@ -195,6 +196,11 @@ export default function TrainingCalendar({ id, isMe }) {
                 </span>
                 <span className={`status ${STATUS[w.status].cls}`}>{STATUS[w.status].label}</span>
                 {w.delivery.length > 0 && <DeliveryBadge delivery={w.delivery} />}
+                {w.comments > 0 && (
+                  <span className="small muted" title="Comments">
+                    💬 {w.comments}
+                  </span>
+                )}
                 {view === "day" && <WorkoutChart blocks={w.blocks} height={60} compact />}
               </button>
             ))}
@@ -336,6 +342,7 @@ function WorkoutDetail({ w, ftp, id, edit, remove, onError, close, reload }) {
         {w.from_plan ? " Made by the training plan: re-planning updates it until you edit it here." : ""}
       </p>
       <RideMatch w={w} id={id} edit={edit} />
+      <CommentsToggle key={w.id} athleteId={id} target="workout" targetId={w.id} count={w.comments} />
       {w.delivery.length > 0 && <DeliveryList w={w} id={id} onError={onError} reload={reload} />}
       <div className="row wrap">
         <button

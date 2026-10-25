@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import assessments, coach_chat
+from .. import assessments, coach_chat, comments
 from ..coach import CoachError
 from ..db import Assessment, CoachChat, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -25,10 +25,13 @@ def overview(athlete: str, user: User = Depends(current_user), db: DbSession = D
     rows = db.scalars(
         select(Assessment).where(Assessment.athlete_id == athlete_id).order_by(Assessment.created_at.desc()).limit(40)
     ).all()
-    daily = [assessments.assessment_out(a) for a in rows if a.kind == "daily"]
+    n = comments.counts(db, "assessment", [a.id for a in rows])
+    daily = [{**assessments.assessment_out(a), "comments": n.get(a.id, 0)} for a in rows if a.kind == "daily"]
     out = {
         "latest_daily": daily[0] if daily else None,
-        "weekly": [assessments.assessment_out(a) for a in rows if a.kind == "weekly"][:12],
+        "weekly": [{**assessments.assessment_out(a), "comments": n.get(a.id, 0)} for a in rows if a.kind == "weekly"][
+            :12
+        ],
         "progress": assessments.progress(db, athlete_id) if "fitness" in scopes else None,
     }
     if athlete_id == user.id:

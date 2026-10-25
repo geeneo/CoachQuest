@@ -5,6 +5,7 @@ import { api } from "../lib/api.js";
 import { dateTime } from "../lib/format.js";
 import Markdown from "./Markdown.jsx";
 import { Stat } from "./WellnessPanel.jsx";
+import { CommentsToggle } from "./PlanComments.jsx";
 
 const VERDICT = {
   go: ["GO", "Train as planned", "verdict-go"],
@@ -34,16 +35,16 @@ export default function AiCoach({ id, isMe }) {
   return (
     <>
       {error && <div className="error">{error}</div>}
-      <Readiness daily={d.latest_daily} busy={busy === "daily"} onRun={() => generate("daily")} />
+      <Readiness id={id} daily={d.latest_daily} busy={busy === "daily"} onRun={() => generate("daily")} />
       {d.progress && <Progress p={d.progress} />}
       <AskCoach id={id} />
-      <WeeklyReviews reviews={d.weekly} busy={busy === "weekly"} onRun={() => generate("weekly")} />
+      <WeeklyReviews id={id} reviews={d.weekly} busy={busy === "weekly"} onRun={() => generate("weekly")} />
       {isMe && d.ai_settings && <Schedule settings={d.ai_settings} />}
     </>
   );
 }
 
-function Readiness({ daily, busy, onRun }) {
+function Readiness({ id, daily, busy, onRun }) {
   const today = new Date().toISOString().slice(0, 10);
   const fresh = daily && daily.period_start === today;
   const [label, text, cls] = daily ? VERDICT[daily.verdict] || [] : [];
@@ -67,6 +68,13 @@ function Readiness({ daily, busy, onRun }) {
             {daily.facts?.reasons?.length > 0 && (
               <p className="hint">Decided by CoachQuest from: {daily.facts.reasons.join(" · ")}</p>
             )}
+            <CommentsToggle
+              key={daily.id}
+              athleteId={id}
+              target="assessment"
+              targetId={daily.id}
+              count={daily.comments}
+            />
           </div>
         </div>
       ) : (
@@ -106,7 +114,7 @@ function Progress({ p }) {
   );
 }
 
-function WeeklyReviews({ reviews, busy, onRun }) {
+function WeeklyReviews({ id, reviews, busy, onRun }) {
   const [open, setOpen] = useState(reviews[0]?.id);
   return (
     <section className="card">
@@ -123,6 +131,7 @@ function WeeklyReviews({ reviews, busy, onRun }) {
             Week of {r.period_start} <span className="muted small">· {dateTime(r.created_at)}</span>
           </summary>
           <Markdown>{r.content_md}</Markdown>
+          <CommentsToggle athleteId={id} target="assessment" targetId={r.id} count={r.comments} />
         </details>
       ))}
     </section>

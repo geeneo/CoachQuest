@@ -238,9 +238,9 @@
       - Input per plan and per re-plan: a "Coach's notes" box that goes to
         Claude with the request. Shown on the plan so everyone sees what
         shaped it.
-      - Coach comments on the AI's readiness notes and weekly reviews
-        ("agree", "disagree, because…"). The next review takes them into
-        account.
+      - [x] Comments on the AI's readiness notes, weekly reviews and calendar
+        workouts (and on plans), by the athlete and coaches; the next note,
+        review or re-plan takes them into account. Done.
       - Coach approval for AI plans: a plan or re-plan the AI writes for a
         coached athlete stays "draft, waiting for coach" until the coach
         approves it, edits it, or sends it back. Only approved workouts go
@@ -285,6 +285,21 @@
       - Removes the activity from load (CTL/ATL/TSB), volume stats, plan vs
         actual and workout completion, and recalculates them.
       - Never deletes anything on Strava, Garmin or Intervals.icu itself.
+- [ ] **Download the indoor workout from the plan.** On the training plan,
+      the workout badge of an indoor day (e.g. "▤ SS 3x10" on Thursday) gets
+      a download: the .zwo file for Zwift / MyWhoosh, straight from the plan
+      day, also for days before the workout reached the calendar. Plus
+      "Download this week's indoor workouts" (ZIP) on each week card.
+- [ ] **Coach dashboard: all athletes' training week at a glance.** One page
+      for a coach (My athletes, as a table), a row per athlete with this week:
+      - Workouts done / planned, compliance % and time ridden vs planned,
+        today's session and whether it's done.
+      - Readiness (go / easy / rest), form (TSB), fitness trend, and flags
+        (missed sessions, under target, fatigue, sync or delivery errors).
+      - Next race and days to go; new comments and unread AI notes.
+      - Sort and filter (needs attention first); click through to the
+        athlete's calendar, plan or AI coach tab.
+      - Shows only what each athlete shares with the coach.
 
 ## Later
 
