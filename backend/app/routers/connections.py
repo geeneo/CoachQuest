@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from ..config import settings
+from .. import runtime
 from ..db import Activity, Connection, OAuthState, SessionLocal, User, WellnessDay, get_db, utcnow
 from ..deps import current_user
 from ..providers import garmin, strava
@@ -45,13 +45,13 @@ def list_connections(user: User = Depends(current_user), db: DbSession = Depends
     conns = db.scalars(select(Connection).where(Connection.user_id == user.id)).all()
     return {
         "connections": [conn_out(c) for c in conns],
-        "strava_configured": bool(settings.strava_client_id and settings.strava_client_secret),
+        "strava_configured": bool(runtime.get("strava_client_id") and runtime.get("strava_client_secret")),
     }
 
 
 @router.post("/strava/authorize")
 def strava_authorize(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    if not settings.strava_client_id:
+    if not runtime.get("strava_client_id"):
         raise HTTPException(status_code=503, detail="Strava is not configured on this server")
     db.execute(delete(OAuthState).where(OAuthState.created_at < utcnow() - timedelta(minutes=15)))
     state = secrets.token_urlsafe(24)

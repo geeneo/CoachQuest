@@ -4,15 +4,14 @@ import logging
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session as DbSession
+from sqlalchemy import select
 
+from . import runtime
 from .config import check_required, settings
-from .db import AiCall, Connection, SessionLocal, User, get_db, init_db
-from .deps import admin_user
-from .routers import athletes, auth, connections, grants, plans
+from .db import Connection, SessionLocal, init_db
+from .routers import admin, athletes, auth, connections, grants, plans
 from .routers.connections import run_sync
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -36,6 +35,8 @@ async def sync_all(provider: str) -> None:
 async def lifespan(app: FastAPI):
     check_required()
     init_db()
+    with SessionLocal() as db:
+        runtime.load(db)
     if settings.enable_scheduler:
         scheduler.add_job(sync_all, "interval", hours=6, args=["strava"], id="strava")
         scheduler.add_job(sync_all, "cron", hour="6,18", minute=15, args=["garmin"], id="garmin")
@@ -61,29 +62,10 @@ async def csrf_guard(request: Request, call_next):
     return await call_next(request)
 
 
-for r in (auth.router, auth.internal, connections.router, grants.router, athletes.router, plans.router):
+for r in (admin.router, auth.router, auth.internal, connections.router, grants.router, athletes.router, plans.router):
     app.include_router(r)
 
 
 @app.get("/api/health")
 def health():
     return {"ok": True}
-
-
-@app.get("/api/admin/version")
-def version(_: User = Depends(admin_user)):
-    return {"commit": settings.build_commit, "built": settings.build_time}
-
-
-@app.get("/api/admin/stats")
-def stats(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
-    return {
-        "users": db.scalar(select(func.count(User.id))),
-        "connections": dict(db.execute(select(Connection.provider, func.count()).group_by(Connection.provider)).all()),
-        "connection_errors": db.scalar(select(func.count()).where(Connection.status == "error")),
-        "ai_calls": dict(db.execute(select(AiCall.status, func.count()).group_by(AiCall.status)).all()),
-        "ai_tokens": {
-            "input": db.scalar(select(func.coalesce(func.sum(AiCall.input_tokens), 0))),
-            "output": db.scalar(select(func.coalesce(func.sum(AiCall.output_tokens), 0))),
-        },
-    }

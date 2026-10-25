@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 import anthropic
 from sqlalchemy.orm import Session as DbSession
 
-from .config import settings
+from . import runtime
 from .db import AiCall, User
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import load_curve, wellness_since
@@ -120,18 +120,19 @@ class CoachError(Exception):
 
 async def generate_plan(db: DbSession, viewer: User, athlete: User, facts: dict) -> tuple[str, str]:
     """Returns (markdown, model that served it)."""
-    if not settings.anthropic_api_key:
+    api_key = runtime.get("anthropic_api_key")
+    if not api_key:
         raise CoachError("The AI coach is not configured on this server.", 503)
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.AsyncAnthropic(api_key=api_key)
     started = time.monotonic()
-    status, usage_in, usage_out, model = "ok", 0, 0, settings.anthropic_model
+    status, usage_in, usage_out, model = "ok", 0, 0, runtime.get("anthropic_model")
     try:
         async with client.beta.messages.stream(
-            model=settings.anthropic_model,
+            model=model,
             max_tokens=32000,
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
-            output_config={"effort": settings.anthropic_effort},
+            output_config={"effort": runtime.get("anthropic_effort")},
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": json.dumps(facts, default=str, indent=1)}],
         ) as stream:

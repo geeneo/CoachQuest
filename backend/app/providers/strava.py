@@ -8,6 +8,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from .. import runtime
 from ..config import settings
 from ..db import Activity, Connection, User, utcnow
 from ..fitness import estimate_tss
@@ -32,7 +33,7 @@ def authorize_url(state: str) -> str:
         + "?"
         + urlencode(
             {
-                "client_id": settings.strava_client_id,
+                "client_id": runtime.get("strava_client_id"),
                 "redirect_uri": redirect_uri(),
                 "response_type": "code",
                 "approval_prompt": "auto",
@@ -55,8 +56,8 @@ async def exchange_code(db: DbSession, user: User, code: str, granted_scope: str
         resp = await client.post(
             TOKEN_URL,
             data={
-                "client_id": settings.strava_client_id,
-                "client_secret": settings.strava_client_secret,
+                "client_id": runtime.get("strava_client_id"),
+                "client_secret": runtime.get("strava_client_secret"),
                 "code": code,
                 "grant_type": "authorization_code",
             },
@@ -82,8 +83,8 @@ async def _access_token(db: DbSession, conn: Connection, client: httpx.AsyncClie
     resp = await client.post(
         TOKEN_URL,
         data={
-            "client_id": settings.strava_client_id,
-            "client_secret": settings.strava_client_secret,
+            "client_id": runtime.get("strava_client_id"),
+            "client_secret": runtime.get("strava_client_secret"),
             "grant_type": "refresh_token",
             "refresh_token": tokens["refresh_token"],
         },

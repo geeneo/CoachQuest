@@ -109,9 +109,24 @@ Fill in `.env` (it is gitignored, never commit it):
 - `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET`: from
   <https://www.strava.com/settings/api>. Set *Authorization Callback Domain* to
   the host of `PUBLIC_BASE_URL`.
-- `ANTHROPIC_API_KEY`.
-- `ADMIN_EMAILS`: these accounts get the Admin page.
-- `REGISTRATION_MODE=closed`: once everyone is registered.
+- `ADMIN_EMAILS`: these accounts get the Admin page. Needed for the first
+  admin only.
+
+Everything else can be set on the **Admin page** in the web UI instead of
+`.env`:
+
+- Anthropic API key, model and effort, with a *Test key* button
+- Strava client ID and secret
+- registration open/closed
+- which users are admins or disabled
+
+Values saved there override `.env` and take effect without a restart. They
+are stored encrypted with `TOKEN_ENCRYPTION_KEY`, so a copy of the database
+alone doesn't reveal them. Secrets are write-only: the page shows only their
+last 4 characters.
+
+`PROXY_SHARED_SECRET`, `TOKEN_ENCRYPTION_KEY` and `PUBLIC_BASE_URL` always stay
+in `.env`. The app and nginx need them before anything else can start.
 
 Put TLS in front of port `APP_PORT`: a Cloudflare Tunnel, Caddy/Traefik, or
 certificates added to the nginx config. Then turn on the HSTS line in

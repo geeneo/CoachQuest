@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
+from .. import runtime
 from ..config import SESSION_COOKIE, settings
 from ..db import Session, User, get_db, utcnow
 from ..deps import current_user
@@ -73,7 +74,7 @@ def _start_session(db: DbSession, user: User, response: Response, user_agent: st
 def register(body: Registration, request: Request, response: Response, db: DbSession = Depends(get_db)):
     email = body.email.lower()
     is_admin = email in settings.admin_emails
-    if settings.registration_mode != "open" and not is_admin:
+    if runtime.get("registration_mode") != "open" and not is_admin:
         raise HTTPException(status_code=403, detail="Registration is closed")
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="An account with that email already exists")

@@ -196,6 +196,17 @@ class AiCall(Base):
     at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class AppSetting(Base):
+    """Settings an admin changed in the web UI. Values are Fernet-encrypted."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value_enc: Mapped[str] = mapped_column(Text)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 _connect_args = {"check_same_thread": False} if settings.db_url.startswith("sqlite") else {}
 engine = create_engine(settings.db_url, connect_args=_connect_args)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
