@@ -21,8 +21,24 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("cq:unauthorized", onUnauthorized);
   }, [refresh]);
 
-  const login = async (email, password) => setUser(await api("/api/auth/login", { method: "POST", body: { email, password } }));
-  const register = async (body) => setUser(await api("/api/auth/register", { method: "POST", body }));
+  // After signing in, check that the browser kept the session cookie. It drops
+  // a Secure cookie on plain http, which otherwise looks like "nothing happens".
+  const confirmSession = async (signedIn) => {
+    try {
+      setUser(await api("/api/auth/me"));
+    } catch {
+      throw new Error(
+        window.location.protocol === "http:"
+          ? `Signed in as ${signedIn.email}, but the browser refused the session cookie because this page is on http://. ` +
+              "Open the site over https://, or set COOKIE_SECURE=false in .env for testing and restart the api container."
+          : `Signed in as ${signedIn.email}, but the browser did not keep the session cookie. ` +
+              "Check that cookies are allowed for this site and that the proxy passes Set-Cookie headers.",
+      );
+    }
+  };
+  const login = async (email, password) =>
+    confirmSession(await api("/api/auth/login", { method: "POST", body: { email, password } }));
+  const register = async (body) => confirmSession(await api("/api/auth/register", { method: "POST", body }));
   const logout = async () => {
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
     setUser(null);
