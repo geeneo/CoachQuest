@@ -18,7 +18,7 @@ from . import runtime
 from .db import AiCall, User
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import load_curve, profile_out, wellness_since
-from .routers.preferences import preferences_out
+from .routers.preferences import SESSION_TYPES, preferences_out
 from .routers.races import race_out, upcoming
 
 log = logging.getLogger("coachquest.ai")
@@ -42,11 +42,13 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 - An activity with a `note` (e.g. illness, travel, mechanical) explains itself: treat a light or missed
   week with such notes as disclosed, not as lost fitness to chase.
 - Give intensities as zones (Z1-Z5) and, when FTP or LTHR is known, as watts or bpm ranges.
-- Lay out the first two weeks day by day, and the remaining weeks as their weekly structure and \
-key sessions. Include recovery weeks where they belong.
-- Finish with short "adjust if" rules (sick, missed sessions, poor sleep/HRV).
-- Output Markdown only: a 2-3 sentence summary, "Key observations", the plan with a table per \
-week, then "Adjust if". This plan is general guidance, not medical advice."""
+- Plan every day of every requested week, starting on the Monday in `request.start_date`: 7 days per \
+week, rest days included (type "Rest", duration 0). Include recovery weeks where they belong.
+- Each day: a session type from the allowed list, a short concrete description (structure, terrain, \
+targets), duration in minutes, and intensity chips such as "Z2", "95-105% FTP" or "LTHR 160-165".
+- Each week: a phase and a one-line focus.
+- `summary_md` is Markdown: a 2-3 sentence summary, "Key observations", then short "Adjust if" rules \
+(sick, missed sessions, poor sleep/HRV). This plan is general guidance, not medical advice."""
 
 
 def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, today: date | None = None) -> dict:
@@ -127,23 +129,28 @@ class CoachError(Exception):
         self.status = status
 
 
-async def generate_plan(db: DbSession, viewer: User, athlete: User, facts: dict) -> tuple[str, str]:
-    """Returns (markdown, model that served it)."""
+async def ask_claude(
+    db: DbSession, viewer: User, athlete: User, system: str, content: str, output_format: dict | None = None
+) -> tuple[str, str]:
+    """One Claude call with logging of metadata only. Returns (text, model that served it)."""
     api_key = runtime.get("anthropic_api_key")
     if not api_key:
         raise CoachError("The AI coach is not configured on this server.", 503)
     client = anthropic.AsyncAnthropic(api_key=api_key)
     started = time.monotonic()
     status, usage_in, usage_out, model = "ok", 0, 0, runtime.get("anthropic_model")
+    output_config = {"effort": runtime.get("anthropic_effort")}
+    if output_format:
+        output_config["format"] = output_format
     try:
         async with client.beta.messages.stream(
             model=model,
             max_tokens=32000,
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
-            output_config={"effort": runtime.get("anthropic_effort")},
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": json.dumps(facts, default=str, indent=1)}],
+            output_config=output_config,
+            system=system,
+            messages=[{"role": "user", "content": content}],
         ) as stream:
             message = await stream.get_final_message()
         model = message.model
@@ -151,10 +158,10 @@ async def generate_plan(db: DbSession, viewer: User, athlete: User, facts: dict)
         if message.stop_reason == "refusal":
             status = "refusal"
             raise CoachError("The AI coach declined this request. Try rephrasing the notes.", 422)
-        text = "".join(b.text for b in message.content if b.type == "text").strip()
         if message.stop_reason == "max_tokens":
             status = "truncated"
-            text += "\n\n_(Plan cut off: try fewer weeks.)_"
+            raise CoachError("The AI coach ran out of room. Try fewer weeks.", 422)
+        text = "".join(b.text for b in message.content if b.type == "text").strip()
         if not text:
             status = "empty"
             raise CoachError("The AI coach returned an empty answer.")
@@ -182,3 +189,60 @@ async def generate_plan(db: DbSession, viewer: User, athlete: User, facts: dict)
             )
         )
         db.commit()
+
+
+WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition"]
+
+
+def plan_schema() -> dict:
+    """JSON schema Claude's answer must follow (structured outputs)."""
+    return {
+        "type": "json_schema",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "summary_md": {"type": "string"},
+                "weeks": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "phase": {"type": "string", "enum": PHASES},
+                            "focus": {"type": "string"},
+                            "days": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "weekday": {"type": "string", "enum": WEEKDAY_KEYS},
+                                        "type": {"type": "string", "enum": list(SESSION_TYPES)},
+                                        "description": {"type": "string"},
+                                        "duration_min": {"type": "integer"},
+                                        "intensity": {"type": "array", "items": {"type": "string"}},
+                                    },
+                                    "required": ["weekday", "type", "description", "duration_min", "intensity"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                        },
+                        "required": ["phase", "focus", "days"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["summary_md", "weeks"],
+            "additionalProperties": False,
+        },
+    }
+
+
+async def generate_plan(db: DbSession, viewer: User, athlete: User, facts: dict) -> tuple[dict, str]:
+    """Returns ({"summary_md": ..., "weeks": [...]}, model that served it)."""
+    text, model = await ask_claude(
+        db, viewer, athlete, SYSTEM_PROMPT, json.dumps(facts, default=str, indent=1), plan_schema()
+    )
+    try:
+        return json.loads(text), model
+    except ValueError as exc:
+        raise CoachError("The AI coach returned a plan CoachQuest could not read. Try again.") from exc

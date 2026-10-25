@@ -80,7 +80,7 @@ def test_plan_prompt_contains_only_shared_data(make_user, monkeypatch):
 
     async def fake_generate(db, viewer, athlete, facts):
         seen.update(facts)
-        return "# Plan", "claude-test"
+        return {"summary_md": "# Plan", "weeks": []}, "claude-test"
 
     monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
     athlete, coach, athlete_id, grant_id = _setup(make_user, ["activities", "plans"])
@@ -89,7 +89,7 @@ def test_plan_prompt_contains_only_shared_data(make_user, monkeypatch):
     assert r.status_code == 200, r.text
     assert "recent_activities" in seen
     assert "wellness" not in seen and "load" not in seen
-    assert r.json()["content_md"] == "# Plan"
+    assert r.json()["content_md"].startswith("# Plan")
     assert len(athlete.get("/api/athletes/me/plans").json()) == 1
 
 
@@ -125,7 +125,7 @@ def test_ai_prompt_respects_profile_and_weight(make_user, monkeypatch):
 
     async def fake_generate(db, viewer, athlete, facts):
         seen.update(facts)
-        return "# Plan", "claude-test"
+        return {"summary_md": "# Plan", "weeks": []}, "claude-test"
 
     monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
     _, coach, athlete_id = _profile_setup(make_user, ["profile", "plans"])

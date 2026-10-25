@@ -793,3 +793,173 @@ table.activities .name-cell {
 .re-high {
   color: var(--danger);
 }
+
+/* ---- training plan tracker ---- */
+.tracker-bar {
+  align-items: center;
+  margin: 0.5rem 0;
+}
+.tracker-bar p {
+  margin: 0;
+  flex: 1 1 300px;
+}
+.week.current {
+  border-left: 3px solid var(--c1);
+}
+.week-head {
+  margin-bottom: 0.4rem;
+}
+select.phase {
+  padding: 0.15rem 0.4rem;
+  font-size: 0.8rem;
+  border-radius: 999px;
+}
+.text-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: text;
+}
+.week-focus {
+  display: block;
+  width: 100%;
+  font-size: 0.88rem;
+  margin-bottom: 0.6rem;
+}
+.days {
+  display: flex;
+  flex-direction: column;
+}
+.day {
+  display: grid;
+  grid-template-columns: 4.5rem 9.5rem 1fr;
+  gap: 0.75rem;
+  padding: 0.6rem 0.25rem;
+  border-top: 1px solid var(--border);
+  align-items: start;
+}
+.day.today {
+  background: color-mix(in srgb, var(--c1) 8%, transparent);
+}
+.day-label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+}
+.day-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.type-pick {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.82rem;
+  width: 100%;
+}
+.row.tight {
+  gap: 0.3rem;
+}
+.chips.tight {
+  margin-top: 0.3rem;
+}
+.icon-btn.active {
+  color: var(--c1);
+}
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.day-desc {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: text;
+}
+.badge.intensity {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+}
+.actual {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+.actual select {
+  width: auto;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.8rem;
+}
+.ok-text {
+  color: var(--accent);
+}
+.warn-text {
+  color: var(--warn);
+}
+.bad-text {
+  color: var(--danger);
+}
+.day-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+label.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+label.inline input {
+  width: 90px;
+  padding: 0.25rem 0.4rem;
+}
+label.inline.grow input {
+  width: 180px;
+}
+.mini-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+.mini-day {
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+.mini-day strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mini-day.today {
+  outline: 2px solid var(--c1);
+}
+.mini-day.status-goal_met .mini-status {
+  color: var(--accent);
+}
+.mini-day.status-missed .mini-status {
+  color: var(--danger);
+}
+@media (max-width: 768px) {
+  .day {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+  .day-label {
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+  .mini-week {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

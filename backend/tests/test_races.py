@@ -46,7 +46,7 @@ def test_upcoming_races_go_to_the_ai_coach(make_user, monkeypatch):
 
     async def fake_generate(db, viewer, athlete, facts):
         seen.update(facts)
-        return "# Plan", "claude-test"
+        return {"summary_md": "# Plan", "weeks": []}, "claude-test"
 
     monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
     p = make_user("a@example.com")

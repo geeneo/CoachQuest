@@ -9,11 +9,13 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function PlansPanel({ id, athlete }) {
   const plans = useApi(`/api/athletes/${id}/plans`);
+  const current = useApi(`/api/athletes/${id}/plans/current`);
   const navigate = useNavigate();
   const [form, setForm] = useState({
     title: "",
     goal: athlete.goal || "",
     event_date: "",
+    start_date: "",
     weeks: 4,
     hours_per_week: 8,
     available_days: ["Tue", "Thu", "Sat", "Sun"],
@@ -40,6 +42,7 @@ export default function PlansPanel({ id, athlete }) {
         weeks: Number(form.weeks),
         hours_per_week: Number(form.hours_per_week),
         event_date: form.event_date || null,
+        start_date: form.start_date || null,
       };
       const plan = await api(`/api/athletes/${id}/plans`, { method: "POST", body });
       navigate(`/athletes/${athlete.id}/plans/${plan.id}`);
@@ -56,8 +59,29 @@ export default function PlansPanel({ id, athlete }) {
     plans.reload();
   };
 
+  const cur = current.data;
+  const thisWeek = cur?.weeks?.find((w) => w.is_current) || cur?.weeks?.[0];
   return (
     <>
+      {cur && thisWeek && (
+        <section className="card week current">
+          <div className="row between">
+            <h2>Current plan: {cur.title}</h2>
+            <Link to={`/athletes/${athlete.id}/plans/${cur.id}`}>Open the full plan →</Link>
+          </div>
+          <div className="mini-week">
+            {thisWeek.days.map((d) => (
+              <div key={d.date} className={`mini-day status-${d.status} ${d.is_today ? "today" : ""}`}>
+                <span className="muted small">{d.weekday.slice(0, 1).toUpperCase() + d.weekday.slice(1)}</span>
+                <strong>{d.type}</strong>
+                <span className="small mini-status">
+                  {{ goal_met: "✓", partial: "◐", missed: "✗", extra: "+" }[d.status] || ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="card">
         <h2>
           <Sparkles size={18} /> New plan from the AI coach
@@ -78,6 +102,11 @@ export default function PlansPanel({ id, athlete }) {
           <label>
             Event date
             <input type="date" value={form.event_date} onChange={set("event_date")} />
+          </label>
+          <label>
+            Start week
+            <input type="date" value={form.start_date} onChange={set("start_date")} />
+            <span className="hint">Starts on that week's Monday. Empty: next Monday.</span>
           </label>
           <label>
             Weeks

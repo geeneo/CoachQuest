@@ -222,6 +222,9 @@ class Plan(Base):
     request: Mapped[dict] = mapped_column(JSON, default=dict)
     facts: Mapped[dict] = mapped_column(JSON, default=dict)
     content_md: Mapped[str] = mapped_column(Text)
+    # Structured plan (see plan_tracker.py). Older plans have only content_md.
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    weeks: Mapped[list | None] = mapped_column(JSON, nullable=True)
     model: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -287,6 +290,7 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 # tables, so add missing columns to existing ones here.
 _ADDED_COLUMNS = {
     "connections": {"options": "JSON", "backfill": "JSON"},
+    "plans": {"start_date": "DATE", "weeks": "JSON"},
     "activities": {
         "avg_cadence": "FLOAT",
         "avg_speed_ms": "FLOAT",

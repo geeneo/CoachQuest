@@ -93,7 +93,7 @@
       Add, rename (click a tag), remove. The AI coach reads tagged activities
       as explained (e.g. a light week marked "illness" is disclosed, not a
       gap in training).
-- [ ] **Training plan tracker** (like the old hub's Training plan page).
+- [x] **Training plan tracker** (like the old hub's Training plan page).
       The AI coach writes plans as structured weeks and days (not just
       Markdown) so they can be tracked against what was actually done.
       - Week cards: phase badge (Base / Build / Recovery / Taper / Race),
@@ -115,6 +115,9 @@
         tags. Re-planning keeps locked and past days.
       - Coaches with the plans scope can view and edit; the athlete sees
         changes.
+      - Still to do: "Re-plan from this week" (Claude rewrites the remaining
+        weeks, keeping locked and past days) and indoor workout matching
+        ("fits a workout").
 - [ ] **AI coach: assessments of wellness and training progress.** A new
       "AI coach" page per athlete, next to Plans. Same rules as plans:
       CoachQuest computes the facts, Claude writes the words, and only the
