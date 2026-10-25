@@ -71,3 +71,19 @@ def test_manual_value_kept_until_garmin_changes(monkeypatch, make_user):
     assert user.ftp_watts == 270  # Garmin unchanged: manual value stays
     user = _sync(monkeypatch, uid, {"ftp_watts": 262, "lthr_bpm": None, "max_hr_bpm": None})
     assert user.ftp_watts == 262 and user.profile_sources["ftp_watts"]["source"] == "garmin"
+
+
+def test_pull_from_garmin_now(monkeypatch, make_user):
+    p = make_user("a@example.com")
+    assert p.post("/api/me/profile/pull-garmin").status_code == 404  # not connected
+    uid = p.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        db.add(Connection(user_id=uid, provider="garmin", token_enc=encrypt_json({"tokens": "{}"})))
+        db.commit()
+    p.patch("/api/me", json={"ftp_watts": 300})
+    found = {"ftp_watts": 255, "lthr_bpm": 161, "max_hr_bpm": None}
+    monkeypatch.setattr(garmin, "_fetch", lambda *a: ("{}", [], [], (72.4, datetime(2026, 10, 24)), found))
+    r = p.post("/api/me/profile/pull-garmin").json()
+    assert r["found"] == {"ftp_watts": 255, "lthr_bpm": 161, "max_hr_bpm": None, "weight_kg": 72.4}
+    assert sorted(r["changed"]) == ["ftp_watts", "lthr_bpm", "weight_kg"]
+    assert r["user"]["ftp_watts"] == 255  # explicit pull wins over the manual 300

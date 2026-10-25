@@ -106,7 +106,7 @@ export default function PlansPanel({ id, athlete }) {
           <label>
             Start week
             <input type="date" value={form.start_date} onChange={set("start_date")} />
-            <span className="hint">Starts on that week's Monday. Empty: next Monday.</span>
+            <span className="hint">Starts on the first day of that week (Profile → My week starts on). Empty: next week.</span>
           </label>
           <label>
             Weeks

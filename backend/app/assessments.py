@@ -18,7 +18,7 @@ from .coach import CoachError, ask_claude
 from .config import settings
 from .db import Assessment, Plan, SessionLocal, User
 from .deps import allowed_scopes
-from .fitness import avg
+from .fitness import avg, week_start_of
 from .queries import activities_since, load_curve, volume_summary, wellness_since
 from .routers.races import race_out, upcoming
 
@@ -156,7 +156,9 @@ def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: dat
     this_week = [a for a in acts if a.start_time.date() >= week_start]
     if "activities" in scopes:
         facts["volume"] = {
-            k: v for k, v in volume_summary(this_week, 7, week_end).items() if k not in ("weekly_elevation",)
+            k: v
+            for k, v in volume_summary(this_week, 7, week_end, athlete.week_start or 0).items()
+            if k not in ("weekly_elevation",)
         }
         facts["activities"] = [
             {
@@ -233,8 +235,8 @@ async def create(db: DbSession, viewer: User, athlete: User, kind: str, schedule
     if kind == "daily":
         facts, prompt, period = readiness_facts(db, athlete, scopes, today), READINESS_PROMPT, today
     else:
-        last_monday = today - timedelta(days=today.weekday() + 7)
-        facts, prompt, period = weekly_facts(db, athlete, scopes, last_monday), WEEKLY_PROMPT, last_monday
+        last_week = week_start_of(today, athlete.week_start or 0) - timedelta(weeks=1)
+        facts, prompt, period = weekly_facts(db, athlete, scopes, last_week), WEEKLY_PROMPT, last_week
     text, model = await ask_claude(db, viewer, athlete, prompt, json.dumps(facts, default=str, indent=1))
     a = Assessment(
         athlete_id=athlete.id,
@@ -252,10 +254,12 @@ async def create(db: DbSession, viewer: User, athlete: User, kind: str, schedule
 
 
 async def run_scheduled(kind: str) -> None:
-    """Scheduler job: daily readiness or Monday weekly review for athletes who switched it on."""
+    """Scheduler job, every morning: readiness, and the weekly review on the first day of each athlete's week."""
     db = SessionLocal()
     try:
         users = [u for u in db.scalars(select(User).where(User.is_active)).all() if (u.ai_settings or {}).get(kind)]
+        if kind == "weekly":
+            users = [u for u in users if date.today().weekday() == (u.week_start or 0)]
         for user in users:
             try:
                 a = await create(db, user, user, kind, scheduled=True)

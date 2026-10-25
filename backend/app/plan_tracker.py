@@ -19,11 +19,11 @@ WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 GOAL_SHARE = 0.7  # logged time at least 70% of planned time counts as done
 
 
-def first_monday(start: date | None, today: date) -> date:
-    """The plan starts on the Monday of `start`, or next Monday (today if it is Monday)."""
+def first_week_start(start: date | None, today: date, week_start: int = 0) -> date:
+    """The plan starts on the first day of `start`'s week, or of next week (today if a week starts today)."""
     if start:
-        return start - timedelta(days=start.weekday())
-    return today + timedelta(days=(7 - today.weekday()) % 7)
+        return start - timedelta(days=(start.weekday() - week_start) % 7)
+    return today + timedelta(days=(week_start - today.weekday()) % 7)
 
 
 def _blank_day(d: date) -> dict:
@@ -41,18 +41,19 @@ def _blank_day(d: date) -> dict:
     }
 
 
-def build_weeks(ai_weeks: list[dict], monday: date, n_weeks: int) -> list[dict]:
+def build_weeks(ai_weeks: list[dict], first_day: date, n_weeks: int) -> list[dict]:
     """Give Claude's weeks real dates. Missing days become Rest; duplicate weekdays keep the first."""
     weeks = []
     for i in range(n_weeks):
         src = ai_weeks[i] if i < len(ai_weeks) else {"phase": "Base", "focus": "", "days": []}
-        start = monday + timedelta(weeks=i)
+        start = first_day + timedelta(weeks=i)
         by_day = {}
         for day in src.get("days", []):
             by_day.setdefault(day.get("weekday"), day)
         days = []
-        for j, key in enumerate(WEEKDAYS):
+        for j in range(7):
             d = _blank_day(start + timedelta(days=j))
+            key = d["weekday"]
             if key in by_day:
                 src_day = by_day[key]
                 d.update(

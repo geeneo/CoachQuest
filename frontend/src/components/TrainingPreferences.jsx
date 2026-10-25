@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
 
 const DAYS = [
   ["mon", "Mon"],
@@ -41,6 +42,7 @@ export default function TrainingPreferences() {
 }
 
 function WeekdayPrefs({ prefs, setPrefs, save }) {
+  const weekStart = useAuth().user.week_start || 0; // follows Profile at once, before prefs reload
   const toggle = (day, type) => {
     const current = prefs.weekday_prefs[day];
     const next = current.includes(type) ? current.filter((t) => t !== type) : [...current, type];
@@ -56,7 +58,7 @@ function WeekdayPrefs({ prefs, setPrefs, save }) {
         free. Saved as you click.
       </p>
       <div className="weekday-grid">
-        {DAYS.map(([day, label]) => (
+        {[...DAYS.slice(weekStart), ...DAYS.slice(0, weekStart)].map(([day, label]) => (
           <div key={day} className="weekday-row">
             <span className="weekday-label">{label}</span>
             <div className="chips">

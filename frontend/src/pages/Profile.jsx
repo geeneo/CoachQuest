@@ -9,14 +9,24 @@ const NUMBER_FIELDS = [
   ["ftp_watts", "FTP (watts)", "Used for power-based TSS"],
   ["lthr_bpm", "Lactate threshold HR (bpm)", "Used for heart-rate TSS when there is no power"],
   ["max_hr_bpm", "Max HR (bpm)", ""],
-  ["weight_kg", "Weight (kg)", "Updated from Garmin when the Weight option is on under Connections"],
+  ["weight_kg", "Weight (kg)", ""],
 ];
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+// Where a profile number came from, shown under the field.
+function sourceLine(user, k) {
+  if (k === "weight_kg" && user.weight_source === "garmin") return `From Garmin, weighed ${dateTime(user.weight_updated_at)}`;
+  if (user.profile_sources?.[k]?.source === "garmin") return `From Garmin, ${dateTime(user.profile_sources[k].at)}`;
+  if (user[k] != null) return "Entered by you";
+  return null;
+}
 
 export default function Profile() {
   const { user, setUser } = useAuth();
   const [form, setForm] = useState(() => ({
     display_name: user.display_name,
     goal: user.goal || "",
+    week_start: user.week_start ?? 0,
     ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, user[k] ?? ""])),
   }));
   const [msg, setMsg] = useState(null);
@@ -25,7 +35,7 @@ export default function Profile() {
   const save = async (e) => {
     e.preventDefault();
     setMsg(null);
-    const body = { display_name: form.display_name, goal: form.goal || null };
+    const body = { display_name: form.display_name, goal: form.goal || null, week_start: Number(form.week_start) };
     for (const [k] of NUMBER_FIELDS) body[k] = form[k] === "" ? null : Number(form[k]);
     try {
       setUser(await api("/api/me", { method: "PATCH", body }));
@@ -54,14 +64,20 @@ export default function Profile() {
             {label}
             <input type="number" value={form[k]} onChange={set(k)} step="any" />
             {hint && <span className="hint">{hint}</span>}
-            {k === "weight_kg" && user.weight_source === "garmin" && (
-              <span className="hint">From Garmin, weighed {dateTime(user.weight_updated_at)}</span>
-            )}
-            {user.profile_sources?.[k]?.source === "garmin" && (
-              <span className="hint">From Garmin, {dateTime(user.profile_sources[k].at)}</span>
-            )}
+            {sourceLine(user, k) && <span className="hint source">{sourceLine(user, k)}</span>}
           </label>
         ))}
+        <label>
+          My week starts on
+          <select value={form.week_start} onChange={set("week_start")}>
+            {WEEKDAYS.map((d, i) => (
+              <option key={d} value={i}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <span className="hint">Weekly totals, charts, plans and weekly reviews use this.</span>
+        </label>
         <label className="wide">
           Goal
           <textarea rows={3} value={form.goal} onChange={set("goal")} maxLength={2000} placeholder="What are you training for?" />
@@ -70,6 +86,12 @@ export default function Profile() {
         {msg?.error && <div className="error wide">{msg.error}</div>}
         <button className="btn primary">Save</button>
       </form>
+      <PullFromGarmin
+        onPulled={(u) => {
+          setUser(u);
+          setForm((f) => ({ ...f, ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, u[k] ?? ""])) }));
+        }}
+      />
       <TrainingPreferences />
       <Appearance />
       <ChangePassword />
@@ -168,6 +190,61 @@ function ChangePassword() {
           Change password
         </button>
       </form>
+    </section>
+  );
+}
+
+function PullFromGarmin({ onPulled }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const labels = { ftp_watts: ["FTP", "W"], lthr_bpm: ["Lactate threshold HR", "bpm"], max_hr_bpm: ["Max HR", "bpm"], weight_kg: ["Weight", "kg"] };
+  const pull = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api("/api/me/profile/pull-garmin", { method: "POST" });
+      setResult(r);
+      onPulled(r.user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card">
+      <div className="row between">
+        <h2>Fill from Garmin and Strava</h2>
+        <button className="btn" onClick={pull} disabled={busy}>
+          {busy ? "Asking Garmin…" : "Pull from Garmin now"}
+        </button>
+      </div>
+      <p className="muted small">
+        <strong>Garmin</strong> fills FTP, lactate threshold HR and max HR (from your Garmin power and heart-rate zones)
+        and your latest weigh-in. This also happens on every Garmin sync while "Thresholds → Profile" and "Weight →
+        Profile" are ticked under Connections; a number you type here is kept until Garmin reports a new one.{" "}
+        <strong>Strava</strong> can't fill these: CoachQuest only has read access to your activities, and Strava keeps
+        FTP and weight behind an extra permission.
+      </p>
+      {error && <div className="error">{error}</div>}
+      {result && (
+        <ul className="pull-result">
+          {Object.entries(labels).map(([k, [label, unit]]) => (
+            <li key={k}>
+              {label}:{" "}
+              {result.found[k] == null ? (
+                <span className="muted">not set in Garmin</span>
+              ) : (
+                <strong>
+                  {result.found[k]} {unit}
+                  {result.changed.includes(k) ? " · updated" : " · unchanged"}
+                </strong>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

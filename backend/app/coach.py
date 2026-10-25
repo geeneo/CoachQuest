@@ -43,8 +43,9 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 - An activity with a `note` (e.g. illness, travel, mechanical) explains itself: treat a light or missed
   week with such notes as disclosed, not as lost fitness to chase.
 - Give intensities as zones (Z1-Z5) and, when FTP or LTHR is known, as watts or bpm ranges.
-- Plan every day of every requested week, starting on the Monday in `request.start_date`: 7 days per \
-week, rest days included (type "Rest", duration 0). Include recovery weeks where they belong.
+- Plan every day of every requested week; weeks start on `request.start_date` (the first day of the \
+athlete's week): 7 days per week, rest days included (type "Rest", duration 0). Include recovery \
+weeks where they belong.
 - Each day: a session type from the allowed list, a short concrete description (structure, terrain, \
 targets), duration in minutes, and intensity chips such as "Z2", "95-105% FTP" or "LTHR 160-165".
 - Each week: a phase and a one-line focus.
@@ -72,7 +73,7 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
             "ctl_change_7d": round(now.ctl - curve[-8].ctl, 1),
             "ctl_change_28d": round(now.ctl - curve[-29].ctl, 1),
         }
-        facts["weekly_volume"] = weekly_volume(acts, 6, today)
+        facts["weekly_volume"] = weekly_volume(acts, 6, today, athlete.week_start or 0)
     if "activities" in scopes:
         cutoff = datetime.combine(today - timedelta(days=14), datetime.min.time())
         facts["recent_activities"] = [

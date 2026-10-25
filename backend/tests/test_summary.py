@@ -68,3 +68,12 @@ def test_summary_endpoint_needs_activities_scope(make_user):
         db.commit()
     assert athlete.get("/api/athletes/me/summary?days=7").json()["distance_km"] == 42
     assert coach.get(f"/api/athletes/{aid}/summary").status_code == 404
+
+
+def test_weekly_elevation_with_sunday_weeks():
+    acts = [_a(0, elev=300), _a(1, elev=200)]  # Sunday 25 Oct and Saturday 24 Oct
+    monday_weeks = volume_summary(acts, 7, TODAY)["weekly_elevation"]
+    sunday_weeks = volume_summary(acts, 7, TODAY, week_start=6)["weekly_elevation"]
+    assert monday_weeks[-1] == {"week_start": "2026-10-19", "elevation_m": 500}
+    assert sunday_weeks[-1] == {"week_start": "2026-10-25", "elevation_m": 300}
+    assert sunday_weeks[-2] == {"week_start": "2026-10-18", "elevation_m": 200}

@@ -144,3 +144,28 @@ def test_garmin_backfill_steps_back_two_weeks(monkeypatch, make_user):
         assert db.get(Connection, conn_id).backfill["status"] == "done"
         assert db.query(WellnessDay).filter(WellnessDay.user_id == uid).count() == 31
     assert [c[0] for c in calls] == [14, 14, 2]
+
+
+def test_refresh_fills_new_fields_on_stored_activities(monkeypatch, athlete):
+    p, uid = athlete
+    conn_id = _strava_conn(uid)  # has one stored activity from 2026-05-01, without speed
+    item = {**_item("new", "2026-05-01"), "average_speed": 7.5, "average_cadence": 88, "kilojoules": 1500}
+    _fake_strava_pages(monkeypatch, [[item], []])
+    r = p.post("/api/connections/strava/refresh")
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        a = db.query(Activity).filter_by(user_id=uid, external_id="new").one()
+        assert (a.avg_speed_ms, a.avg_cadence, a.kilojoules) == (7.5, 88, 1500)
+        conn = db.get(Connection, conn_id)
+        assert conn.backfill["status"] == "done" and conn.backfill["mode"] == "refresh"
+        assert conn.options["fields_version"] == backfill.FIELDS_VERSION
+
+
+def test_refresh_outdated_runs_once(monkeypatch, athlete):
+    _, uid = athlete
+    conn_id = _strava_conn(uid)
+    with SessionLocal() as db:
+        assert backfill.refresh_outdated(db) == [conn_id]
+        db.get(Connection, conn_id).backfill = {"status": "done"}
+        db.commit()
+        assert backfill.refresh_outdated(db) == []  # already at the current fields version

@@ -57,6 +57,7 @@ class User(Base):
     note_tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # {"daily": bool, "weekly": bool, "email": bool}: scheduled AI coach notes
     ai_settings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    week_start: Mapped[int] = mapped_column(Integer, default=0)  # 0 = Monday ... 6 = Sunday
 
 
 class Session(Base):
@@ -341,6 +342,7 @@ _ADDED_COLUMNS = {
         "weekday_prefs": "JSON",
         "note_tags": "JSON",
         "ai_settings": "JSON",
+        "week_start": "INTEGER NOT NULL DEFAULT 0",
     },
 }
 

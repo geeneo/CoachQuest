@@ -1,4 +1,4 @@
-import { Activity, Flag, LayoutDashboard, Link2, LogOut, Menu, Settings, Share2, Shield, Users } from "lucide-react";
+import { Activity, BookOpen, Flag, LayoutDashboard, Link2, LogOut, Menu, Settings, Share2, Shield, Users } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth.jsx";
@@ -10,6 +10,7 @@ const NAV = [
   { to: "/sharing", label: "Sharing", icon: Share2 },
   { to: "/athletes", label: "My athletes", icon: Users },
   { to: "/profile", label: "Profile", icon: Settings },
+  { to: "/glossary", label: "Glossary", icon: BookOpen },
 ];
 
 export default function Layout() {

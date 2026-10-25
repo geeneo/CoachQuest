@@ -31,15 +31,15 @@ def mark_manual(user: User, fields) -> None:
     user.profile_sources = sources
 
 
-def apply_from_provider(db: DbSession, user: User, provider: str, values: dict) -> list[str]:
-    """Apply new provider values; returns the fields that changed."""
+def apply_from_provider(db: DbSession, user: User, provider: str, values: dict, force: bool = False) -> list[str]:
+    """Apply new provider values; returns the fields that changed. `force` applies unchanged values too."""
     sources = dict(user.profile_sources or {})
     changed = []
     for field, value in values.items():
         if field not in THRESHOLDS or value is None:
             continue
         info = sources.get(field, {})
-        if value == info.get(f"{provider}_seen"):
+        if value == info.get(f"{provider}_seen") and not force:
             continue  # nothing new from the provider
         sources[field] = {**info, "source": provider, "at": utcnow().isoformat(), f"{provider}_seen": value}
         if getattr(user, field) != value:

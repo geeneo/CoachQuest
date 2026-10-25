@@ -49,6 +49,7 @@ def preferences_out(user: User) -> dict:
         "weekday_prefs": {d: (user.weekday_prefs or {}).get(d, []) for d in WEEKDAYS},
         "note_tags": user.note_tags if user.note_tags is not None else list(DEFAULT_NOTE_TAGS),
         "session_types": list(SESSION_TYPES),
+        "week_start": user.week_start or 0,
     }
 
 

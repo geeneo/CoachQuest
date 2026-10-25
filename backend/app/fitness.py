@@ -86,14 +86,19 @@ def dedupe(activities: list, window_s: int = 600) -> list:
     return kept
 
 
-def weekly_volume(activities: list, weeks: int, today: date) -> list[dict]:
-    """Hours, distance and TSS per ISO week (Monday start), oldest first."""
-    monday = today - timedelta(days=today.weekday())
-    starts = [monday - timedelta(weeks=i) for i in range(weeks - 1, -1, -1)]
+def week_start_of(d: date, week_start: int = 0) -> date:
+    """First day of the week containing `d`. week_start: 0 = Monday ... 6 = Sunday."""
+    return d - timedelta(days=(d.weekday() - week_start) % 7)
+
+
+def weekly_volume(activities: list, weeks: int, today: date, week_start: int = 0) -> list[dict]:
+    """Hours, distance and TSS per week (starting on the athlete's chosen day), oldest first."""
+    this_week = week_start_of(today, week_start)
+    starts = [this_week - timedelta(weeks=i) for i in range(weeks - 1, -1, -1)]
     buckets = {s: {"week_start": s.isoformat(), "hours": 0.0, "km": 0.0, "tss": 0.0, "sessions": 0} for s in starts}
     for a in activities:
         d = a.start_time.date()
-        wk = d - timedelta(days=d.weekday())
+        wk = week_start_of(d, week_start)
         if wk in buckets:
             b = buckets[wk]
             b["hours"] += a.duration_s / 3600

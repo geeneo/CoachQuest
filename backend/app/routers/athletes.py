@@ -14,6 +14,7 @@ from .. import profile_sync
 from ..activity_types import CHOICES
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
+from ..providers import garmin
 from ..queries import (
     activities_since,
     activity_out,
@@ -36,6 +37,7 @@ class ProfileUpdate(BaseModel):
     max_hr_bpm: int | None = Field(default=None, ge=100, le=240)
     weight_kg: float | None = Field(default=None, ge=30, le=200)
     goal: str | None = Field(default=None, max_length=2000)
+    week_start: int | None = Field(default=None, ge=0, le=6)
 
 
 @router.patch("/me")
@@ -52,6 +54,19 @@ def update_profile(body: ProfileUpdate, user: User = Depends(current_user), db: 
         profile_sync.recalculate_tss(db, user)
     db.commit()
     return user_out(user)
+
+
+@router.post("/me/profile/pull-garmin")
+async def pull_profile_from_garmin(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Fill FTP, LTHR, max HR and weight from Garmin right now and say what Garmin had."""
+    conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "garmin"))
+    if conn is None:
+        raise HTTPException(status_code=404, detail="Connect Garmin first (Connections page)")
+    try:
+        result = await garmin.pull_profile(db, conn)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Garmin didn't answer: {type(exc).__name__}") from exc
+    return {**result, "user": user_out(user)}
 
 
 @router.get("/athletes")
@@ -151,7 +166,8 @@ def summary(
     require_scope(db, user, athlete_id, "activities")
     today = date.today()
     since = datetime.combine(min(today - timedelta(days=days), today - timedelta(weeks=12)), datetime.min.time())
-    return volume_summary(activities_since(db, athlete_id, since), days, today)
+    week_start = db.get(User, athlete_id).week_start or 0
+    return volume_summary(activities_since(db, athlete_id, since), days, today, week_start)
 
 
 @router.get("/athletes/{athlete}/fitness")

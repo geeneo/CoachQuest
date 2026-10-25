@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from .activity_types import category, is_outdoor, is_ride
 from .db import Activity, WellnessDay
-from .fitness import daily_tss, dedupe, pmc
+from .fitness import daily_tss, dedupe, pmc, week_start_of
 from .sync_options import hidden_sources
 
 
@@ -54,7 +54,7 @@ def calories(a: Activity) -> float | None:
     return None
 
 
-def volume_summary(acts: list[Activity], days: int, today: date) -> dict:
+def volume_summary(acts: list[Activity], days: int, today: date, week_start: int = 0) -> dict:
     """Totals for the last `days`, activity mix, and weekly elevation for the last 12 weeks."""
     since = datetime.combine(today - timedelta(days=days - 1), datetime.min.time())
     period = [a for a in acts if a.start_time >= since]
@@ -66,12 +66,12 @@ def volume_summary(acts: list[Activity], days: int, today: date) -> dict:
         m["count"] += 1
         m["hours"] += a.duration_s / 3600
         m["km"] += a.distance_m / 1000
-    monday = today - timedelta(days=today.weekday())
-    weeks = [monday - timedelta(weeks=i) for i in range(11, -1, -1)]
+    this_week = week_start_of(today, week_start)
+    weeks = [this_week - timedelta(weeks=i) for i in range(11, -1, -1)]
     elevation = {w: 0.0 for w in weeks}
     for a in acts:
         d = a.start_time.date()
-        week = d - timedelta(days=d.weekday())
+        week = week_start_of(d, week_start)
         if week in elevation:
             elevation[week] += a.elevation_m
     return {

@@ -256,6 +256,20 @@ def start_backfill(
     return conn_out(conn)
 
 
+@router.post("/{provider}/refresh")
+def refresh_activities(
+    provider: str, background: BackgroundTasks, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """Re-download stored activities to fill in fields added since they were imported."""
+    conn = _conn(db, user, provider)
+    try:
+        backfill.refresh(db, conn)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    background.add_task(backfill.run, conn.id)
+    return conn_out(conn)
+
+
 @router.delete("/{provider}/backfill")
 def cancel_backfill(provider: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     conn = _conn(db, user, provider)

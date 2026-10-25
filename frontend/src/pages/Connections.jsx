@@ -148,6 +148,8 @@ function Backfill({ conn, provider, run, busy }) {
     run(() => api(`/api/connections/${provider}/backfill`, { method: "POST", body: { since: isoDaysAgo(days) } }));
   };
   const cancel = () => run(() => api(`/api/connections/${provider}/backfill`, { method: "DELETE" }));
+  const refresh = () => run(() => api(`/api/connections/${provider}/refresh`, { method: "POST" }));
+  const refreshing = bf?.mode === "refresh";
   const reached = bf?.cursor ? bf.cursor.slice(0, 10) : null;
 
   return (
@@ -157,9 +159,13 @@ function Backfill({ conn, provider, run, busy }) {
         <p className="small">
           {
             {
-              running: `Importing… back to ${reached} so far, ${bf.stored} items. Target ${bf.target}.`,
+              running: refreshing
+                ? `Refreshing stored activities… back to ${reached} so far, ${bf.stored} updated.`
+                : `Importing… back to ${reached} so far, ${bf.stored} items. Target ${bf.target}.`,
               waiting: `Paused at ${reached} (${bf.stored} items) to stay inside the rate limit. Resumes around ${bf.resume_at?.slice(11, 16)} UTC.`,
-              done: `Done: imported ${bf.stored} items back to ${bf.target}.`,
+              done: refreshing
+                ? `Stored activities refreshed (${bf.stored} updated) back to ${bf.target}.`
+                : `Done: imported ${bf.stored} items back to ${bf.target}.`,
               cancelled: `Stopped at ${reached} after ${bf.stored} items.`,
               error: `Stopped with an error at ${reached}: ${bf.message}`,
             }[bf.status]
@@ -182,6 +188,17 @@ function Backfill({ conn, provider, run, busy }) {
           <button type="button" className="btn" disabled={busy} onClick={start}>
             Import
           </button>
+          {conn.options.activities && (
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={refresh}
+              title="Re-download activities you already have, to fill in speed, cadence and calories"
+            >
+              Refresh imported activities
+            </button>
+          )}
         </div>
       )}
       <p className="hint">

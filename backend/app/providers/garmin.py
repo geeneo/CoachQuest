@@ -308,25 +308,53 @@ def _store(db: DbSession, user: User, wellness: list, activities: list | None, w
             _upsert_activity(db, user, item)
 
 
+async def pull_profile(db: DbSession, conn: Connection) -> dict:
+    """Fetch FTP, LTHR, max HR and the latest weigh-in now and apply them (the athlete asked, so Garmin wins).
+
+    Returns what Garmin had for each field (None = not set in Garmin) and which fields changed.
+    """
+    user = db.get(User, conn.user_id)
+    tokens = decrypt_json(conn.token_enc)["tokens"]
+    new_tokens, _, _, weight, thresholds = await asyncio.to_thread(_fetch, tokens, [], None, True, True)
+    conn.token_enc = encrypt_json({"tokens": new_tokens})
+    changed = profile_sync.apply_from_provider(db, user, "garmin", thresholds or {}, force=True)
+    found = dict(thresholds or {})
+    found["weight_kg"] = weight[0] if weight else None
+    if weight:
+        kg, measured_at = weight
+        if user.weight_kg != kg:
+            changed.append("weight_kg")
+        user.weight_kg, user.weight_source, user.weight_updated_at = kg, "garmin", measured_at
+    db.commit()
+    return {"found": found, "changed": changed}
+
+
 # Wellness needs ~3 requests per day of history, so the backfill stops at a year.
 BACKFILL_WELLNESS_DAYS = 365
 BACKFILL_CHUNK_DAYS = 14
 
 
-async def backfill_step(db: DbSession, conn: Connection, target: date, cursor: date) -> tuple[date, int]:
+async def backfill_step(
+    db: DbSession, conn: Connection, target: date, cursor: date, activities_only: bool = False
+) -> tuple[date, int]:
     """Import the chunk of days just before `cursor` (not before `target`).
 
     Returns the new cursor (the oldest day now covered) and how many items were stored.
+    `activities_only` (used to refresh stored activities) skips wellness, so a
+    chunk is one request and can cover 90 days.
     """
     user = db.get(User, conn.user_id)
     end = cursor - timedelta(days=1)
-    start = max(target, end - timedelta(days=BACKFILL_CHUNK_DAYS - 1))
+    chunk = 90 if activities_only else BACKFILL_CHUNK_DAYS
+    start = max(target, end - timedelta(days=chunk - 1))
     if end < start:
         return cursor, 0
     opts = sync_options.options(conn)
     oldest_wellness = date.today() - timedelta(days=BACKFILL_WELLNESS_DAYS)
     wellness_days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-    wellness_days = [d for d in wellness_days if d >= oldest_wellness] if opts["wellness"] else []
+    wellness_days = (
+        [d for d in wellness_days if d >= oldest_wellness] if opts["wellness"] and not activities_only else []
+    )
     tokens = decrypt_json(conn.token_enc)["tokens"]
     new_tokens, wellness, activities, _, _ = await asyncio.to_thread(
         _fetch, tokens, wellness_days, (start, end) if opts["activities"] else None, False

@@ -37,16 +37,18 @@ async def lifespan(app: FastAPI):
     init_db()
     with SessionLocal() as db:
         runtime.load(db)
+        if settings.enable_scheduler:
+            backfill.refresh_outdated(db)  # picked up by the backfill job below
     if settings.enable_scheduler:
         scheduler.add_job(sync_all, "interval", hours=6, args=["strava"], id="strava")
         scheduler.add_job(sync_all, "cron", hour="6,18", minute=15, args=["garmin"], id="garmin")
         scheduler.add_job(backfill.resume_due, "interval", minutes=15, id="backfill")
         # After the morning Garmin sync window, so last night's sleep and HRV are in.
         scheduler.add_job(assessments.run_scheduled, "cron", hour=6, minute=40, args=["daily"], id="ai-daily")
-        scheduler.add_job(
-            assessments.run_scheduled, "cron", day_of_week="mon", hour=6, minute=50, args=["weekly"], id="ai-weekly"
-        )
+        # Runs daily; each athlete gets their review on the first day of their own week.
+        scheduler.add_job(assessments.run_scheduled, "cron", hour=6, minute=50, args=["weekly"], id="ai-weekly")
         scheduler.start()
+        scheduler.add_job(backfill.resume_due, id="backfill-now")  # once, right away
     yield
     if scheduler.running:
         scheduler.shutdown(wait=False)

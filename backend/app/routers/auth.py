@@ -51,6 +51,7 @@ def user_out(user: User) -> dict:
         "weight_updated_at": user.weight_updated_at,
         "profile_sources": user.profile_sources or {},
         "goal": user.goal,
+        "week_start": user.week_start or 0,
     }
 
 

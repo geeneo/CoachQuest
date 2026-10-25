@@ -1031,3 +1031,42 @@ label.inline.grow input {
     grid-template-columns: 1fr;
   }
 }
+
+.hint.source {
+  color: var(--accent);
+}
+.pull-result {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  line-height: 1.8;
+}
+
+.glossary-group {
+  margin: 1.5rem 0 0.25rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.glossary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.75rem;
+}
+.glossary-card {
+  margin: 0;
+}
+.glossary-card h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.glossary-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}

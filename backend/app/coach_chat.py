@@ -89,7 +89,8 @@ def run_tool(db: DbSession, viewer: User, athlete_id: int, name: str, inp: dict)
     if name == "get_volume_summary":
         days = _days(inp, 30, 365)
         since = datetime.combine(today - timedelta(days=max(days, 84)), datetime.min.time())
-        return volume_summary(activities_since(db, athlete_id, since), days, today)
+        week_start = db.get(User, athlete_id).week_start or 0
+        return volume_summary(activities_since(db, athlete_id, since), days, today, week_start)
     if name == "get_fitness":
         curve, _ = load_curve(db, athlete_id, _days(inp, 42, 365), today)
         return [{"day": d.day, "tss": d.tss, "ctl": d.ctl, "atl": d.atl, "tsb": d.tsb} for d in curve]

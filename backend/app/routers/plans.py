@@ -22,7 +22,7 @@ class PlanRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     goal: str = Field(min_length=1, max_length=500)
     event_date: date | None = None
-    start_date: date | None = None  # plan starts on this date's Monday; default next Monday
+    start_date: date | None = None  # plan starts on the first day of this date's week; default next week
     weeks: int = Field(default=4, ge=1, le=16)
     hours_per_week: float = Field(default=8, ge=1, le=30)
     available_days: list[str] = Field(default_factory=lambda: ["Tue", "Thu", "Sat", "Sun"])
@@ -105,7 +105,7 @@ async def create_plan(
     athlete_id = resolve_athlete_id(athlete, user)
     require_scope(db, user, athlete_id, "plans")
     target = db.get(User, athlete_id)
-    monday = plan_tracker.first_monday(body.start_date, date.today())
+    monday = plan_tracker.first_week_start(body.start_date, date.today(), target.week_start or 0)
     request = body.model_dump(mode="json", exclude={"title"})
     request["start_date"] = monday.isoformat()
     facts = build_facts(db, target, allowed_scopes(db, user, athlete_id), request)

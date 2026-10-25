@@ -37,10 +37,19 @@ def test_build_weeks_dates_and_fills_rest():
     assert all(d["type"] == "Rest" for d in weeks[1]["days"])  # Claude gave only one week
 
 
-def test_first_monday():
-    assert plan_tracker.first_monday(None, date(2026, 10, 25)) == date(2026, 10, 26)  # Sunday -> next Monday
-    assert plan_tracker.first_monday(None, date(2026, 10, 26)) == date(2026, 10, 26)
-    assert plan_tracker.first_monday(date(2026, 11, 5), date(2026, 10, 25)) == date(2026, 11, 2)
+def test_first_week_start():
+    sun, mon = date(2026, 10, 25), date(2026, 10, 26)
+    assert plan_tracker.first_week_start(None, sun) == mon  # Monday weeks: next Monday
+    assert plan_tracker.first_week_start(None, mon) == mon
+    assert plan_tracker.first_week_start(date(2026, 11, 5), sun) == date(2026, 11, 2)
+    assert plan_tracker.first_week_start(None, sun, week_start=6) == sun  # Sunday weeks start today
+
+
+def test_build_weeks_for_sunday_weeks():
+    weeks = plan_tracker.build_weeks([_ai_week()], date(2026, 10, 25), 1)  # a Sunday
+    days = weeks[0]["days"]
+    assert days[0]["weekday"] == "sun" and days[-1]["weekday"] == "sat"
+    assert days[-1]["description"] == "Long ride" and days[2]["type"] == "Zwift / indoor"
 
 
 def _act(day, minutes):

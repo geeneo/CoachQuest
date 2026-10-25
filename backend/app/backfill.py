@@ -14,7 +14,7 @@ between.
 
 import asyncio
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
@@ -73,6 +73,56 @@ def start(db: DbSession, conn: Connection, target: date) -> dict:
     return state(conn)
 
 
+FIELDS_VERSION = 2  # bump when activities gain fields that need a re-download
+
+
+def refresh(db: DbSession, conn: Connection) -> dict:
+    """Re-download activities already imported, to fill fields added in later versions.
+
+    Same machinery as importing older data, walking back from today to the
+    oldest stored activity; activities are updated in place.
+    """
+    if conn.backfill and conn.backfill.get("status") in ("running", "waiting"):
+        raise ValueError("An import is already running for this connection")
+    if not sync_options.options(conn)["activities"]:
+        raise ValueError("Activities are switched off for this connection")
+    oldest = db.scalar(
+        select(func.min(Activity.start_time)).where(Activity.user_id == conn.user_id, Activity.source == conn.provider)
+    )
+    if oldest is None:
+        raise ValueError("No activities imported from this connection yet")
+    conn.backfill = {
+        "status": "running",
+        "mode": "refresh",
+        "target": oldest.date().isoformat(),
+        "cursor": (utcnow() + timedelta(days=1)).isoformat(),
+        "stored": 0,
+        "resume_at": None,
+        "message": None,
+        "started_at": utcnow().isoformat(),
+    }
+    conn.options = {**(conn.options or {}), "fields_version": FIELDS_VERSION}
+    db.commit()
+    return state(conn)
+
+
+def refresh_outdated(db: DbSession) -> list[int]:
+    """At startup: start a one-time refresh for connections imported before the current fields existed."""
+    started = []
+    for conn in db.scalars(select(Connection)).all():
+        if (conn.options or {}).get("fields_version", 0) >= FIELDS_VERSION:
+            continue
+        try:
+            refresh(db, conn)
+            started.append(conn.id)
+        except ValueError:
+            conn.options = {**(conn.options or {}), "fields_version": FIELDS_VERSION}
+            db.commit()
+    if started:
+        log.info("Refreshing stored activities for connections %s", started)
+    return started
+
+
 def cancel(db: DbSession, conn: Connection) -> None:
     if conn.backfill and conn.backfill.get("status") in ("running", "waiting"):
         _save(db, conn, status="cancelled", resume_at=None)
@@ -103,7 +153,9 @@ async def run(conn_id: int) -> None:
                         db, conn, datetime.combine(target, datetime.min.time()), cursor
                     )
                 else:
-                    new_day, stored = await garmin.backfill_step(db, conn, target, cursor.date())
+                    new_day, stored = await garmin.backfill_step(
+                        db, conn, target, cursor.date(), activities_only=bf.get("mode") == "refresh"
+                    )
                     new_cursor, pause = datetime.combine(new_day, datetime.min.time()), None
             except Exception as exc:
                 log.warning("Backfill of connection %s failed: %r", conn_id, exc)
