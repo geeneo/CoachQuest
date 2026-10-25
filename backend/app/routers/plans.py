@@ -235,6 +235,56 @@ def apply_preferences(athlete: str, plan_id: int, user: User = Depends(current_u
     return {**plan_out(p, db, full=True), "changed": changed}
 
 
+class Replan(BaseModel):
+    reason: str = Field(default="", max_length=1000)
+
+
+@router.post("/{plan_id}/replan")
+async def replan(
+    athlete: str, plan_id: int, body: Replan, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """Claude rewrites the plan from this week on. Past and locked days stay as they are."""
+    p = _plan(db, user, athlete, plan_id)
+    if not p.weeks:
+        raise HTTPException(status_code=400, detail="This older plan has no day-by-day schedule")
+    today = date.today()
+    weeks = _editable(p)
+    first = plan_tracker.replan_from(weeks, today)
+    if first == len(weeks):
+        raise HTTPException(status_code=409, detail="This plan is over. Create a new plan instead.")
+    tracked = plan_out(p, db, full=True, today=today)["weeks"]
+    keep = [
+        {k: d[k] for k in ("date", "weekday", "type", "description", "duration_min", "status")}
+        for w in tracked[first:]
+        for d in w["days"]
+        if plan_tracker.kept(d, today)
+    ]
+    request = {
+        **(p.request or {}),
+        "start_date": weeks[first]["start"],
+        "weeks": len(weeks) - first,
+        "replan": {
+            "reason": body.reason,
+            "keep": keep,
+            "so_far": [{"start": w["start"], "phase": w["phase"], **w["summary"]} for w in tracked[:first]],
+        },
+    }
+    target = db.get(User, p.athlete_id)
+    facts = build_facts(db, target, allowed_scopes(db, user, p.athlete_id), request, today)
+    try:
+        answer, model = await generate_plan(db, user, target, facts)
+    except CoachError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    start = date.fromisoformat(weeks[first]["start"])
+    fresh = plan_tracker.build_weeks(answer.get("weeks", []), start, len(weeks) - first)
+    changed = plan_tracker.merge_replan(weeks, fresh, today)
+    summary = (answer.get("summary_md") or "").strip()
+    p.content_md = f"**Re-planned {today.isoformat()}.** {summary}\n\n" + plan_tracker.markdown(weeks)
+    p.model = model
+    _save_weeks(db, p, weeks)
+    return {**plan_out(p, db, full=True), "changed": changed}
+
+
 @router.delete("/{plan_id}")
 def delete_plan(athlete: str, plan_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     p = _plan(db, user, athlete, plan_id)

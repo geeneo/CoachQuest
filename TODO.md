@@ -115,9 +115,10 @@
         tags. Re-planning keeps locked and past days.
       - Coaches with the plans scope can view and edit; the athlete sees
         changes.
-      - Still to do: "Re-plan from this week" (Claude rewrites the remaining
-        weeks, keeping locked and past days) and indoor workout matching
-        ("fits a workout").
+      - Done: "Re-plan from this week" (Claude rewrites the remaining weeks
+        from what was logged, with an optional "what changed?" note, keeping
+        locked and past days).
+      - Still to do: indoor workout matching ("fits a workout").
 - [x] **AI coach: assessments of wellness and training progress.** A new
       "AI coach" page per athlete, next to Plans. Same rules as plans:
       CoachQuest computes the facts, Claude writes the words, and only the

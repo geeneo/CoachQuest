@@ -46,6 +46,10 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 - Plan every day of every requested week; weeks start on `request.start_date` (the first day of the \
 athlete's week): 7 days per week, rest days included (type "Rest", duration 0). Include recovery \
 weeks where they belong.
+- When `request.replan` is present you are re-planning a plan already under way: return weeks from \
+`request.start_date` only. Days listed in `request.replan.keep` are fixed (already done or locked by the \
+athlete); repeat them as they are and plan the other days around them. Use `request.replan.so_far` \
+(planned vs logged per earlier week) and `request.replan.reason` to decide what to change.
 - Each day: a session type from the allowed list, a short concrete description (structure, terrain, \
 targets), duration in minutes, and intensity chips such as "Z2", "95-105% FTP" or "LTHR 160-165".
 - Each week: a phase and a one-line focus.

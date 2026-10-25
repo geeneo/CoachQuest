@@ -83,8 +83,8 @@ server {
         proxy_pass http://cq_api;
     }
 
-    # ---- AI coach (plans, assessments, chat): authenticated, slower rate, long timeout ----
-    location ~ ^/api/athletes/[^/]+/(plans|coach/assessments|coach/chats)$ {
+    # ---- AI coach (plans, re-plans, assessments, chat): authenticated, slower rate, long timeout ----
+    location ~ ^/api/athletes/[^/]+/(plans|plans/\d+/replan|coach/assessments|coach/chats)$ {
         auth_request /_auth;
         auth_request_set $cq_user_id $upstream_http_x_auth_user_id;
         error_page 401 = @unauthorized;

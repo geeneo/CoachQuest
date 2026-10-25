@@ -1070,3 +1070,10 @@ label.inline.grow input {
   font-size: 0.88rem;
   line-height: 1.55;
 }
+
+.replan label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}

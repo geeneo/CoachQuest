@@ -154,3 +154,53 @@ def test_apply_preferences_only_future_unlocked(plan_id):
     r = p.post(f"{base}/apply-preferences").json()
     nxt = r["weeks"][1]["days"]
     assert nxt[1]["type"] == "Rest" and nxt[5]["type"] == "Road"  # Saturday locked, kept
+
+
+def test_replan_keeps_past_and_locked_days(plan_id, monkeypatch):
+    p, plan = plan_id
+    seen = {}
+
+    async def fake_replan(db, viewer, athlete, facts):
+        seen.update(facts["request"])
+        week = {
+            "phase": "Recovery",
+            "focus": "easier after illness",
+            "days": [
+                {"weekday": k, "type": "Walk", "description": "Easy walk", "duration_min": 40, "intensity": ["Z1"]}
+                for k in plan_tracker.WEEKDAYS
+            ],
+        }
+        return {"summary_md": "Eased off.", "weeks": [week, week]}, "claude-test"
+
+    monkeypatch.setattr("app.routers.plans.generate_plan", fake_replan)
+    base = f"/api/athletes/me/plans/{plan['id']}"
+    next_sat = plan["weeks"][1]["days"][5]["date"]
+    p.patch(f"{base}/days/{next_sat}", json={"locked": True})
+    r = p.post(f"{base}/replan", json={"reason": "I was sick"})
+    assert r.status_code == 200, r.text
+    today = date.today().isoformat()
+    assert seen["start_date"] == plan["weeks"][0]["start"] and seen["weeks"] == 2
+    assert seen["replan"]["reason"] == "I was sick"
+    assert next_sat in [d["date"] for d in seen["replan"]["keep"]]
+    for old_w, new_w in zip(plan["weeks"], r.json()["weeks"], strict=True):
+        for old, new in zip(old_w["days"], new_w["days"], strict=True):
+            if old["date"] < today or old["date"] == next_sat:
+                assert new["type"] == old["type"] and new["description"] == old["description"]
+            else:
+                assert new["type"] == "Walk"
+    assert r.json()["weeks"][1]["phase"] == "Recovery"
+    assert "Re-planned" in r.json()["content_md"]
+
+
+def test_replan_merge_in_code():
+    weeks = plan_tracker.build_weeks([_ai_week()], MON, 1)
+    weeks[0]["days"][5]["locked"] = True
+    fresh = plan_tracker.build_weeks([{"phase": "Taper", "focus": "", "days": []}], MON, 1)
+    today = MON + timedelta(days=2)  # Wednesday
+    assert plan_tracker.replan_from(weeks, today) == 0
+    assert plan_tracker.replan_from(weeks, MON + timedelta(days=7)) == 1
+    changed = plan_tracker.merge_replan(weeks, fresh, today)
+    days = weeks[0]["days"]
+    assert days[1]["type"] == "Zwift / indoor"  # Tuesday is past
+    assert days[5]["type"] == "Road"  # Saturday is locked
+    assert changed == 0 and weeks[0]["phase"] == "Taper"  # the free days were already Rest

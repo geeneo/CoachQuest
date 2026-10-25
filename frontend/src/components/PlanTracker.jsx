@@ -38,6 +38,19 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
     if (r) setNotice(`${r.changed} future day${r.changed === 1 ? "" : "s"} changed to your weekday preferences.`);
   };
 
+  const [replan, setReplan] = useState(null); // null = closed, else the reason being typed
+  const [replanning, setReplanning] = useState(false);
+  const runReplan = async (e) => {
+    e.preventDefault();
+    setReplanning(true);
+    const r = await call("/replan", "POST", { reason: replan });
+    setReplanning(false);
+    if (r) {
+      setReplan(null);
+      setNotice(`Re-planned: ${r.changed} day${r.changed === 1 ? "" : "s"} changed. Past and locked days were kept.`);
+    }
+  };
+
   const ctx = { prefs: prefs.data, editDay, swap, swapFrom };
   return (
     <>
@@ -46,10 +59,40 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
           Click a day's type to change it, click a description to edit it. 🔒 locks a day so re-planning and swaps leave
           it alone.
         </p>
-        <button className="btn" onClick={applyPrefs}>
-          Apply weekday preferences to future days
-        </button>
+        <div className="row">
+          <button className="btn" onClick={applyPrefs}>
+            Apply weekday preferences to future days
+          </button>
+          <button className="btn primary" onClick={() => setReplan(replan === null ? "" : null)}>
+            Re-plan from this week
+          </button>
+        </div>
       </div>
+      {replan !== null && (
+        <form className="card replan" onSubmit={runReplan}>
+          <p className="small">
+            The AI coach rewrites the rest of the plan from this week, using what you've logged so far. Past days and
+            🔒 locked days stay as they are.
+          </p>
+          <label>
+            What changed? (optional)
+            <input
+              value={replan}
+              maxLength={1000}
+              placeholder="e.g. sick for 3 days, travelling next week, felt strong"
+              onChange={(e) => setReplan(e.target.value)}
+            />
+          </label>
+          <div className="row">
+            <button className="btn primary" disabled={replanning}>
+              {replanning ? "Re-planning… (up to a minute)" : "Re-plan"}
+            </button>
+            <button type="button" className="btn" onClick={() => setReplan(null)} disabled={replanning}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
       {swapFrom && <div className="ok small">Pick the day to swap with {fmtDate(swapFrom)}, or click ⇄ again to cancel.</div>}
       {notice && <div className="ok small">{notice}</div>}
       {error && <div className="error">{error}</div>}

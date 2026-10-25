@@ -174,3 +174,41 @@ def apply_preferences(weeks: list[dict], prefs: dict[str, list[str]], today: dat
                 d.update(description="Rest day.", duration_min=0, intensity=[])
             changed += 1
     return changed
+
+
+def replan_from(weeks: list[dict], today: date) -> int:
+    """Index of the first week to re-plan: the one holding today, or 0 before the plan starts.
+
+    Returns len(weeks) when the plan is over."""
+    for i, week in enumerate(weeks):
+        if today < date.fromisoformat(week["start"]) + timedelta(7):
+            return i
+    return len(weeks)
+
+
+def kept(day: dict, today: date) -> bool:
+    """Re-planning leaves past days (what happened, happened) and locked days alone."""
+    return day["locked"] or date.fromisoformat(day["date"]) < today
+
+
+def merge_replan(old: list[dict], new: list[dict], today: date) -> int:
+    """Put Claude's new weeks over the old ones from the same start, keeping kept() days.
+
+    Changes `old` in place and returns how many days changed."""
+    by_start = {w["start"]: w for w in new}
+    changed = 0
+    for week in old:
+        fresh = by_start.get(week["start"])
+        if fresh is None:
+            continue
+        for i, d in enumerate(week["days"]):
+            if kept(d, today):
+                continue
+            n = fresh["days"][i]
+            fields = ("type", "description", "duration_min", "intensity")
+            if any(d[k] != n[k] for k in fields):
+                changed += 1
+            d.update({k: n[k] for k in fields}, gear=None, route=None, missed_reason=None)
+        if any(not kept(d, today) for d in week["days"]):
+            week.update(phase=fresh["phase"], focus=fresh["focus"], status="draft")
+    return changed
