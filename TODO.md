@@ -27,6 +27,17 @@
       - Garmin wellness goes back day by day, so long ranges are slow; cap it
         or run it overnight.
       - The fitness chart and CTL get more accurate with more history.
+- [ ] **Fill Profile from Garmin and/or Strava.** A "Pull from…" button per
+      field (FTP, lactate threshold HR, max HR, weight), with a choice of
+      Garmin, Strava or manual. Optionally keep it in sync on every sync.
+      - Garmin has the most: cycling FTP, lactate threshold HR, max HR and
+        weight (`get_cycling_ftp`, `get_lactate_threshold`,
+        `get_heart_rate_zones`, user profile).
+      - Strava has FTP and weight only when the athlete set them there. It
+        needs the `profile:read_all` scope, so Strava users reconnect once.
+      - Show where each value came from and when, e.g. "FTP 265 W · Garmin ·
+        3 days ago".
+      - When FTP or LTHR changes, recalculate TSS (Save already does this).
 - [ ] **Admin sets a user's password.** Admin → Users: "Set password", or
       "Send reset link" once SMTP works. Signs that user out everywhere. Logged.
 
