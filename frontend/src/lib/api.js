@@ -19,7 +19,17 @@ export async function api(path, { method = "GET", body } = {}) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    // An HTML error page from a proxy: the API is down, restarting or unreachable.
+    throw new ApiError(
+      res.status,
+      `The server answered with an error page (HTTP ${res.status}). CoachQuest may be restarting or its API ` +
+        "container is down. Wait a moment and try again; if it persists, check the api container logs.",
+    );
+  }
   if (!res.ok) {
     let detail = data?.detail;
     if (Array.isArray(detail)) detail = detail.map((d) => d.msg).join("; ");
