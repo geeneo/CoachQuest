@@ -250,6 +250,20 @@
         weekly review flags any conflict with the data (e.g. the coach asked
         for more volume but fatigue is flagged) instead of silently
         overruling either.
+- [ ] **Sign-in log.** See who signed in, when and from where.
+      - Admin → Sign-ins: every sign-in attempt with user (or the email
+        typed), time, result (success, wrong password, waiting for approval,
+        locked out / rate limited), IP address and browser. Filter by user,
+        result and date.
+      - Also logged: sign-outs, "sign out everywhere", password changes and
+        resets, and admin actions on accounts.
+      - Each user sees their own recent sign-ins in Profile → Security, so
+        they can spot one that wasn't them.
+      - Admin → Settings: "Keep sign-in log for X days" (e.g. 90 by
+        default). Older entries are deleted automatically every night. Applies
+        to the coach access log too, unless set separately.
+      - Keep it to what's needed (POPIA): no passwords, and IP addresses only
+        for as long as the retention allows.
 
 ## Later
 
