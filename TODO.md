@@ -38,6 +38,26 @@
       - Show where each value came from and when, e.g. "FTP 265 W · Garmin ·
         3 days ago".
       - When FTP or LTHR changes, recalculate TSS (Save already does this).
+- [ ] **AI coach: assessments of wellness and training progress.** A new
+      "AI coach" page per athlete, next to Plans. Same rules as plans:
+      CoachQuest computes the facts, Claude writes the words, and only the
+      scopes granted to the viewer go in.
+      - **Daily readiness:** a short morning note from last night's sleep, HRV,
+        resting HR and Body Battery vs the athlete's own 30-day baseline,
+        plus TSB. "Go / easy / rest" is decided in code; Claude explains why.
+      - **Weekly review:** planned vs done, load and ramp rate, standout
+        sessions, wellness trend, and what to change next week. Stored, so
+        progress can be read week to week.
+      - **Progress over time:** fitness (CTL) trend, power and pace bests,
+        and how close the athlete is to the goal / event date.
+      - **Ask the coach (agent):** a chat where Claude can look things up
+        itself through tools (activities, load, wellness, plans), limited to
+        the viewer's scopes. Every question and tool call goes in the access
+        log.
+      - **Delivery:** shown on My training and in the coach's athlete view.
+        Weekly review by email once SMTP is in.
+      - **Cost control:** daily notes are short. Per-user monthly limits and
+        token use are shown on the Admin page.
 - [ ] **Admin sets a user's password.** Admin → Users: "Set password", or
       "Send reset link" once SMTP works. Signs that user out everywhere. Logged.
 
