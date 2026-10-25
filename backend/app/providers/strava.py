@@ -58,7 +58,8 @@ def _token_error(resp: httpx.Response) -> StravaLinkError:
     except ValueError:
         fields, public = set(), f"Strava answered HTTP {resp.status_code}"
     detail = f"HTTP {resp.status_code}: {resp.text[:300]}"
-    if "client_secret" in fields:
+    # A wrong secret (or one from a different app) comes back as 401 with an empty field.
+    if "client_secret" in fields or resp.status_code == 401:
         return StravaLinkError("secret", detail)
     if "client_id" in fields:
         return StravaLinkError("client_id", detail)

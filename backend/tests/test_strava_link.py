@@ -87,3 +87,14 @@ def test_callback_passes_server_error_detail(monkeypatch, make_user):
     )
     q = parse_qs(urlparse(r.headers["location"]).query)
     assert q["error"] == ["strava"] and q["detail"] == ["Server error: RuntimeError: database is locked"]
+
+
+def test_401_authorization_error_means_wrong_secret(monkeypatch, user_with_app):
+    _fake_strava(
+        monkeypatch,
+        401,
+        {"message": "Authorization Error", "errors": [{"resource": "Application", "field": "", "code": "invalid"}]},
+    )
+    with pytest.raises(strava.StravaLinkError) as exc:
+        _exchange(user_with_app)
+    assert exc.value.reason == "secret"
