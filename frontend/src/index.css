@@ -617,3 +617,17 @@ code {
 .stack > .btn {
   align-self: flex-start;
 }
+
+.manage-cell {
+  white-space: normal;
+  background: var(--panel-2);
+}
+.manage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.4rem 0;
+}
+.manage input {
+  max-width: 340px;
+}

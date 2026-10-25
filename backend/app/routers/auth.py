@@ -1,5 +1,6 @@
 """Login, logout, registration, and the verify endpoint nginx calls."""
 
+import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
@@ -7,7 +8,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import runtime
+from .. import accounts, mailer, runtime
 from ..config import SESSION_COOKIE, settings
 from ..db import Session, User, get_db, utcnow
 from ..deps import current_user
@@ -19,6 +20,8 @@ from ..security import (
     proxy_secret_ok,
     verify_password,
 )
+
+log = logging.getLogger("coachquest.auth")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 internal = APIRouter(prefix="/internal/auth", include_in_schema=False)
@@ -117,6 +120,44 @@ def logout_all(response: Response, user: User = Depends(current_user), db: DbSes
     db.execute(delete(Session).where(Session.user_id == user.id))
     db.commit()
     response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"ok": True}
+
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+
+FORGOT_REPLY = {
+    "ok": True,
+    "message": "If that email has a CoachQuest account, a reset link is on its way. "
+    "It works once and expires in 30 minutes. Check your spam folder too.",
+}
+
+
+@router.post("/forgot")
+async def forgot_password(body: ForgotPassword, db: DbSession = Depends(get_db)):
+    """Always gives the same answer, so it can't be used to find out who has an account."""
+    user = db.scalar(select(User).where(User.email == body.email.lower(), User.is_active))
+    if user is not None:
+        link = accounts.create_reset_link(db, user, accounts.SELF_SERVICE_TTL)
+        try:
+            await accounts.email_reset_link(user, link, accounts.SELF_SERVICE_TTL, by_admin=False)
+        except mailer.MailError as exc:
+            log.warning("Password reset email for user %s not sent: %s", user.id, exc)
+    return FORGOT_REPLY
+
+
+class ResetPassword(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+@router.post("/reset")
+def reset_password(body: ResetPassword, db: DbSession = Depends(get_db)):
+    if accounts.use_reset_token(db, body.token, body.new_password) is None:
+        raise HTTPException(
+            status_code=400, detail="This reset link is invalid, already used or expired. Ask for a new one."
+        )
     return {"ok": True}
 
 

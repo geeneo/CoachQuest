@@ -1,15 +1,22 @@
 """Admin page: settings, users, version and usage stats."""
 
+import logging
+import shutil
+from pathlib import Path
+
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import delete, func, select
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
-from .. import mailer, runtime
+from .. import accounts, mailer, runtime
 from ..config import settings
-from ..db import AiCall, Connection, Session, User, get_db
+from ..db import AccessLog, Activity, AiCall, Connection, Grant, Plan, Session, User, WellnessDay, get_db
 from ..deps import admin_user
+
+log = logging.getLogger("coachquest.admin")
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -124,6 +131,91 @@ def list_users(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
 class UserUpdate(BaseModel):
     is_admin: bool | None = None
     is_active: bool | None = None
+
+
+class SetPassword(BaseModel):
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+def _other_user(db: DbSession, user_id: int) -> User:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.post("/users/{user_id}/password")
+def admin_set_password(
+    user_id: int, body: SetPassword, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
+):
+    """Set a user's password. They are signed out everywhere."""
+    user = _other_user(db, user_id)
+    accounts.set_password(db, user, body.new_password)
+    log.info("Admin %s set the password of user %s", admin.id, user.id)
+    return {"ok": True}
+
+
+@router.post("/users/{user_id}/reset-link")
+async def admin_reset_link(user_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """A 24-hour reset link: emailed when email works, and always shown to the admin to pass on."""
+    user = _other_user(db, user_id)
+    link = accounts.create_reset_link(db, user, accounts.ADMIN_LINK_TTL, admin_id=admin.id)
+    log.info("Admin %s created a reset link for user %s", admin.id, user.id)
+    try:
+        await accounts.email_reset_link(user, link, accounts.ADMIN_LINK_TTL, by_admin=True)
+        emailed = f"Emailed to {user.email}."
+    except mailer.MailError as exc:
+        emailed = f"Not emailed: {exc}"
+    return {"link": link, "emailed": emailed}
+
+
+class DeleteUser(BaseModel):
+    confirm_email: str
+
+
+@router.delete("/users/{user_id}")
+def admin_delete_user(
+    user_id: int, body: DeleteUser, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
+):
+    user = _other_user(db, user_id)
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="You can't delete your own account")
+    if body.confirm_email.strip().lower() != user.email:
+        raise HTTPException(status_code=400, detail="Type the user's email exactly to confirm")
+    accounts.delete_account(db, user)
+    log.info("Admin %s deleted user %s", admin.id, user_id)
+    return {"ok": True}
+
+
+@router.get("/storage")
+def storage(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    tables = {}
+    for name, model in (
+        ("Users", User),
+        ("Activities", Activity),
+        ("Wellness days", WellnessDay),
+        ("Training plans", Plan),
+        ("Connections", Connection),
+        ("Sharing grants", Grant),
+        ("Access log entries", AccessLog),
+        ("AI calls", AiCall),
+        ("Sign-in sessions", Session),
+    ):
+        tables[name] = db.scalar(select(func.count()).select_from(model))
+    files = {}
+    url = make_url(settings.db_url)
+    if url.get_backend_name() == "sqlite" and url.database:
+        for suffix in ("", "-wal", "-shm"):
+            path = Path(url.database + suffix)
+            if path.exists():
+                files[path.name] = path.stat().st_size
+    disk = shutil.disk_usage(settings.data_dir if Path(settings.data_dir).exists() else ".")
+    return {
+        "database_bytes": sum(files.values()),
+        "files": files,
+        "tables": tables,
+        "disk": {"total": disk.total, "used": disk.used, "free": disk.free, "path": settings.data_dir},
+    }
 
 
 @router.patch("/users/{user_id}")

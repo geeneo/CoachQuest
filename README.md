@@ -233,8 +233,4 @@ docker-compose.yml build.sh deploy.sh menu.sh .env.example
 
 ## Next steps
 
-- Account export/delete, password reset by email, optional TOTP 2FA
-- Postgres + Alembic migrations when SQLite gets tight
-- Strava webhooks instead of 6-hourly polling
-- Plan → calendar: turn the AI plan into dated workouts and track plan vs actual
-- Coach-to-athlete comments on plans
+See [TODO.md](TODO.md).

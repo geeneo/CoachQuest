@@ -9,7 +9,9 @@ import { dateTime } from "../lib/format.js";
 const SOURCE = { web: "set here", env: "from .env", unset: "not set" };
 
 export default function Admin() {
-  const stats = useApi("/api/admin/stats");
+  // Bumped when users change, so Storage and Usage show fresh numbers.
+  const [rev, setRev] = useState(0);
+  const stats = useApi(`/api/admin/stats?rev=${rev}`);
   const version = useApi("/api/admin/version");
   const s = stats.data;
   return (
@@ -19,7 +21,8 @@ export default function Admin() {
         API build {version.data?.commit} {version.data?.built} · frontend build {import.meta.env.VITE_BUILD_COMMIT || "dev"}
       </p>
       <Settings />
-      <Users />
+      <Users onChange={() => setRev((r) => r + 1)} />
+      <Storage rev={rev} />
       <section className="card">
         <h2>Usage</h2>
         {stats.error && <div className="error">{stats.error.message}</div>}
@@ -203,9 +206,10 @@ function SettingRow({ item, draft, onChange, onClear }) {
   );
 }
 
-function Users() {
+function Users({ onChange }) {
   const { user: me } = useAuth();
   const users = useApi("/api/admin/users");
+  const [open, setOpen] = useState(null);
   const [error, setError] = useState(null);
   const update = (u, body) => {
     setError(null);
@@ -225,39 +229,179 @@ function Users() {
                 <th>Joined</th>
                 <th>Admin</th>
                 <th>Active</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {users.data.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.display_name}</td>
-                  <td>{u.email}</td>
-                  <td>{dateTime(u.created_at)}</td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={u.is_admin}
-                      disabled={u.id === me.id}
-                      onChange={(e) => update(u, { is_admin: e.target.checked })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={u.is_active}
-                      disabled={u.id === me.id}
-                      onChange={(e) =>
-                        (e.target.checked || confirm(`Disable ${u.display_name}? They are signed out at once.`)) &&
-                        update(u, { is_active: e.target.checked })
-                      }
-                    />
-                  </td>
-                </tr>
+                <UserRow
+                  key={u.id}
+                  u={u}
+                  isMe={u.id === me.id}
+                  open={open === u.id}
+                  toggle={() => setOpen(open === u.id ? null : u.id)}
+                  update={update}
+                  reload={() => {
+                    users.reload();
+                    onChange();
+                  }}
+                />
               ))}
             </tbody>
           </table>
         </div>
       )}
+    </section>
+  );
+}
+
+function UserRow({ u, isMe, open, toggle, update, reload }) {
+  return (
+    <>
+      <tr>
+        <td>{u.display_name}</td>
+        <td>{u.email}</td>
+        <td>{dateTime(u.created_at)}</td>
+        <td>
+          <input type="checkbox" checked={u.is_admin} disabled={isMe} onChange={(e) => update(u, { is_admin: e.target.checked })} />
+        </td>
+        <td>
+          <input
+            type="checkbox"
+            checked={u.is_active}
+            disabled={isMe}
+            onChange={(e) =>
+              (e.target.checked || confirm(`Disable ${u.display_name}? They are signed out at once.`)) &&
+              update(u, { is_active: e.target.checked })
+            }
+          />
+        </td>
+        <td>
+          {!isMe && (
+            <button className="link-btn small" onClick={toggle}>
+              {open ? "Close" : "Manage"}
+            </button>
+          )}
+        </td>
+      </tr>
+      {open && (
+        <tr>
+          <td colSpan={6} className="manage-cell">
+            <ManageUser u={u} reload={reload} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function ManageUser({ u, reload }) {
+  const [password, setPassword] = useState("");
+  const [msg, setMsg] = useState(null);
+  const [link, setLink] = useState(null);
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const done = (ok) => setMsg({ ok });
+  const fail = (err) => setMsg({ error: err.message });
+
+  const setPw = (e) => {
+    e.preventDefault();
+    api(`/api/admin/users/${u.id}/password`, { method: "POST", body: { new_password: password } }).then(() => {
+      setPassword("");
+      done(`Password set. ${u.display_name} has been signed out everywhere; give them the new password.`);
+    }, fail);
+  };
+  const makeLink = () =>
+    api(`/api/admin/users/${u.id}/reset-link`, { method: "POST" }).then((r) => {
+      setLink(r.link);
+      done(`Reset link created (valid 24 hours, works once). ${r.emailed}`);
+    }, fail);
+  const remove = (e) => {
+    e.preventDefault();
+    if (!confirm(`Delete ${u.display_name} and all their data? This cannot be undone.`)) return;
+    api(`/api/admin/users/${u.id}`, { method: "DELETE", body: { confirm_email: confirmEmail } }).then(reload, fail);
+  };
+
+  return (
+    <div className="manage">
+      <form className="row" onSubmit={setPw}>
+        <input
+          type="password"
+          autoComplete="new-password"
+          minLength={12}
+          placeholder="New password (12+ characters)"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <button className="btn">Set password</button>
+        <button type="button" className="btn" onClick={makeLink}>
+          Create reset link
+        </button>
+      </form>
+      {link && (
+        <div className="row">
+          <input readOnly value={link} onFocus={(e) => e.target.select()} />
+          <button type="button" className="btn" onClick={() => navigator.clipboard?.writeText(link)}>
+            Copy
+          </button>
+        </div>
+      )}
+      <form className="row" onSubmit={remove}>
+        <input
+          placeholder={`Type ${u.email} to delete`}
+          value={confirmEmail}
+          onChange={(e) => setConfirmEmail(e.target.value)}
+          autoComplete="off"
+        />
+        <button className="btn danger" disabled={confirmEmail.trim().toLowerCase() !== u.email}>
+          Delete user and all data
+        </button>
+      </form>
+      {msg?.ok && <div className="ok small">{msg.ok}</div>}
+      {msg?.error && <div className="error small">{msg.error}</div>}
+    </div>
+  );
+}
+
+function bytes(n) {
+  if (n == null) return "–";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(i ? 1 : 0)} ${units[i]}`;
+}
+
+function Storage({ rev }) {
+  const s = useApi(`/api/admin/storage?rev=${rev}`);
+  if (s.error) return <div className="error">{s.error.message}</div>;
+  if (!s.data) return null;
+  const { disk } = s.data;
+  return (
+    <section className="card">
+      <h2>Storage</h2>
+      <div className="stats">
+        <Stat label="Database" value={bytes(s.data.database_bytes)} />
+        <Stat label="Disk free" value={bytes(disk.free)} />
+        <Stat label="Disk used" value={`${Math.round((disk.used / disk.total) * 100)}%`} />
+      </div>
+      <div className="table-wrap">
+        <table>
+          <tbody>
+            {Object.entries(s.data.tables).map(([name, count]) => (
+              <tr key={name}>
+                <td>{name}</td>
+                <td className="num">{count.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">
+        Files: {Object.entries(s.data.files).map(([f, n]) => `${f} ${bytes(n)}`).join(" · ")} · in {disk.path}
+      </p>
     </section>
   );
 }

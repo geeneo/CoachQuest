@@ -64,8 +64,8 @@ server {
         return 404;
     }
 
-    # ---- public API: login / register / logout / health ----
-    location ~ ^/api/auth/(login|register)$ {
+    # ---- public API: login / register / password reset / logout / health ----
+    location ~ ^/api/auth/(login|register|forgot|reset)$ {
         limit_req zone=cq_auth burst=5 nodelay;
         include /etc/nginx/conf.d/cq_proxy.inc;
         proxy_set_header X-Auth-User-Id "";

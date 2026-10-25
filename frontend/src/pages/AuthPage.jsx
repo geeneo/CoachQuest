@@ -51,6 +51,11 @@ export default function AuthPage({ mode }) {
           />
           {isRegister && <span className="hint">At least 12 characters.</span>}
         </label>
+        {!isRegister && (
+          <Link to="/forgot-password" className="small">
+            Forgot password?
+          </Link>
+        )}
         {error && <div className="error">{error}</div>}
         <button className="btn primary" disabled={busy}>
           {busy ? "…" : isRegister ? "Create account" : "Sign in"}

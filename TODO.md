@@ -10,7 +10,7 @@
       Include a "Send test email" button. Password reset depends on this.
 - [x] **Users change their own password.** Profile: current password + new
       password (min 12). Signs out the user's other sessions.
-- [ ] **Forgot password.** "Forgot password?" on the sign-in page emails a
+- [x] **Forgot password.** "Forgot password?" on the sign-in page emails a
       single-use reset link that expires in 30 minutes.
       - The page always says "if that email has an account, we've sent a link",
         so it doesn't reveal who has an account.
@@ -57,7 +57,7 @@
         Weekly review by email once SMTP is in.
       - **Cost control:** daily notes are short. Per-user monthly limits and
         token use are shown on the Admin page.
-- [ ] **Admin user management.**
+- [x] **Admin user management.**
       - Admin → Users: "Set password", or "Send reset link" once SMTP works.
         Signs that user out everywhere. Logged.
       - "Delete user": removes the account and all its data (activities,
