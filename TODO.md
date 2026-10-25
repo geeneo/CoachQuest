@@ -183,6 +183,32 @@
         4h55m · RE 169 · 138W avg · 122bpm avg (Ride)", or "✗ Not logged"
         with the "why missed?" dropdown.
       - Compact, so a whole week fits on one screen.
+- [ ] **Multi-platform workout sync (Zwift, MyWhoosh).** Coaches build
+      structured cycling workouts, schedule them for an athlete, and, where an
+      authorised integration allows it, CoachQuest delivers them to the
+      athlete's training platform with no manual file upload.
+      - **Review first.** Reuse the existing pieces: plan days, the plans
+        scope, coach/athlete grants, Connections, styling. Check the Garmin
+        and Strava sync so a workout ridden on Zwift doesn't import twice.
+        Write an implementation plan before any big architectural change.
+      - **Settings → Connected Platforms.** For each platform show:
+        connection status, the athlete's account on that platform, last
+        successful sync, last error, and what it can do.
+
+        | Platform | Integration |
+        |---|---|
+        | Zwift | Official Training API once approved; ZWO file export until then |
+        | MyWhoosh | Official integration if one exists; an experimental API behind a feature flag |
+        | Garmin | Reuse the existing connection; send workouts only where authorised |
+        | Strava | Reuse the existing activity integration |
+
+      - Notes:
+        - Zwift's API needs a partner application and approval, so ZWO
+          export ships first.
+        - MyWhoosh has no public workout API as far as we know. Plan on
+          file export unless they offer one.
+        - This replaces the plan tracker's "MyWhoosh" and "fits a workout"
+          buttons idea: indoor plan days become real workouts.
 
 ## Later
 
