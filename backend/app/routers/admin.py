@@ -2,21 +2,23 @@
 
 import logging
 import shutil
+from datetime import timedelta
 from pathlib import Path
 
 import anthropic
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
-from .. import accounts, mailer, runtime
+from .. import accounts, auth_log, mailer, runtime
 from ..config import settings
 from ..db import (
     AccessLog,
     Activity,
     AiCall,
+    AuthEvent,
     Connection,
     Grant,
     Plan,
@@ -183,20 +185,28 @@ def _other_user(db: DbSession, user_id: int) -> User:
 
 @router.post("/users/{user_id}/password")
 def admin_set_password(
-    user_id: int, body: SetPassword, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
+    user_id: int,
+    body: SetPassword,
+    request: Request,
+    admin: User = Depends(admin_user),
+    db: DbSession = Depends(get_db),
 ):
     """Set a user's password. They are signed out everywhere."""
     user = _other_user(db, user_id)
     accounts.set_password(db, user, body.new_password)
+    auth_log.admin_action(db, request, "admin_password_set", admin, user)
     log.info("Admin %s set the password of user %s", admin.id, user.id)
     return {"ok": True}
 
 
 @router.post("/users/{user_id}/reset-link")
-async def admin_reset_link(user_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+async def admin_reset_link(
+    user_id: int, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
+):
     """A 24-hour reset link: emailed when email works, and always shown to the admin to pass on."""
     user = _other_user(db, user_id)
     link = accounts.create_reset_link(db, user, accounts.ADMIN_LINK_TTL, admin_id=admin.id)
+    auth_log.admin_action(db, request, "admin_reset_link", admin, user)
     log.info("Admin %s created a reset link for user %s", admin.id, user.id)
     try:
         await accounts.email_reset_link(user, link, accounts.ADMIN_LINK_TTL, by_admin=True)
@@ -207,12 +217,15 @@ async def admin_reset_link(user_id: int, admin: User = Depends(admin_user), db: 
 
 
 @router.post("/users/{user_id}/approve")
-async def approve_user(user_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+async def approve_user(
+    user_id: int, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
+):
     user = _other_user(db, user_id)
     if user.approved:
         return {"ok": True, "emailed": None}
     user.approved = True
     db.commit()
+    auth_log.admin_action(db, request, "admin_approved", admin, user)
     log.info("Admin %s approved user %s", admin.id, user.id)
     try:
         await mailer.send(
@@ -228,12 +241,14 @@ async def approve_user(user_id: int, admin: User = Depends(admin_user), db: DbSe
 
 
 @router.post("/users/{user_id}/reject")
-def reject_user(user_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+def reject_user(user_id: int, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
     """Remove a sign-up that is still waiting for approval."""
     user = _other_user(db, user_id)
     if user.approved:
         raise HTTPException(status_code=400, detail="Only accounts waiting for approval can be rejected; use Delete")
+    email = user.email
     accounts.delete_account(db, user)
+    auth_log.admin_action(db, request, "admin_rejected", admin, None, email)
     log.info("Admin %s rejected sign-up %s", admin.id, user_id)
     return {"ok": True}
 
@@ -244,14 +259,16 @@ class DeleteUser(BaseModel):
 
 @router.delete("/users/{user_id}")
 def admin_delete_user(
-    user_id: int, body: DeleteUser, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
+    user_id: int, body: DeleteUser, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
 ):
     user = _other_user(db, user_id)
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="You can't delete your own account")
     if body.confirm_email.strip().lower() != user.email:
         raise HTTPException(status_code=400, detail="Type the user's email exactly to confirm")
+    email = user.email
     accounts.delete_account(db, user)
+    auth_log.admin_action(db, request, "admin_deleted", admin, None, email)
     log.info("Admin %s deleted user %s", admin.id, user_id)
     return {"ok": True}
 
@@ -288,7 +305,9 @@ def storage(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
 
 
 @router.patch("/users/{user_id}")
-def update_user(user_id: int, body: UserUpdate, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+def update_user(
+    user_id: int, body: UserUpdate, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
+):
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -296,6 +315,8 @@ def update_user(user_id: int, body: UserUpdate, admin: User = Depends(admin_user
         raise HTTPException(status_code=400, detail="You can't remove your own admin rights or disable yourself")
     if body.is_admin is not None:
         user.is_admin = body.is_admin
+    if body.is_active is not None and body.is_active != user.is_active:
+        auth_log.admin_action(db, request, "admin_enabled" if body.is_active else "admin_disabled", admin, user)
     if body.is_active is not None:
         user.is_active = body.is_active
         if not body.is_active:
@@ -303,3 +324,30 @@ def update_user(user_id: int, body: UserUpdate, admin: User = Depends(admin_user
             db.execute(delete(Session).where(Session.user_id == user.id))
     db.commit()
     return {"ok": True}
+
+
+@router.get("/sign-ins")
+def sign_ins(
+    q: str = "",
+    event: str = "",
+    failed: bool = False,
+    days: int = Query(default=30, ge=1, le=3650),
+    limit: int = Query(default=200, ge=1, le=1000),
+    _: User = Depends(admin_user),
+    db: DbSession = Depends(get_db),
+):
+    """The sign-in log, newest first. q matches the email or IP address."""
+    query = select(AuthEvent).where(AuthEvent.at >= utcnow() - timedelta(days=days))
+    if q.strip():
+        like = f"%{q.strip().lower()}%"
+        query = query.where(or_(AuthEvent.email.like(like), AuthEvent.ip.like(like)))
+    if event:
+        query = query.where(AuthEvent.event == event)
+    if failed:
+        query = query.where(AuthEvent.event.in_(auth_log.FAILURES))
+    rows = db.scalars(query.order_by(AuthEvent.at.desc(), AuthEvent.id.desc()).limit(limit)).all()
+    return {
+        "events": [auth_log.out(e) for e in rows],
+        "kinds": auth_log.EVENTS,
+        "keep_days": runtime.get("auth_log_days"),
+    }

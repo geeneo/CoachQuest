@@ -4,6 +4,7 @@ import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { dateTime } from "../lib/format.js";
 import { getTheme, setTheme } from "../lib/theme.js";
+import { MySignIns } from "../components/SignInLog.jsx";
 
 const NUMBER_FIELDS = [
   ["ftp_watts", "FTP (watts)", "Used for power-based TSS"],
@@ -128,6 +129,7 @@ export default function Profile() {
         <button className="btn danger" onClick={logoutAll}>
           Sign out everywhere
         </button>
+        <MySignIns />
       </section>
     </>
   );

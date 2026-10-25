@@ -250,7 +250,7 @@
         weekly review flags any conflict with the data (e.g. the coach asked
         for more volume but fatigue is flagged) instead of silently
         overruling either.
-- [ ] **Sign-in log.** See who signed in, when and from where.
+- [x] **Sign-in log.** See who signed in, when and from where. (Done.)
       - Admin → Sign-ins: every sign-in attempt with user (or the email
         typed), time, result (success, wrong password, waiting for approval,
         locked out / rate limited), IP address and browser. Filter by user,

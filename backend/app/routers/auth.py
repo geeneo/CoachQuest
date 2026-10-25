@@ -8,9 +8,9 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import accounts, mailer, runtime
+from .. import accounts, auth_log, mailer, runtime
 from ..config import SESSION_COOKIE, settings
-from ..db import Session, User, get_db, utcnow
+from ..db import AuthEvent, Session, User, get_db, utcnow
 from ..deps import current_user
 from ..security import (
     DUMMY_HASH,
@@ -117,6 +117,7 @@ async def register(body: Registration, request: Request, response: Response, db:
     )
     db.add(user)
     db.commit()
+    auth_log.record(db, request, "registered", user, detail="" if user.approved else "waiting for approval")
     if not user.approved:
         await _tell_admins_about(db, user)
         return {"pending": True, "message": PENDING_MESSAGE}
@@ -128,11 +129,17 @@ async def register(body: Registration, request: Request, response: Response, db:
 def login(body: Credentials, request: Request, response: Response, db: DbSession = Depends(get_db)):
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     ok = verify_password(body.password, user.password_hash if user else DUMMY_HASH)
-    if not user or not ok or not user.is_active:
+    if not user or not ok:
+        auth_log.record(db, request, "login_failed", user, email=body.email)
+        raise HTTPException(status_code=401, detail="Wrong email or password")
+    if not user.is_active:
+        auth_log.record(db, request, "login_disabled", user)
         raise HTTPException(status_code=401, detail="Wrong email or password")
     if not user.approved:
+        auth_log.record(db, request, "login_pending", user)
         raise HTTPException(status_code=403, detail="Your account is waiting for an administrator to approve it.")
     _start_session(db, user, response, request.headers.get("user-agent"))
+    auth_log.record(db, request, "login_ok", user)
     return user_out(user)
 
 
@@ -140,6 +147,9 @@ def login(body: Credentials, request: Request, response: Response, db: DbSession
 def logout(request: Request, response: Response, db: DbSession = Depends(get_db)):
     token = request.cookies.get(SESSION_COOKIE)
     if token:
+        s = db.scalar(select(Session).where(Session.token_hash == hash_token(token)))
+        if s is not None:
+            auth_log.record(db, request, "logout", db.get(User, s.user_id))
         db.execute(delete(Session).where(Session.token_hash == hash_token(token)))
         db.commit()
     response.delete_cookie(SESSION_COOKIE, path="/")
@@ -147,9 +157,12 @@ def logout(request: Request, response: Response, db: DbSession = Depends(get_db)
 
 
 @router.post("/logout-all")
-def logout_all(response: Response, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+def logout_all(
+    request: Request, response: Response, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
     db.execute(delete(Session).where(Session.user_id == user.id))
     db.commit()
+    auth_log.record(db, request, "logout_all", user)
     response.delete_cookie(SESSION_COOKIE, path="/")
     return {"ok": True}
 
@@ -166,9 +179,10 @@ FORGOT_REPLY = {
 
 
 @router.post("/forgot")
-async def forgot_password(body: ForgotPassword, db: DbSession = Depends(get_db)):
+async def forgot_password(body: ForgotPassword, request: Request, db: DbSession = Depends(get_db)):
     """Always gives the same answer, so it can't be used to find out who has an account."""
     user = db.scalar(select(User).where(User.email == body.email.lower(), User.is_active))
+    auth_log.record(db, request, "reset_requested", user, email=body.email, detail="" if user else "no such account")
     if user is not None:
         link = accounts.create_reset_link(db, user, accounts.SELF_SERVICE_TTL)
         try:
@@ -184,11 +198,13 @@ class ResetPassword(BaseModel):
 
 
 @router.post("/reset")
-def reset_password(body: ResetPassword, db: DbSession = Depends(get_db)):
-    if accounts.use_reset_token(db, body.token, body.new_password) is None:
+def reset_password(body: ResetPassword, request: Request, db: DbSession = Depends(get_db)):
+    user = accounts.use_reset_token(db, body.token, body.new_password)
+    if user is None:
         raise HTTPException(
             status_code=400, detail="This reset link is invalid, already used or expired. Ask for a new one."
         )
+    auth_log.record(db, request, "password_reset", user)
     return {"ok": True}
 
 
@@ -210,7 +226,20 @@ def change_password(
     this = hash_token(request.cookies.get(SESSION_COOKIE, ""))
     db.execute(delete(Session).where(Session.user_id == user.id, Session.token_hash != this))
     db.commit()
+    auth_log.record(db, request, "password_changed", user)
     return {"ok": True}
+
+
+@router.get("/sign-ins")
+def my_sign_ins(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Your own recent sign-ins and account events, to spot one that wasn't you."""
+    rows = db.scalars(
+        select(AuthEvent)
+        .where(AuthEvent.user_id == user.id)
+        .order_by(AuthEvent.at.desc(), AuthEvent.id.desc())
+        .limit(30)
+    ).all()
+    return [auth_log.out(e) for e in rows]
 
 
 @router.get("/me")

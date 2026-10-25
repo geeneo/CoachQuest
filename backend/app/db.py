@@ -400,6 +400,22 @@ class CoachChat(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class AuthEvent(Base):
+    """Sign-in log: sign-ins (and failed attempts), sign-outs, password and admin account events."""
+
+    __tablename__ = "auth_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # None for an unknown email or a deleted account; `email` keeps what was typed or known.
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), default="")
+    event: Mapped[str] = mapped_column(String(30))
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str] = mapped_column(String(255), default="")
+    detail: Mapped[str] = mapped_column(String(255), default="")
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
 class AccessLog(Base):
     """Every time someone other than the athlete reads the athlete's data."""
 

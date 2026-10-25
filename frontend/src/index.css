@@ -1424,3 +1424,8 @@ tr.sub-row td {
   border-color: var(--c1);
   color: var(--c1);
 }
+
+/* ---- Sign-in log ---- */
+table.sign-ins td {
+  white-space: nowrap;
+}

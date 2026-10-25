@@ -91,6 +91,18 @@ EDITABLE: dict[str, Editable] = {
         choices=("open", "approval", "closed"),
         help="Approval: anyone can sign up, an admin approves them first. Closed: only emails in ADMIN_EMAILS.",
     ),
+    "auth_log_days": Editable(
+        "Keep sign-in log for (days)",
+        "Accounts",
+        pattern=r"[0-9]{1,4}",
+        help="Sign-ins, failed attempts and account events older than this are deleted every night. 0 keeps them.",
+    ),
+    "access_log_days": Editable(
+        "Keep coach access log for (days)",
+        "Accounts",
+        pattern=r"[0-9]{1,4}",
+        help="What coaches looked at. Empty: same as the sign-in log. 0 keeps it.",
+    ),
     "ai_monthly_limit": Editable(
         "Monthly AI calls per user",
         "AI coach",

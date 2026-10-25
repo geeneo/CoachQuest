@@ -5,6 +5,7 @@ import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { dateTime } from "../lib/format.js";
+import { AdminSignIns } from "../components/SignInLog.jsx";
 
 const SOURCE = { web: "set here", env: "from .env", unset: "not set" };
 
@@ -24,6 +25,7 @@ export default function Admin() {
       <Users onChange={() => setRev((r) => r + 1)} />
       <AiUsage rev={rev} />
       <Storage rev={rev} />
+      <AdminSignIns />
       <section className="card">
         <h2>Usage</h2>
         {stats.error && <div className="error">{stats.error.message}</div>}

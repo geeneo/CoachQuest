@@ -14,6 +14,7 @@ from .db import (
     Activity,
     AiCall,
     Assessment,
+    AuthEvent,
     CoachChat,
     Comment,
     Connection,
@@ -97,6 +98,8 @@ def delete_account(db: DbSession, user: User) -> None:
     # Comments about their own training go; comments they wrote for other athletes stay, unsigned.
     db.execute(delete(Comment).where(Comment.athlete_id == uid))
     db.execute(update(Comment).where(Comment.author_id == uid).values(author_id=None))
+    # The sign-in log keeps the email until the retention removes it, for the audit trail.
+    db.execute(update(AuthEvent).where(AuthEvent.user_id == uid).values(user_id=None))
     db.execute(update(Comment).where(Comment.edited_by == uid).values(edited_by=None))
     for model, column in (
         (Activity, Activity.user_id),

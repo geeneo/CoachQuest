@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from . import assessments, backfill, runtime, sync_engine
+from . import assessments, auth_log, backfill, runtime, sync_engine
 from .config import check_required, settings
 from .db import Connection, SessionLocal, init_db
 from .routers import admin, athletes, auth, coach_ai, comments, connections, grants, plans, preferences, races, workouts
@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(sync_all, "interval", hours=6, args=["intervals_icu"], id="intervals_icu")
         scheduler.add_job(backfill.resume_due, "interval", minutes=15, id="backfill")
         scheduler.add_job(sync_engine.run_due, "interval", minutes=1, id="workout-sync")
+        scheduler.add_job(auth_log.purge_job, "cron", hour=3, minute=20, id="log-retention")
         # After the morning Garmin sync window, so last night's sleep and HRV are in.
         scheduler.add_job(assessments.run_scheduled, "cron", hour=6, minute=40, args=["daily"], id="ai-daily")
         # Runs daily; each athlete gets their review on the first day of their own week.
