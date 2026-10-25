@@ -257,10 +257,20 @@ function Users({ onChange }) {
 }
 
 function UserRow({ u, isMe, open, toggle, update, reload }) {
+  const decide = (user, action) =>
+    api(`/api/admin/users/${user.id}/${action}`, { method: "POST" }).then(
+      (r) => {
+        if (r.emailed) alert(`${user.email} approved. ${r.emailed}`);
+        reload();
+      },
+      (e) => alert(e.message),
+    );
   return (
     <>
       <tr>
-        <td>{u.display_name}</td>
+        <td>
+          {u.display_name} {!u.approved && <span className="badge bad">waiting for approval</span>}
+        </td>
         <td>{u.email}</td>
         <td>{dateTime(u.created_at)}</td>
         <td>
@@ -278,10 +288,21 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
           />
         </td>
         <td>
-          {!isMe && (
-            <button className="link-btn small" onClick={toggle}>
-              {open ? "Close" : "Manage"}
-            </button>
+          {!u.approved ? (
+            <span className="row tight">
+              <button className="btn primary" onClick={() => decide(u, "approve")}>
+                Approve
+              </button>
+              <button className="btn danger" onClick={() => confirm(`Reject ${u.email}?`) && decide(u, "reject")}>
+                Reject
+              </button>
+            </span>
+          ) : (
+            !isMe && (
+              <button className="link-btn small" onClick={toggle}>
+                {open ? "Close" : "Manage"}
+              </button>
+            )
           )}
         </td>
       </tr>

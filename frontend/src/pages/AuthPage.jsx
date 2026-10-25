@@ -7,6 +7,7 @@ export default function AuthPage({ mode }) {
   const [form, setForm] = useState({ email: "", password: "", display_name: "" });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState(null);
   const isRegister = mode === "register";
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -15,8 +16,10 @@ export default function AuthPage({ mode }) {
     setBusy(true);
     setError(null);
     try {
-      if (isRegister) await register(form);
-      else await login(form.email, form.password);
+      if (isRegister) {
+        const r = await register(form);
+        if (r?.pending) setPending(r.message);
+      } else await login(form.email, form.password);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -57,6 +60,7 @@ export default function AuthPage({ mode }) {
           </Link>
         )}
         {error && <div className="error">{error}</div>}
+        {pending && <div className="ok">{pending}</div>}
         <button className="btn primary" disabled={busy}>
           {busy ? "…" : isRegister ? "Create account" : "Sign in"}
         </button>

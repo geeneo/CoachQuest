@@ -39,6 +39,8 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(100))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # False while waiting for an admin (registration mode "approval").
+    approved: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     # Athlete profile, used for TSS and by the AI coach
@@ -343,6 +345,7 @@ _ADDED_COLUMNS = {
         "note_tags": "JSON",
         "ai_settings": "JSON",
         "week_start": "INTEGER NOT NULL DEFAULT 0",
+        "approved": "BOOLEAN NOT NULL DEFAULT 1",
     },
 }
 

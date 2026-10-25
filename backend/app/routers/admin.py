@@ -149,7 +149,8 @@ async def test_email(body: TestEmail, admin: User = Depends(admin_user)):
 
 @router.get("/users")
 def list_users(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
-    users = db.scalars(select(User).order_by(User.created_at)).all()
+    # People waiting for approval first.
+    users = db.scalars(select(User).order_by(User.approved, User.created_at)).all()
     return [
         {
             "id": u.id,
@@ -157,6 +158,7 @@ def list_users(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
             "display_name": u.display_name,
             "is_admin": u.is_admin,
             "is_active": u.is_active,
+            "approved": u.approved,
             "created_at": u.created_at,
         }
         for u in users
@@ -202,6 +204,38 @@ async def admin_reset_link(user_id: int, admin: User = Depends(admin_user), db: 
     except mailer.MailError as exc:
         emailed = f"Not emailed: {exc}"
     return {"link": link, "emailed": emailed}
+
+
+@router.post("/users/{user_id}/approve")
+async def approve_user(user_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    user = _other_user(db, user_id)
+    if user.approved:
+        return {"ok": True, "emailed": None}
+    user.approved = True
+    db.commit()
+    log.info("Admin %s approved user %s", admin.id, user.id)
+    try:
+        await mailer.send(
+            user.email,
+            "Your CoachQuest account is ready",
+            f"Hi {user.display_name},\n\nYour CoachQuest account has been approved. Sign in here:\n"
+            f"{settings.public_base_url}/login\n",
+        )
+        emailed = f"Emailed {user.email}."
+    except mailer.MailError as exc:
+        emailed = f"Not emailed: {exc}"
+    return {"ok": True, "emailed": emailed}
+
+
+@router.post("/users/{user_id}/reject")
+def reject_user(user_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Remove a sign-up that is still waiting for approval."""
+    user = _other_user(db, user_id)
+    if user.approved:
+        raise HTTPException(status_code=400, detail="Only accounts waiting for approval can be rejected; use Delete")
+    accounts.delete_account(db, user)
+    log.info("Admin %s rejected sign-up %s", admin.id, user_id)
+    return {"ok": True}
 
 
 class DeleteUser(BaseModel):

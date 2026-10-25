@@ -73,8 +73,8 @@ EDITABLE: dict[str, Editable] = {
     "registration_mode": Editable(
         "Registration",
         "Accounts",
-        choices=("open", "closed"),
-        help="Closed: only emails in ADMIN_EMAILS can create accounts.",
+        choices=("open", "approval", "closed"),
+        help="Approval: anyone can sign up, an admin approves them first. Closed: only emails in ADMIN_EMAILS.",
     ),
     "ai_monthly_limit": Editable(
         "Monthly AI calls per user",

@@ -77,11 +77,31 @@ def _start_session(db: DbSession, user: User, response: Response, user_agent: st
     )
 
 
+PENDING_MESSAGE = (
+    "Thanks for signing up. An administrator needs to approve your account; you'll get an email when it's ready."
+)
+
+
+async def _tell_admins_about(db: DbSession, user: User) -> None:
+    admins = db.scalars(select(User).where(User.is_admin, User.is_active)).all()
+    for admin in admins:
+        try:
+            await mailer.send(
+                admin.email,
+                f"CoachQuest: {user.display_name} is waiting for approval",
+                f"{user.display_name} ({user.email}) signed up and is waiting for approval.\n\n"
+                f"Approve or reject them under Admin → Users: {settings.public_base_url}/admin\n",
+            )
+        except mailer.MailError as exc:
+            log.warning("Could not email admin %s about sign-up %s: %s", admin.id, user.id, exc)
+
+
 @router.post("/register")
-def register(body: Registration, request: Request, response: Response, db: DbSession = Depends(get_db)):
+async def register(body: Registration, request: Request, response: Response, db: DbSession = Depends(get_db)):
     email = body.email.lower()
     is_admin = email in settings.admin_emails
-    if runtime.get("registration_mode") != "open" and not is_admin:
+    mode = runtime.get("registration_mode")
+    if mode == "closed" and not is_admin:
         raise HTTPException(status_code=403, detail="Registration is closed")
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="An account with that email already exists")
@@ -90,9 +110,13 @@ def register(body: Registration, request: Request, response: Response, db: DbSes
         password_hash=hash_password(body.password),
         display_name=body.display_name.strip(),
         is_admin=is_admin,
+        approved=is_admin or mode != "approval",
     )
     db.add(user)
     db.commit()
+    if not user.approved:
+        await _tell_admins_about(db, user)
+        return {"pending": True, "message": PENDING_MESSAGE}
     _start_session(db, user, response, request.headers.get("user-agent"))
     return user_out(user)
 
@@ -103,6 +127,8 @@ def login(body: Credentials, request: Request, response: Response, db: DbSession
     ok = verify_password(body.password, user.password_hash if user else DUMMY_HASH)
     if not user or not ok or not user.is_active:
         raise HTTPException(status_code=401, detail="Wrong email or password")
+    if not user.approved:
+        raise HTTPException(status_code=403, detail="Your account is waiting for an administrator to approve it.")
     _start_session(db, user, response, request.headers.get("user-agent"))
     return user_out(user)
 
@@ -206,7 +232,7 @@ def verify(
     if session is None or session.expires_at < now:
         raise HTTPException(status_code=401)
     user = db.get(User, session.user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or not user.approved:
         raise HTTPException(status_code=401)
     # Write at most once a minute so every request doesn't hit the disk.
     if (now - session.last_seen_at).total_seconds() > 60:

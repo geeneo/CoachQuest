@@ -147,7 +147,7 @@
       - Admin → Storage: database size on disk, rows per table (activities,
         wellness days, plans, users), and free disk space where the data lives.
 
-- [ ] **Admin approves new users.** A third registration mode, "approval",
+- [x] **Admin approves new users.** A third registration mode, "approval",
       next to open and closed:
       - New accounts are created as "waiting for approval" and can't sign in
         yet; the sign-in page says so.

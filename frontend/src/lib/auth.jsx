@@ -38,7 +38,11 @@ export function AuthProvider({ children }) {
   };
   const login = async (email, password) =>
     confirmSession(await api("/api/auth/login", { method: "POST", body: { email, password } }));
-  const register = async (body) => confirmSession(await api("/api/auth/register", { method: "POST", body }));
+  // Returns {pending, message} when the account must wait for an admin; signs in otherwise.
+  const register = async (body) => {
+    const r = await api("/api/auth/register", { method: "POST", body });
+    return r.pending ? r : confirmSession(r);
+  };
   const logout = async () => {
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
     setUser(null);
