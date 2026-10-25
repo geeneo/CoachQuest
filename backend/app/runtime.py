@@ -59,7 +59,7 @@ EDITABLE: dict[str, Editable] = {
         "Client ID",
         "Strava",
         pattern=r"[0-9]{1,12}",
-        help="The short number labelled Client ID at the top of strava.com/settings/api.",
+        help="Optional shared app. Leave empty if every user adds their own Strava app on Connections.",
         error="Client ID is the short number (e.g. 154321) at the top of your Strava API page, not the secret.",
     ),
     "strava_client_secret": Editable(

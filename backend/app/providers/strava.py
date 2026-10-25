@@ -1,6 +1,13 @@
-"""Strava OAuth and activity sync (one connection per user)."""
+"""Strava OAuth and activity sync (one connection per user).
+
+Which Strava API app is used: the user's own app if they entered one on the
+Connections page, otherwise the server-wide app from Admin settings. The
+client_id that issued a connection's tokens is stored with them, because
+Strava only refreshes tokens with the app that issued them.
+"""
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
@@ -10,7 +17,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from .. import runtime, sync_options
 from ..config import settings
-from ..db import Activity, Connection, User, utcnow
+from ..db import Activity, Connection, User, UserStravaApp, utcnow
 from ..fitness import estimate_tss
 from ..security import decrypt_json, encrypt_json
 
@@ -23,17 +30,52 @@ SCOPE = "read,activity:read_all"
 INITIAL_DAYS = 180
 
 
+@dataclass(frozen=True)
+class StravaApp:
+    client_id: str
+    client_secret: str
+    own: bool  # the user's own app, not the server-wide one
+
+
+class StravaAppChanged(Exception):
+    """The app that issued this connection's tokens is no longer configured."""
+
+
+def server_app() -> StravaApp | None:
+    cid, secret = runtime.get("strava_client_id"), runtime.get("strava_client_secret")
+    return StravaApp(cid, secret, own=False) if cid and secret else None
+
+
+def own_app(db: DbSession, user_id: int) -> StravaApp | None:
+    row = db.get(UserStravaApp, user_id)
+    return StravaApp(row.client_id, decrypt_json(row.secret_enc)["v"], own=True) if row else None
+
+
+def app_for(db: DbSession, user_id: int) -> StravaApp | None:
+    return own_app(db, user_id) or server_app()
+
+
+def _app_by_client_id(db: DbSession, user_id: int, client_id: str | None) -> StravaApp:
+    for app in (own_app(db, user_id), server_app()):
+        # Tokens saved before client_id was recorded came from the server app.
+        if app and (app.client_id == client_id or (client_id is None and not app.own)):
+            return app
+    raise StravaAppChanged(
+        "The Strava API app this connection was made with has changed. Disconnect and connect again."
+    )
+
+
 def redirect_uri() -> str:
     return f"{settings.public_base_url}/api/connections/strava/callback"
 
 
-def authorize_url(state: str) -> str:
+def authorize_url(state: str, app: StravaApp) -> str:
     return (
         AUTH_URL
         + "?"
         + urlencode(
             {
-                "client_id": runtime.get("strava_client_id"),
+                "client_id": app.client_id,
                 "redirect_uri": redirect_uri(),
                 "response_type": "code",
                 "approval_prompt": "auto",
@@ -44,20 +86,25 @@ def authorize_url(state: str) -> str:
     )
 
 
-def _store_tokens(conn: Connection, payload: dict) -> None:
-    conn.token_enc = encrypt_json({"access_token": payload["access_token"], "refresh_token": payload["refresh_token"]})
+def _store_tokens(conn: Connection, payload: dict, client_id: str) -> None:
+    conn.token_enc = encrypt_json(
+        {"access_token": payload["access_token"], "refresh_token": payload["refresh_token"], "client_id": client_id}
+    )
     conn.expires_at = datetime.fromtimestamp(payload["expires_at"], tz=UTC).replace(tzinfo=None)
 
 
 async def exchange_code(db: DbSession, user: User, code: str, granted_scope: str) -> Connection:
     if "activity:read" not in granted_scope:
         raise ValueError("Strava access to activities was not granted.")
+    app = app_for(db, user.id)
+    if app is None:
+        raise ValueError("No Strava API app configured.")
     async with httpx.AsyncClient(timeout=20) as client:
         resp = await client.post(
             TOKEN_URL,
             data={
-                "client_id": runtime.get("strava_client_id"),
-                "client_secret": runtime.get("strava_client_secret"),
+                "client_id": app.client_id,
+                "client_secret": app.client_secret,
                 "code": code,
                 "grant_type": "authorization_code",
             },
@@ -71,7 +118,7 @@ async def exchange_code(db: DbSession, user: User, code: str, granted_scope: str
     conn.external_id = str(payload.get("athlete", {}).get("id", ""))
     conn.status = "active"
     conn.last_error = None
-    _store_tokens(conn, payload)
+    _store_tokens(conn, payload, app.client_id)
     db.commit()
     return conn
 
@@ -80,17 +127,18 @@ async def _access_token(db: DbSession, conn: Connection, client: httpx.AsyncClie
     tokens = decrypt_json(conn.token_enc)
     if conn.expires_at and conn.expires_at > utcnow() + timedelta(minutes=5):
         return tokens["access_token"]
+    app = _app_by_client_id(db, conn.user_id, tokens.get("client_id"))
     resp = await client.post(
         TOKEN_URL,
         data={
-            "client_id": runtime.get("strava_client_id"),
-            "client_secret": runtime.get("strava_client_secret"),
+            "client_id": app.client_id,
+            "client_secret": app.client_secret,
             "grant_type": "refresh_token",
             "refresh_token": tokens["refresh_token"],
         },
     )
     resp.raise_for_status()
-    _store_tokens(conn, resp.json())
+    _store_tokens(conn, resp.json(), app.client_id)
     db.commit()
     return decrypt_json(conn.token_enc)["access_token"]
 
@@ -154,6 +202,9 @@ async def sync(db: DbSession, conn: Connection) -> int:
         conn.last_sync_at = utcnow()
         conn.status = "active"
         conn.last_error = None
+    except StravaAppChanged as exc:
+        conn.status = "error"
+        conn.last_error = str(exc)
     except httpx.HTTPError as exc:
         conn.status = "error"
         conn.last_error = f"{type(exc).__name__}: {exc}"[:500]

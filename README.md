@@ -68,6 +68,24 @@ Athletes grant a coach any combination of these scopes (Sharing page):
 - Every read by someone other than the athlete is written to an access log,
   which the athlete sees on the Sharing page.
 
+### Strava API app: shared or per user
+
+Strava needs an API app (Client ID + Client Secret). There are two ways to set
+it up:
+
+- **Per user (recommended for small groups).** Each user creates their own app
+  at strava.com/settings/api, with Authorization Callback Domain set to your
+  CoachQuest host. They paste its Client ID and Secret on their Connections
+  page. Every personal app allows its owner, so nobody waits for Strava to
+  raise the athlete limit.
+- **Shared.** The admin enters one app under Admin → Settings → Strava. Users
+  without their own app use it. A new app allows only 1 athlete until Strava
+  approves more.
+
+A user's own app wins over the shared one. Secrets are stored encrypted and
+never shown again. Tokens only refresh with the app that issued them, so after
+switching apps a user disconnects and connects Strava again (the page says so).
+
 ### What to import from where
 
 Each connection has its own import choices on the Connections page:

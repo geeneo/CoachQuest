@@ -585,3 +585,17 @@ code {
   font-weight: 600;
   margin-bottom: 0.2rem;
 }
+
+.strava-app {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.strava-app summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.steps {
+  padding-left: 1.2rem;
+  line-height: 1.7;
+}

@@ -10,9 +10,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import runtime, sync_options
-from ..db import Activity, Connection, OAuthState, SessionLocal, User, WellnessDay, get_db, utcnow
+from ..db import Activity, Connection, OAuthState, SessionLocal, User, UserStravaApp, WellnessDay, get_db, utcnow
 from ..deps import current_user
 from ..providers import garmin, strava
+from ..security import encrypt_json
 
 router = APIRouter(prefix="/api/connections", tags=["connections"])
 
@@ -44,21 +45,57 @@ async def run_sync(conn_id: int) -> None:
 @router.get("")
 def list_connections(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     conns = db.scalars(select(Connection).where(Connection.user_id == user.id)).all()
+    own = strava.own_app(db, user.id)
     return {
         "connections": [conn_out(c) for c in conns],
-        "strava_configured": bool(runtime.get("strava_client_id") and runtime.get("strava_client_secret")),
+        "strava_configured": strava.app_for(db, user.id) is not None,
+        "strava_app": {
+            "own": own is not None,
+            "client_id": own.client_id if own else None,
+            "secret_hint": f"…{own.client_secret[-4:]}" if own else None,
+            "server_available": strava.server_app() is not None,
+            "callback_domain": strava.redirect_uri().split("://")[-1].split("/")[0],
+        },
     }
+
+
+class StravaAppIn(BaseModel):
+    client_id: str
+    client_secret: str
+
+
+@router.put("/strava/app")
+def set_strava_app(body: StravaAppIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Use the user's own Strava API app instead of the server-wide one."""
+    try:
+        client_id = runtime.validate("strava_client_id", body.client_id)
+        secret = runtime.validate("strava_client_secret", body.client_secret)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    row = db.get(UserStravaApp, user.id) or UserStravaApp(user_id=user.id)
+    row.client_id, row.secret_enc, row.updated_at = client_id, encrypt_json({"v": secret}), utcnow()
+    db.add(row)
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/strava/app")
+def remove_strava_app(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    db.execute(delete(UserStravaApp).where(UserStravaApp.user_id == user.id))
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/strava/authorize")
 def strava_authorize(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    if not runtime.get("strava_client_id"):
-        raise HTTPException(status_code=503, detail="Strava is not configured on this server")
+    app = strava.app_for(db, user.id)
+    if app is None:
+        raise HTTPException(status_code=503, detail="Add your Strava API app first")
     db.execute(delete(OAuthState).where(OAuthState.created_at < utcnow() - timedelta(minutes=15)))
     state = secrets.token_urlsafe(24)
     db.add(OAuthState(state=state, user_id=user.id, provider="strava"))
     db.commit()
-    return {"url": strava.authorize_url(state)}
+    return {"url": strava.authorize_url(state, app)}
 
 
 @router.get("/strava/callback")

@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
-import { useAuth } from "../lib/auth.jsx";
 import { dateTime } from "../lib/format.js";
 
 const ERRORS = {
@@ -34,7 +33,12 @@ export default function Connections() {
           <strong>Activities</strong> under Garmin and keep Garmin for wellness only.
         </div>
       )}
-      <StravaCard conn={byProvider.strava} configured={conns.data?.strava_configured} reload={conns.reload} />
+      <StravaCard
+        conn={byProvider.strava}
+        configured={conns.data?.strava_configured}
+        app={conns.data?.strava_app}
+        reload={conns.reload}
+      />
       <GarminCard conn={byProvider.garmin} reload={conns.reload} />
     </>
   );
@@ -113,24 +117,99 @@ function SyncChoices({ conn, provider, run, busy }) {
   );
 }
 
-function StravaNotConfigured() {
-  const { user } = useAuth();
-  if (!user.is_admin) {
-    return <p className="muted">Strava isn't set up on this server yet. Ask your CoachQuest administrator.</p>;
-  }
+function StravaAppForm({ app, reload }) {
+  const [form, setForm] = useState({ client_id: "", client_secret: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  const save = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/api/connections/strava/app", { method: "PUT", body: form });
+      setForm({ client_id: "", client_secret: "" });
+      reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    if (!confirm("Remove your Strava API app from CoachQuest?")) return;
+    await api("/api/connections/strava/app", { method: "DELETE" }).catch((err) => setError(err.message));
+    reload();
+  };
+
   return (
-    <div className="flags card small">
-      <strong>Strava isn't set up yet.</strong> As admin, register one Strava API app for CoachQuest at{" "}
-      <a href="https://www.strava.com/settings/api" target="_blank" rel="noreferrer">
-        strava.com/settings/api
-      </a>{" "}
-      and put its Client ID and Client Secret in <Link to="/admin">Admin → Settings → Strava</Link>. After that every
-      user can connect their own Strava account here.
-    </div>
+    <details className="strava-app" open={!app.own && !app.server_available}>
+      <summary>
+        Your Strava API app{" "}
+        <span className="muted small">
+          {app.own
+            ? `in use · Client ID ${app.client_id} · secret ${app.secret_hint}`
+            : app.server_available
+              ? "optional · CoachQuest's shared app is used if you don't add one"
+              : "needed before you can connect"}
+        </span>
+      </summary>
+      <ol className="small steps">
+        <li>
+          Open{" "}
+          <a href="https://www.strava.com/settings/api" target="_blank" rel="noreferrer">
+            strava.com/settings/api
+          </a>{" "}
+          and create an app (any name, e.g. "My CoachQuest").
+        </li>
+        <li>
+          Set <strong>Authorization Callback Domain</strong> to <code>{app.callback_domain}</code>.
+        </li>
+        <li>
+          Copy <strong>Client ID</strong> (the short number at the top) and <strong>Client Secret</strong> below. Ignore
+          "Your Access Token" and "Your Refresh Token".
+        </li>
+      </ol>
+      <form className="stack" onSubmit={save}>
+        <label>
+          Client ID
+          <input value={form.client_id} onChange={set("client_id")} required inputMode="numeric" placeholder="e.g. 154321" />
+        </label>
+        <label>
+          Client Secret
+          <input
+            type="password"
+            autoComplete="off"
+            value={form.client_secret}
+            onChange={set("client_secret")}
+            required
+            placeholder={app.own ? "Enter a new secret to replace it" : "40 characters"}
+          />
+        </label>
+        {error && <div className="error">{error}</div>}
+        <div className="row">
+          <button className="btn primary" disabled={busy}>
+            {app.own ? "Replace my Strava app" : "Save my Strava app"}
+          </button>
+          {app.own && (
+            <button type="button" className="btn danger" onClick={remove}>
+              Remove
+            </button>
+          )}
+        </div>
+        {app.own && (
+          <p className="hint">
+            If you change apps after connecting, disconnect and connect Strava again: tokens only work with the app that
+            issued them.
+          </p>
+        )}
+      </form>
+    </details>
   );
 }
 
-function StravaCard({ conn, configured, reload }) {
+function StravaCard({ conn, configured, app, reload }) {
   const [error, setError] = useState(null);
   const connect = async () => {
     try {
@@ -151,9 +230,10 @@ function StravaCard({ conn, configured, reload }) {
           Connect with Strava
         </button>
       ) : (
-        <StravaNotConfigured />
+        <p className="muted small">Add your Strava API app below, then connect.</p>
       )}
       {error && <div className="error">{error}</div>}
+      {app && <StravaAppForm app={app} reload={reload} />}
     </section>
   );
 }

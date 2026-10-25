@@ -84,6 +84,17 @@ class Connection(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class UserStravaApp(Base):
+    """A user's own Strava API app, used instead of the server-wide one."""
+
+    __tablename__ = "user_strava_apps"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(20))
+    secret_enc: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class OAuthState(Base):
     __tablename__ = "oauth_states"
 
