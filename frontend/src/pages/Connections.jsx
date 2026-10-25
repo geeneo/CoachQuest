@@ -184,16 +184,31 @@ function StravaAppForm({ app, reload }) {
           "Your Access Token" and "Your Refresh Token".
         </li>
       </ol>
-      <form className="stack" onSubmit={save}>
+      <form className="stack" onSubmit={save} autoComplete="off">
         <label>
           Client ID
-          <input value={form.client_id} onChange={set("client_id")} required inputMode="numeric" placeholder="e.g. 154321" />
+          <input
+            name="strava-client-id"
+            value={form.client_id}
+            onChange={set("client_id")}
+            required
+            inputMode="numeric"
+            pattern="[0-9]{1,12}"
+            title="The short number labelled Client ID on strava.com/settings/api"
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+            placeholder="e.g. 154321"
+          />
         </label>
         <label>
           Client Secret
           <input
             type="password"
-            autoComplete="off"
+            name="strava-client-secret"
+            autoComplete="new-password"
+            data-1p-ignore
+            data-lpignore="true"
             value={form.client_secret}
             onChange={set("client_secret")}
             required
