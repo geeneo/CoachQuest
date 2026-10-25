@@ -120,6 +120,27 @@ def logout_all(response: Response, user: User = Depends(current_user), db: DbSes
     return {"ok": True}
 
 
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+@router.post("/password")
+def change_password(
+    body: PasswordChange, request: Request, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """Change your own password. Other devices are signed out; this one stays signed in."""
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is wrong")
+    if body.new_password == body.current_password:
+        raise HTTPException(status_code=400, detail="Choose a password different from the current one")
+    user.password_hash = hash_password(body.new_password)
+    this = hash_token(request.cookies.get(SESSION_COOKIE, ""))
+    db.execute(delete(Session).where(Session.user_id == user.id, Session.token_hash != this))
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/me")
 def me(user: User = Depends(current_user)):
     return user_out(user)

@@ -59,3 +59,50 @@ def test_logout_kills_session(make_user):
 def test_admin_endpoints_need_admin(make_user):
     assert make_user("a@example.com").get("/api/admin/stats").status_code == 403
     assert make_user("admin@example.com").get("/api/admin/stats").status_code == 200
+
+
+def _session_count(user_email):
+    from sqlalchemy import func, select
+
+    from app.db import Session, SessionLocal, User
+
+    with SessionLocal() as db:
+        uid = db.scalar(select(User.id).where(User.email == user_email))
+        return db.scalar(select(func.count()).where(Session.user_id == uid))
+
+
+def test_change_password_signs_out_other_devices(client, make_user):
+    laptop = make_user("a@example.com")
+    # Sign in a second time, as if from another device.
+    r = client.post(
+        "/api/auth/login",
+        json={"email": "a@example.com", "password": "correct horse battery"},
+        headers=CSRF,
+    )
+    other_cookie = r.cookies["cq_session"]
+    client.cookies.clear()
+    assert _session_count("a@example.com") == 2
+
+    r = laptop.post(
+        "/api/auth/password",
+        json={"current_password": "correct horse battery", "new_password": "a brand new passphrase"},
+        cookies={"cq_session": laptop.cookie},
+    )
+    assert r.status_code == 200, r.text
+    assert _session_count("a@example.com") == 1
+    assert laptop.get("/api/auth/me").status_code == 200  # this device stays in
+    laptop.cookie = other_cookie
+    assert laptop.get("/api/auth/me").status_code == 401  # the other one is out
+
+    ok = client.post(
+        "/api/auth/login", json={"email": "a@example.com", "password": "a brand new passphrase"}, headers=CSRF
+    )
+    assert ok.status_code == 200
+
+
+def test_change_password_needs_current_password(make_user):
+    p = make_user("a@example.com")
+    r = p.post("/api/auth/password", json={"current_password": "wrong", "new_password": "a brand new passphrase"})
+    assert r.status_code == 400
+    r = p.post("/api/auth/password", json={"current_password": "correct horse battery", "new_password": "short"})
+    assert r.status_code == 422

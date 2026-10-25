@@ -18,8 +18,22 @@
   color-scheme: dark;
 }
 
+/* Light colours: when chosen in Profile, or when the system is light and no choice was made. */
+:root[data-theme="light"] {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel-2: #f0f2f5;
+  --border: #dde1e7;
+  --grid: #eceff3;
+  --text: #1a1f26;
+  --muted: #5f6b7a;
+  --accent: #1f9d6f;
+  --accent-ink: #ffffff;
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
+  :root:not([data-theme]) {
     --bg: #f5f6f8;
     --panel: #ffffff;
     --panel-2: #f0f2f5;
@@ -598,4 +612,8 @@ code {
 .steps {
   padding-left: 1.2rem;
   line-height: 1.7;
+}
+
+.stack > .btn {
+  align-self: flex-start;
 }

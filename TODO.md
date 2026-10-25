@@ -2,13 +2,13 @@
 
 ## Next up
 
-- [ ] **Dark mode toggle.** The app already follows the operating system's
+- [x] **Dark mode toggle.** The app already follows the operating system's
       light/dark setting. Add a Light / Dark / System switch in Profile,
       remembered per browser.
 - [ ] **Email (SMTP).** Admin → Settings: host, port, username, password
       (encrypted, write-only like the other secrets), from address, TLS.
       Include a "Send test email" button. Password reset depends on this.
-- [ ] **Users change their own password.** Profile: current password + new
+- [x] **Users change their own password.** Profile: current password + new
       password (min 12). Signs out the user's other sessions.
 - [ ] **Forgot password.** "Forgot password?" on the sign-in page emails a
       single-use reset link that expires in 30 minutes.
@@ -57,8 +57,14 @@
         Weekly review by email once SMTP is in.
       - **Cost control:** daily notes are short. Per-user monthly limits and
         token use are shown on the Admin page.
-- [ ] **Admin sets a user's password.** Admin → Users: "Set password", or
-      "Send reset link" once SMTP works. Signs that user out everywhere. Logged.
+- [ ] **Admin user management.**
+      - Admin → Users: "Set password", or "Send reset link" once SMTP works.
+        Signs that user out everywhere. Logged.
+      - "Delete user": removes the account and all its data (activities,
+        wellness, connections, plans, grants). Asks you to type the email to
+        confirm, and you can't delete yourself.
+      - Admin → Storage: database size on disk, rows per table (activities,
+        wellness days, plans, users), and free disk space where the data lives.
 
 ## Later
 
