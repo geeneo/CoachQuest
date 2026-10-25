@@ -15,7 +15,7 @@ def test_latest_weight_parses_grams_and_timestamp():
 
 
 def _sync_with_weight(monkeypatch, user_id, kg, measured_at, options=None):
-    monkeypatch.setattr(garmin, "_fetch", lambda *a: ("{}", [], [], (kg, measured_at) if a[4] else None))
+    monkeypatch.setattr(garmin, "_fetch", lambda *a: ("{}", [], [], (kg, measured_at) if a[3] else None))
     with SessionLocal() as db:
         conn = Connection(user_id=user_id, provider="garmin", token_enc=encrypt_json({"tokens": "{}"}), options=options)
         db.add(conn)

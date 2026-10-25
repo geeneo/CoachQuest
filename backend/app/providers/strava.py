@@ -188,7 +188,7 @@ def _upsert(db: DbSession, user: User, item: dict) -> None:
         db.add(act)
     act.name = (item.get("name") or "")[:255]
     act.sport = item.get("sport_type") or item.get("type") or "Other"
-    act.start_time = datetime.fromisoformat(item["start_date"].replace("Z", "+00:00")).replace(tzinfo=None)
+    act.start_time = _start(item)
     act.duration_s = int(item.get("moving_time") or 0)
     act.distance_m = float(item.get("distance") or 0)
     act.elevation_m = float(item.get("total_elevation_gain") or 0)
@@ -246,6 +246,76 @@ async def sync(db: DbSession, conn: Connection) -> int:
         log.warning("Strava sync failed for user %s: %s", conn.user_id, exc)
     db.commit()
     return count
+
+
+# Leave this much of each Strava limit for regular syncs and other apps that share the API app.
+HEADROOM_15MIN = 30
+HEADROOM_DAILY = 300
+
+
+def _resume_time(resp: httpx.Response, now: datetime) -> datetime | None:
+    """When the backfill should pause, judging by Strava's rate-limit headers. None means carry on."""
+
+    def pair(name: str) -> tuple[int, int] | None:
+        try:
+            a, b = resp.headers[name].split(",")[:2]
+            return int(a), int(b)
+        except (KeyError, ValueError):
+            return None
+
+    # Reads have their own (lower) limit on newer apps; fall back to the overall one.
+    limit = pair("X-ReadRateLimit-Limit") or pair("X-RateLimit-Limit")
+    usage = pair("X-ReadRateLimit-Usage") or pair("X-RateLimit-Usage")
+    next_quarter = now.replace(minute=now.minute - now.minute % 15, second=0, microsecond=0) + timedelta(minutes=15)
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
+    if resp.status_code == 429:
+        return tomorrow if usage and limit and usage[1] >= limit[1] else next_quarter
+    if not (limit and usage):
+        return None
+    if usage[1] >= limit[1] - HEADROOM_DAILY:
+        return tomorrow
+    if usage[0] >= limit[0] - HEADROOM_15MIN:
+        return next_quarter
+    return None
+
+
+async def backfill_step(
+    db: DbSession, conn: Connection, target: datetime, cursor: datetime
+) -> tuple[datetime, int, datetime | None]:
+    """Import one page (up to 200) of activities older than `cursor` and newer than `target`.
+
+    Returns (new cursor, number stored, pause until). The new cursor equals
+    `target` when there is nothing older left. "Pause until" is set when
+    Strava's rate-limit headers say to stop for now.
+    """
+    user = db.get(User, conn.user_id)
+    async with httpx.AsyncClient(timeout=30) as client:
+        token = await _access_token(db, conn, client)
+        resp = await client.get(
+            f"{API}/athlete/activities",
+            params={
+                "before": int(cursor.replace(tzinfo=UTC).timestamp()),
+                "after": int(target.replace(tzinfo=UTC).timestamp()),
+                "per_page": 200,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    pause = _resume_time(resp, utcnow())
+    if resp.status_code == 429:
+        return cursor, 0, pause
+    resp.raise_for_status()
+    items = resp.json()
+    for item in items:
+        _upsert(db, user, item)
+    db.commit()
+    if not items:
+        return target, 0, None
+    oldest = min(_start(item) for item in items)
+    return oldest, len(items), pause
+
+
+def _start(item: dict) -> datetime:
+    return datetime.fromisoformat(item["start_date"].replace("Z", "+00:00")).replace(tzinfo=None)
 
 
 async def deauthorize(conn: Connection) -> None:

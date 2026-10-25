@@ -130,12 +130,12 @@ def latest_weight(data) -> tuple[float, datetime] | None:
     return (kg, when or datetime.now(UTC).replace(tzinfo=None)) if 20 <= kg <= 300 else None
 
 
-def _fetch(tokens: str, days: list[date], want_wellness: bool, want_activities: bool, want_weight: bool):
-    """Blocking Garmin calls; runs in a thread."""
+def _fetch(tokens: str, wellness_days: list[date], activity_range: tuple[date, date] | None, want_weight: bool):
+    """Blocking Garmin calls; runs in a thread. Returns (tokens, wellness rows, activities, weight)."""
     api = garminconnect.Garmin()
     api.login(tokenstore=tokens)
     wellness = []
-    for d in days if want_wellness else []:
+    for d in wellness_days:
         iso = d.isoformat()
         row = {"day": d}
         try:
@@ -168,8 +168,8 @@ def _fetch(tokens: str, days: list[date], want_wellness: bool, want_activities: 
         except Exception as exc:
             log.debug("latest weight failed: %s", exc)
     activities = []
-    if want_activities:
-        activities = api.get_activities_by_date(days[0].isoformat(), days[-1].isoformat())
+    if activity_range:
+        activities = api.get_activities_by_date(activity_range[0].isoformat(), activity_range[1].isoformat())
     return api.client.dumps(), wellness, activities, weight
 
 
@@ -205,7 +205,11 @@ async def sync(db: DbSession, conn: Connection) -> int:
         tokens = decrypt_json(conn.token_enc)["tokens"]
         opts = sync_options.options(conn)
         new_tokens, wellness, activities, weight = await asyncio.to_thread(
-            _fetch, tokens, days, opts["wellness"], opts["activities"], opts["weight"]
+            _fetch,
+            tokens,
+            days if opts["wellness"] else [],
+            (days[0], days[-1]) if opts["activities"] else None,
+            opts["weight"],
         )
     except Exception as exc:
         conn.status = "error"
@@ -214,6 +218,15 @@ async def sync(db: DbSession, conn: Connection) -> int:
         log.warning("Garmin sync failed for user %s: %s", conn.user_id, exc)
         return 0
     conn.token_enc = encrypt_json({"tokens": new_tokens})
+    _store(db, user, wellness, activities, weight)
+    conn.last_sync_at = utcnow()
+    conn.status = "active"
+    conn.last_error = None
+    db.commit()
+    return len(wellness) + len(activities or [])
+
+
+def _store(db: DbSession, user: User, wellness: list, activities: list | None, weight=None) -> None:
     for row in wellness:
         day = db.scalar(select(WellnessDay).where(WellnessDay.user_id == user.id, WellnessDay.day == row["day"]))
         if day is None:
@@ -229,8 +242,32 @@ async def sync(db: DbSession, conn: Connection) -> int:
     for item in activities or []:
         if item.get("activityId") and item.get("startTimeGMT"):
             _upsert_activity(db, user, item)
-    conn.last_sync_at = utcnow()
-    conn.status = "active"
-    conn.last_error = None
+
+
+# Wellness needs ~3 requests per day of history, so the backfill stops at a year.
+BACKFILL_WELLNESS_DAYS = 365
+BACKFILL_CHUNK_DAYS = 14
+
+
+async def backfill_step(db: DbSession, conn: Connection, target: date, cursor: date) -> tuple[date, int]:
+    """Import the chunk of days just before `cursor` (not before `target`).
+
+    Returns the new cursor (the oldest day now covered) and how many items were stored.
+    """
+    user = db.get(User, conn.user_id)
+    end = cursor - timedelta(days=1)
+    start = max(target, end - timedelta(days=BACKFILL_CHUNK_DAYS - 1))
+    if end < start:
+        return cursor, 0
+    opts = sync_options.options(conn)
+    oldest_wellness = date.today() - timedelta(days=BACKFILL_WELLNESS_DAYS)
+    wellness_days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    wellness_days = [d for d in wellness_days if d >= oldest_wellness] if opts["wellness"] else []
+    tokens = decrypt_json(conn.token_enc)["tokens"]
+    new_tokens, wellness, activities, _ = await asyncio.to_thread(
+        _fetch, tokens, wellness_days, (start, end) if opts["activities"] else None, False
+    )
+    conn.token_enc = encrypt_json({"tokens": new_tokens})
+    _store(db, user, wellness, activities)
     db.commit()
-    return len(wellness) + len(activities or [])
+    return start, len(wellness) + len(activities or [])

@@ -2,7 +2,7 @@
 
 import logging
 import secrets
-from datetime import timedelta
+from datetime import date, timedelta
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import runtime, sync_options
+from .. import backfill, runtime, sync_options
 from ..db import Activity, Connection, OAuthState, SessionLocal, User, UserStravaApp, WellnessDay, get_db, utcnow
 from ..deps import current_user
 from ..providers import garmin, strava
@@ -32,6 +32,7 @@ def conn_out(conn: Connection) -> dict:
         "last_sync_at": conn.last_sync_at,
         "last_error": conn.last_error,
         "options": sync_options.options(conn),
+        "backfill": backfill.state(conn),
         "created_at": conn.created_at,
     }
 
@@ -228,6 +229,37 @@ def set_options(
     db.commit()
     if turned_on:
         background.add_task(run_sync, conn.id)
+    return conn_out(conn)
+
+
+class BackfillIn(BaseModel):
+    since: date
+
+
+@router.post("/{provider}/backfill")
+def start_backfill(
+    provider: str,
+    body: BackfillIn,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Import data older than what the first sync brought in."""
+    conn = _conn(db, user, provider)
+    if conn.backfill and conn.backfill.get("status") in ("running", "waiting"):
+        raise HTTPException(status_code=409, detail="An import is already running for this connection")
+    try:
+        backfill.start(db, conn, body.since)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    background.add_task(backfill.run, conn.id)
+    return conn_out(conn)
+
+
+@router.delete("/{provider}/backfill")
+def cancel_backfill(provider: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    conn = _conn(db, user, provider)
+    backfill.cancel(db, conn)
     return conn_out(conn)
 
 

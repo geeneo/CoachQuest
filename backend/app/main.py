@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from . import runtime
+from . import backfill, runtime
 from .config import check_required, settings
 from .db import Connection, SessionLocal, init_db
 from .routers import admin, athletes, auth, connections, grants, plans
@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
     if settings.enable_scheduler:
         scheduler.add_job(sync_all, "interval", hours=6, args=["strava"], id="strava")
         scheduler.add_job(sync_all, "cron", hour="6,18", minute=15, args=["garmin"], id="garmin")
+        scheduler.add_job(backfill.resume_due, "interval", minutes=15, id="backfill")
         scheduler.start()
     yield
     if scheduler.running:

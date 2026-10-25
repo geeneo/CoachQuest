@@ -84,6 +84,8 @@ class Connection(Base):
     # What to import from this provider, e.g. {"activities": false, "wellness": true}.
     # Missing keys mean "on"; see sync_options.py.
     options: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Progress of an "import older data" run; see backfill.py.
+    backfill: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -247,7 +249,7 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 # Columns added after the first release. create_all() only creates missing
 # tables, so add missing columns to existing ones here.
 _ADDED_COLUMNS = {
-    "connections": {"options": "JSON"},
+    "connections": {"options": "JSON", "backfill": "JSON"},
     "users": {"weight_source": "VARCHAR(20)", "weight_updated_at": "DATETIME"},
 }
 

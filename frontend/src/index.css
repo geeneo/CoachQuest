@@ -631,3 +631,6 @@ code {
 .manage input {
   max-width: 340px;
 }
+.sync-choices > .btn {
+  align-self: flex-start;
+}

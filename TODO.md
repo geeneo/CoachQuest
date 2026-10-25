@@ -17,7 +17,7 @@
       - Rate limited in nginx.
       - Resetting signs out every session.
       - Needs SMTP.
-- [ ] **Backfill older data.** First sync imports 180 days of Strava and 30
+- [x] **Backfill older data.** First sync imports 180 days of Strava and 30
       days of Garmin. Add a "Import older data" option on Connections:
       - Pick a start date (e.g. 1 year, 2 years, everything).
       - Runs in the background with progress shown on the card.
@@ -37,6 +37,62 @@
       - Show where each value came from and when, e.g. "FTP 265 W · Garmin ·
         3 days ago".
       - When FTP or LTHR changes, recalculate TSS (Save already does this).
+- [ ] **My training: volume summary** (like the old hub's Volume stats).
+      - 7 / 30 / 90 day switch.
+      - Cards: distance (with activity count), elevation, moving time,
+        calories, average effort per ride (Strava relative effort).
+      - "Activity mix" bar chart by type: Road, Virtual, MTB / E-MTB, Run…
+        from Strava's sport type.
+      - "Weekly elevation" bar chart for the last 12 weeks.
+      - Calories: Garmin's activity list has them. For Strava, use kilojoules
+        from the activity list (kJ ≈ kcal for cycling); otherwise leave blank
+        rather than guess.
+      - Coaches see it only with the activities scope.
+- [ ] **My training: Recent activities table** (like the old hub).
+      - Period: Date range (7d, 30d, 90d, 180d, 1/2/3/5/10 years, All time),
+        Month or Year view.
+      - Type chips (All, Road, Zwift / Virtual, E-MTB, MTB, Run, Swim, Walk,
+        Hike, Workout, Yoga…) built from the types actually present, plus
+        "Races only", "Show NP" and a name search.
+      - Summary line: count, km, elevation with "analog" elevation (outdoor
+        only, excluding virtual rides) and hours.
+      - Columns: Date, Type, Activity, Dist, Elev, Time, Speed, Power, NP,
+        HR, Cadence, Cal, RE (relative effort as a coloured badge: green /
+        amber / red), Race, Note.
+      - Editable per activity, saved in CoachQuest, never written back to
+        Strava:
+        - Type override (e.g. mark a ride as E-MTB).
+        - Race link (pick from a races list).
+        - Note tag (Group, Solo, Wind, Weather, …).
+      - Needs new stored fields: cadence, kilojoules/calories, average speed,
+        and the override/race/note columns. Plus a small Races list (name,
+        date, distance) to link to.
+      - Coaches see it with the activities scope; only the athlete can edit.
+- [ ] **Races / event plan** (like the old hub's Races table, but per user and
+      in the database).
+      - Fields: short code, name, short name, distance (km), elevation (m),
+        discipline, target date, start time, target CTL, days (stage races),
+        active.
+      - Disciplines for every sport, not just cycling: Road, Mountain bike,
+        Gravel, Track, Run, Trail run, Ultra, Triathlon, Duathlon, Swim /
+        open water, Multisport, Other.
+      - Inline editing (click a field, saves when you leave it), plus an
+        "Add a race" row. Past results are read-only.
+      - Used by the Recent activities "Race" dropdown, a countdown and
+        "Upcoming races" on My training, and the AI coach (event date and
+        target CTL go into plans and assessments).
+      - Coaches see races with the plans scope.
+- [ ] **Training preferences: weekday riding preferences.** One row per day
+      (Mon–Sun), choose one or more: Rest, E-MTB, MTB, Road, Hill repeats,
+      Zwift / indoor, Treadmill run, Outdoor run, Race. Other sports can be
+      added. The AI coach reads this when planning (it replaces the plan
+      form's "training days"). Option to apply it to weeks already planned.
+- [ ] **Training preferences: activity note tags.** Each user manages their
+      own preset tags for the Recent activities "Note" dropdown: illness,
+      mechanical, travel, weather, adventure, group, solo, wind, work, other…
+      Add, rename (click a tag), remove. The AI coach reads tagged activities
+      as explained (e.g. a light week marked "illness" is disclosed, not a
+      gap in training).
 - [ ] **AI coach: assessments of wellness and training progress.** A new
       "AI coach" page per athlete, next to Plans. Same rules as plans:
       CoachQuest computes the facts, Claude writes the words, and only the

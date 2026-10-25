@@ -28,13 +28,15 @@ export default function Connections() {
   const conns = useApi("/api/connections");
   const [params] = useSearchParams();
   const byProvider = Object.fromEntries((conns.data?.connections || []).map((c) => [c.provider, c]));
-  const firstSyncRunning = (conns.data?.connections || []).some((c) => !c.last_sync_at && c.status === "active");
+  const firstSyncRunning = (conns.data?.connections || []).some(
+    (c) => (!c.last_sync_at && c.status === "active") || c.backfill?.status === "running",
+  );
 
   // A first sync runs in the background; refresh until it has finished (max ~3 minutes).
   useEffect(() => {
     if (!firstSyncRunning) return;
     let polls = 0;
-    const timer = setInterval(() => (++polls > 45 ? clearInterval(timer) : conns.reload()), 4000);
+    const timer = setInterval(() => (++polls > 450 ? clearInterval(timer) : conns.reload()), 4000);
     return () => clearInterval(timer);
   }, [firstSyncRunning, conns.reload]);
 
@@ -102,6 +104,7 @@ function Status({ conn, provider, reload }) {
       </p>
       {conn.last_error && <p className="error small">{conn.last_error}</p>}
       <SyncChoices conn={conn} provider={provider} run={run} busy={busy} />
+      <Backfill conn={conn} provider={provider} run={run} busy={busy} />
       {msg && <p className="error small">{msg}</p>}
       <div className="row">
         <button className="btn" disabled={busy} onClick={sync}>
@@ -123,6 +126,71 @@ const KIND_LABELS = {
   wellness: "Wellness (sleep, HRV, resting HR, Body Battery, stress, steps)",
   weight: "Weight → Profile (latest weigh-in from Garmin or a Garmin Index scale)",
 };
+
+const BACKFILL_CHOICES = [
+  ["1y", "1 year", 365],
+  ["2y", "2 years", 730],
+  ["5y", "5 years", 1826],
+  ["all", "Everything", null],
+];
+
+function isoDaysAgo(days) {
+  return days == null ? "2009-01-01" : new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+}
+
+function Backfill({ conn, provider, run, busy }) {
+  const [choice, setChoice] = useState("1y");
+  const bf = conn.backfill;
+  const active = bf && (bf.status === "running" || bf.status === "waiting");
+  const start = () => {
+    const days = BACKFILL_CHOICES.find((c) => c[0] === choice)[2];
+    run(() => api(`/api/connections/${provider}/backfill`, { method: "POST", body: { since: isoDaysAgo(days) } }));
+  };
+  const cancel = () => run(() => api(`/api/connections/${provider}/backfill`, { method: "DELETE" }));
+  const reached = bf?.cursor ? bf.cursor.slice(0, 10) : null;
+
+  return (
+    <fieldset className="sync-choices">
+      <legend>Import older data</legend>
+      {bf && (
+        <p className="small">
+          {
+            {
+              running: `Importing… back to ${reached} so far, ${bf.stored} items. Target ${bf.target}.`,
+              waiting: `Paused at ${reached} (${bf.stored} items) to stay inside the rate limit. Resumes around ${bf.resume_at?.slice(11, 16)} UTC.`,
+              done: `Done: imported ${bf.stored} items back to ${bf.target}.`,
+              cancelled: `Stopped at ${reached} after ${bf.stored} items.`,
+              error: `Stopped with an error at ${reached}: ${bf.message}`,
+            }[bf.status]
+          }
+        </p>
+      )}
+      {active ? (
+        <button type="button" className="btn" disabled={busy} onClick={cancel}>
+          Stop import
+        </button>
+      ) : (
+        <div className="row">
+          <select value={choice} onChange={(e) => setChoice(e.target.value)} disabled={busy}>
+            {BACKFILL_CHOICES.map(([value, label]) => (
+              <option key={value} value={value}>
+                Back {label === "Everything" ? "to the start" : label}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="btn" disabled={busy} onClick={start}>
+            Import
+          </button>
+        </div>
+      )}
+      <p className="hint">
+        {provider === "strava"
+          ? "Pauses on its own near Strava's rate limits (shared with other apps using the same Strava app) and resumes later."
+          : "Goes back two weeks at a time. Wellness is imported for the last year only; activities go back as far as you choose."}
+      </p>
+    </fieldset>
+  );
+}
 
 function SyncChoices({ conn, provider, run, busy }) {
   const name = provider === "strava" ? "Strava" : "Garmin";
