@@ -32,6 +32,7 @@ class Editable:
     choices: tuple[str, ...] = ()
     pattern: str = ""
     help: str = ""
+    error: str = ""  # shown when the value doesn't match `pattern`
 
 
 EDITABLE: dict[str, Editable] = {
@@ -58,9 +59,17 @@ EDITABLE: dict[str, Editable] = {
         "Client ID",
         "Strava",
         pattern=r"[0-9]{1,12}",
-        help="From strava.com/settings/api.",
+        help="The short number labelled Client ID at the top of strava.com/settings/api.",
+        error="Client ID is the short number (e.g. 154321) at the top of your Strava API page, not the secret.",
     ),
-    "strava_client_secret": Editable("Client secret", "Strava", secret=True, pattern=r"[0-9a-f]{20,64}"),
+    "strava_client_secret": Editable(
+        "Client secret",
+        "Strava",
+        secret=True,
+        pattern=r"[0-9a-f]{40}",
+        help="The 40-character Client Secret. Not 'Your Access Token' or 'Your Refresh Token'.",
+        error="Client secret should be the 40-character Client Secret from your Strava API page.",
+    ),
     "registration_mode": Editable(
         "Registration",
         "Accounts",
@@ -96,7 +105,7 @@ def validate(key: str, value: str) -> str:
     if spec.choices and value not in spec.choices:
         raise ValueError(f"{spec.label}: choose one of {', '.join(spec.choices)}")
     if spec.pattern and not re.fullmatch(spec.pattern, value):
-        raise ValueError(f"{spec.label}: that doesn't look like a valid value")
+        raise ValueError(spec.error or f"{spec.label}: that doesn't look like a valid value")
     return value
 
 

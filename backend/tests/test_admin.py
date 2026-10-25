@@ -67,3 +67,13 @@ def test_admin_cannot_demote_self(make_user):
     admin = make_user("admin@example.com")
     me = admin.get("/api/auth/me").json()["id"]
     assert admin.patch(f"/api/admin/users/{me}", json={"is_admin": False}).status_code == 400
+
+
+def test_strava_secret_in_id_field_gets_a_clear_message(make_user):
+    admin = make_user("admin@example.com")
+    r = admin.request("PUT", "/api/admin/settings", json={"values": {"strava_client_id": "a" * 40}})
+    assert r.status_code == 422 and "short number" in r.json()["detail"]
+    r = admin.request(
+        "PUT", "/api/admin/settings", json={"values": {"strava_client_id": "154321", "strava_client_secret": "0f" * 20}}
+    )
+    assert r.status_code == 200
