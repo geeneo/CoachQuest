@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
 import { dateTime } from "../lib/format.js";
 
 const ERRORS = {
@@ -112,6 +113,23 @@ function SyncChoices({ conn, provider, run, busy }) {
   );
 }
 
+function StravaNotConfigured() {
+  const { user } = useAuth();
+  if (!user.is_admin) {
+    return <p className="muted">Strava isn't set up on this server yet. Ask your CoachQuest administrator.</p>;
+  }
+  return (
+    <div className="flags card small">
+      <strong>Strava isn't set up yet.</strong> As admin, register one Strava API app for CoachQuest at{" "}
+      <a href="https://www.strava.com/settings/api" target="_blank" rel="noreferrer">
+        strava.com/settings/api
+      </a>{" "}
+      and put its Client ID and Client Secret in <Link to="/admin">Admin → Settings → Strava</Link>. After that every
+      user can connect their own Strava account here.
+    </div>
+  );
+}
+
 function StravaCard({ conn, configured, reload }) {
   const [error, setError] = useState(null);
   const connect = async () => {
@@ -133,7 +151,7 @@ function StravaCard({ conn, configured, reload }) {
           Connect with Strava
         </button>
       ) : (
-        <p className="muted">Strava is not configured on this server yet.</p>
+        <StravaNotConfigured />
       )}
       {error && <div className="error">{error}</div>}
     </section>
