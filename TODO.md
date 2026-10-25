@@ -264,6 +264,18 @@
         to the coach access log too, unless set separately.
       - Keep it to what's needed (POPIA): no passwords, and IP addresses only
         for as long as the retention allows.
+- [ ] **Disable an account** (without deleting it).
+      - Admin → Users → Manage → "Disable": the user is signed out
+        everywhere and can't sign in (the sign-in page says the account is
+        disabled). "Enable" undoes it. Their data, plans and sharing stay as
+        they were.
+      - While disabled: no scheduled syncs, AI notes, emails or workout
+        sending for that account, and coaches see the athlete as disabled.
+      - Optional reason and date, shown to admins; logged (with the sign-in
+        log).
+      - Users can pause their own account from Profile (same effect, they can
+        come back by asking an admin), as a step before deleting it.
+      - Admins can't disable themselves or the last admin.
 
 ## Later
 

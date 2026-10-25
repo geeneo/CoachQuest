@@ -28,6 +28,11 @@ const ERRORS = {
 
 export default function Connections() {
   const conns = useApi("/api/connections");
+  const platforms = useApi("/api/athletes/me/platforms");
+  const reloadAll = () => {
+    conns.reload();
+    platforms.reload();
+  };
   const [params] = useSearchParams();
   const byProvider = Object.fromEntries((conns.data?.connections || []).map((c) => [c.provider, c]));
   const firstSyncRunning = (conns.data?.connections || []).some(
@@ -76,7 +81,13 @@ export default function Connections() {
         reload={conns.reload}
       />
       <GarminCard conn={byProvider.garmin} reload={conns.reload} />
-      <ConnectedPlatforms />
+      <IntervalsCard
+        conn={byProvider.intervals_icu}
+        platform={platforms.data?.find((p) => p.id === "intervals_icu")}
+        platforms={platforms.data}
+        reload={reloadAll}
+      />
+      <ConnectedPlatforms platforms={platforms} />
     </>
   );
 }
@@ -92,18 +103,21 @@ const PLATFORM_STATUS = {
 
 // Settings > Connected platforms: every training platform, what CoachQuest can do with it
 // today, and the athlete's choices. Automatic delivery is only offered where it really works.
-function ConnectedPlatforms() {
-  const platforms = useApi("/api/athletes/me/platforms");
+// PUT /api/me/platforms needs the whole choice; `changes` gets the current lists and returns what differs.
+async function savePlatformPrefs(list, changes) {
+  const preferred = list.filter((p) => p.preferred).map((p) => p.id);
+  const auto = Object.fromEntries(list.filter((p) => p.auto_sync).map((p) => [p.id, true]));
+  await api("/api/me/platforms", { method: "PUT", body: { preferred, auto, ...changes(preferred, auto) } });
+}
+
+function ConnectedPlatforms({ platforms }) {
   const [error, setError] = useState(null);
   const list = platforms.data || [];
 
   const savePrefs = async (changes) => {
     setError(null);
-    const preferred = list.filter((p) => p.preferred).map((p) => p.id);
-    const auto = Object.fromEntries(list.filter((p) => p.auto_sync).map((p) => [p.id, true]));
-    const body = { preferred, auto, ...changes(preferred, auto) };
     try {
-      await api("/api/me/platforms", { method: "PUT", body });
+      await savePlatformPrefs(list, changes);
       platforms.reload();
     } catch (err) {
       setError(err.message);
@@ -112,24 +126,6 @@ function ConnectedPlatforms() {
   const togglePreferred = (id, on) =>
     savePrefs((preferred) => ({ preferred: on ? [...preferred, id] : preferred.filter((x) => x !== id) }));
   const toggleAuto = (id, on) => savePrefs((_, auto) => ({ auto: { ...auto, [id]: on } }));
-  const connectIntervals = async () => {
-    setError(null);
-    try {
-      window.location.href = (await api("/api/connections/intervals/authorize", { method: "POST" })).url;
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-  const disconnectIntervals = async () => {
-    if (!window.confirm("Disconnect Intervals.icu? Workouts already on your Intervals.icu calendar stay there.")) return;
-    try {
-      await api("/api/connections/intervals", { method: "DELETE" });
-      platforms.reload();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
   return (
     <section className="card" id="platforms">
       <h2>Connected platforms</h2>
@@ -164,15 +160,8 @@ function ConnectedPlatforms() {
                 <td>
                   <span className={`badge ${PLATFORM_STATUS[p.status].cls}`}>{PLATFORM_STATUS[p.status].label}</span>
                   {p.last_error && <div className="small error-text">{p.last_error}</div>}
-                  {p.id === "intervals_icu" && ["not_connected", "error"].includes(p.status) && (
-                    <button className="btn small primary" onClick={connectIntervals}>
-                      {p.status === "error" ? "Reconnect" : "Connect"}
-                    </button>
-                  )}
-                  {p.id === "intervals_icu" && ["connected", "error"].includes(p.status) && (
-                    <button className="link-btn small" onClick={disconnectIntervals}>
-                      Disconnect
-                    </button>
+                  {p.id === "intervals_icu" && p.status !== "not_configured" && (
+                    <div className="small muted">Connect and choose what syncs on the Intervals.icu card above.</div>
                   )}
                   {p.status === "not_configured" && (
                     <div className="small muted">An admin adds the Intervals.icu app keys in Admin → Settings.</div>
@@ -654,6 +643,131 @@ function GarminCard({ conn, reload }) {
             {busy ? "…" : step === "login" ? "Connect Garmin" : "Verify code"}
           </button>
         </form>
+      )}
+    </section>
+  );
+}
+
+const ICU_CHOICES = {
+  activities: [
+    "ACTIVITY:READ",
+    "Import activities",
+    "Leave off if Strava or Garmin already brings your rides in; the same ride is only shown once either way.",
+  ],
+  wellness: [
+    "WELLNESS:READ",
+    "Import wellness (sleep, HRV, resting HR, steps)",
+    "Fills what Garmin leaves empty, or replaces Garmin if you stop that connection.",
+  ],
+};
+
+// Intervals.icu: send workouts to it (and on to Zwift / MyWhoosh), and optionally import from it.
+function IntervalsCard({ conn, platform, platforms, reload }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const run = async (fn) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await fn();
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setBusy(false);
+      reload();
+    }
+  };
+  const connect = () =>
+    run(async () => {
+      window.location.href = (await api("/api/connections/intervals/authorize", { method: "POST" })).url;
+    });
+  const disconnect = () => {
+    if (!confirm("Disconnect Intervals.icu? Workouts already on your Intervals.icu calendar stay there.")) return;
+    const purge = confirm("Also delete activities and wellness imported from Intervals.icu? Cancel keeps them.");
+    run(() => api(`/api/connections/intervals?purge=${purge}`, { method: "DELETE" }));
+  };
+  const setSend = (on) =>
+    run(() => savePlatformPrefs(platforms, (_, auto) => ({ auto: { ...auto, intervals_icu: on } })));
+  const setImport = (kind, on) =>
+    run(async () => {
+      await api("/api/connections/intervals_icu/options", { method: "PATCH", body: { [kind]: on } });
+      if (!on && confirm(`Stopped importing ${kind} from Intervals.icu, and hid what was imported.\n\nAlso delete it? Cancel keeps it hidden.`)) {
+        await api(`/api/connections/intervals_icu/data/${kind}`, { method: "DELETE" });
+      }
+    });
+  const sync = () => run(() => api("/api/connections/intervals_icu/sync", { method: "POST" }));
+  const scopes = new Set(conn?.scopes || []);
+
+  return (
+    <section className="card">
+      <h2>Intervals.icu</h2>
+      <p className="muted small">
+        Sends your scheduled workouts to Intervals.icu, which passes them on to Zwift (and MyWhoosh) when you link those in
+        Intervals.icu. Can also import activities and wellness. Imports run every 6 hours.
+      </p>
+      {platform?.status === "not_configured" ? (
+        <p className="small">Not set up on this server yet: an admin adds the Intervals.icu app keys in Admin → Settings.</p>
+      ) : !conn ? (
+        <button className="btn primary" disabled={busy} onClick={connect}>
+          Connect Intervals.icu
+        </button>
+      ) : (
+        <>
+          <p className="small">
+            <span className={`badge ${conn.status === "active" ? "ok" : "bad"}`}>{conn.status}</span> Last sync:{" "}
+            {conn.last_sync_at ? dateTime(conn.last_sync_at) : "never"}
+            {conn.external_id && <span className="muted"> · athlete {conn.external_id}</span>}
+          </p>
+          {conn.last_error && <p className="error small">{conn.last_error}</p>}
+          <fieldset className="sync-choices">
+            <legend>Sync with Intervals.icu</legend>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={!!platform?.auto_sync}
+                disabled={busy || (!platform?.auto_sync_available && !platform?.auto_sync)}
+                onChange={(e) => setSend(e.target.checked)}
+              />
+              Send scheduled workouts (from today on; they go on to Zwift and MyWhoosh when linked in Intervals.icu)
+            </label>
+            {!scopes.has("CALENDAR:WRITE") && (
+              <p className="hint">Calendar access wasn't allowed. Reconnect and allow it to send workouts.</p>
+            )}
+            {Object.entries(ICU_CHOICES).map(([kind, [scope, label, hint]]) => (
+              <label key={kind} className="check">
+                <input
+                  type="checkbox"
+                  checked={!!conn.options[kind]}
+                  disabled={busy || !scopes.has(scope)}
+                  onChange={(e) => setImport(kind, e.target.checked)}
+                />
+                <span>
+                  {label}
+                  <span className="hint">
+                    {" "}
+                    {scopes.has(scope) ? hint : "Not allowed when you connected: reconnect to allow it."}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          {msg && <p className="error small">{msg}</p>}
+          <div className="row">
+            {(conn.options.activities || conn.options.wellness) && (
+              <button className="btn" disabled={busy} onClick={sync}>
+                <RefreshCw size={16} /> Import now
+              </button>
+            )}
+            {(conn.status === "error" || scopes.size < 3) && (
+              <button className="btn primary" disabled={busy} onClick={connect}>
+                Reconnect
+              </button>
+            )}
+            <button className="btn danger" disabled={busy} onClick={disconnect}>
+              <Unlink size={16} /> Disconnect
+            </button>
+          </div>
+        </>
       )}
     </section>
   );

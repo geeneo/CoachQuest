@@ -71,16 +71,22 @@ def pmc(tss_by_day: dict[date, float], start: date, end: date) -> list[DayLoad]:
     return out
 
 
+SOURCE_RANK = {"strava": 0, "garmin": 1, "intervals_icu": 2}
+
+
 def dedupe(activities: list, window_s: int = 600) -> list:
-    """Drop Garmin copies of activities that also came from Strava.
+    """Show a session once when it came from several sources.
 
     Two activities are the same session when they start within `window_s` of
-    each other. Strava wins because it is the primary activity source.
+    each other. Strava wins (the primary activity source), then Garmin, then
+    Intervals.icu.
     """
-    strava_starts = sorted(a.start_time for a in activities if a.source == "strava")
+    rank = {a.source: SOURCE_RANK.get(a.source, 9) for a in activities}
+    starts = {src: [a.start_time for a in activities if a.source == src] for src in rank}
     kept = []
     for a in activities:
-        if a.source != "strava" and any(abs((a.start_time - s).total_seconds()) <= window_s for s in strava_starts):
+        better = [s for src, r in rank.items() if r < rank[a.source] for s in starts[src]]
+        if any(abs((a.start_time - s).total_seconds()) <= window_s for s in better):
             continue
         kept.append(a)
     return kept

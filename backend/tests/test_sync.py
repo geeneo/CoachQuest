@@ -30,6 +30,8 @@ class FakeIntervals:
             "scope": "CALENDAR:WRITE",
             "athlete": {"id": "i4242", "name": "Test Rider"},
         }
+        self.activities: list[dict] = []
+        self.wellness: list[dict] = []
 
     def fail_next(self, status: int, headers: dict | None = None, body: str = "nope"):
         self.fail.append(httpx.Response(status, headers=headers or {}, text=body))
@@ -44,6 +46,10 @@ class FakeIntervals:
         assert request.headers["Authorization"].startswith("Bearer ")
         if self.fail:
             return self.fail.pop(0)
+        if request.method == "GET" and request.url.path.endswith("/activities"):
+            return httpx.Response(200, json=self.activities)
+        if request.method == "GET" and request.url.path.endswith("/wellness"):
+            return httpx.Response(200, json=self.wellness)
         if request.url.path.endswith("/events/bulk"):
             return httpx.Response(200, json=[{"id": 9000 + i, **e} for i, e in enumerate(parsed)])
         return httpx.Response(200, json={})
@@ -111,7 +117,8 @@ def test_connect_flow(make_user, fake):
     a = make_user("rider@example.com")
     url = a.post("/api/connections/intervals/authorize").json()["url"]
     q = parse_qs(urlparse(url).query)
-    assert url.startswith("https://intervals.icu/oauth/authorize") and q["scope"] == ["CALENDAR:WRITE"]
+    assert url.startswith("https://intervals.icu/oauth/authorize")
+    assert q["scope"] == ["CALENDAR:WRITE,ACTIVITY:READ,WELLNESS:READ"]
     assert q["redirect_uri"][0].endswith("/api/connections/intervals/callback")
     r = a.get(f"/api/connections/intervals/callback?state={q['state'][0]}&code=abc", follow_redirects=False)
     assert r.headers["location"] == "/connections?connected=intervals#platforms"
@@ -127,14 +134,28 @@ def test_connect_flow(make_user, fake):
     assert "error=state" in r.headers["location"]
 
 
-def test_connect_without_calendar_scope_fails(make_user, fake):
-    fake.token_response["scope"] = "ACTIVITY:READ"
-    a = make_user("rider@example.com")
+def _link(a):
     state = parse_qs(urlparse(a.post("/api/connections/intervals/authorize").json()["url"]).query)["state"][0]
-    r = a.get(f"/api/connections/intervals/callback?state={state}&code=abc", follow_redirects=False)
-    assert "error=intervals" in r.headers["location"]
+    return a.get(f"/api/connections/intervals/callback?state={state}&code=abc", follow_redirects=False)
+
+
+def test_connect_with_no_access_fails(make_user, fake):
+    fake.token_response["scope"] = ""
+    a = make_user("rider@example.com")
+    assert "error=intervals" in _link(a).headers["location"]
     p = {x["id"]: x for x in a.get("/api/athletes/me/platforms").json()}["intervals_icu"]
     assert p["status"] == "not_connected"
+
+
+def test_connect_without_calendar_access_cannot_send(make_user, fake):
+    fake.token_response["scope"] = "ACTIVITY:READ"
+    a = make_user("rider@example.com")
+    assert "connected=intervals" in _link(a).headers["location"]
+    p = {x["id"]: x for x in a.get("/api/athletes/me/platforms").json()}["intervals_icu"]
+    assert p["status"] == "connected" and not p["auto_sync_available"]
+    assert a.request("PUT", "/api/me/platforms", json={"auto": {"intervals_icu": True}}).status_code == 409
+    conn = next(c for c in a.get("/api/connections").json()["connections"] if c["provider"] == "intervals_icu")
+    assert conn["scopes"] == ["ACTIVITY:READ"] and conn["options"] == {"activities": False, "wellness": False}
 
 
 def test_not_configured_on_server(make_user):

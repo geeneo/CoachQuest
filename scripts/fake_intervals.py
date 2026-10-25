@@ -53,7 +53,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "access_token": "dev-token",
                     "token_type": "Bearer",
-                    "scope": "CALENDAR:WRITE",
+                    "scope": "CALENDAR:WRITE,ACTIVITY:READ,WELLNESS:READ",
                     "athlete": {"id": "i1", "name": "Dev Rider"},
                 },
             )

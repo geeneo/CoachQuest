@@ -12,7 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from .db import Connection, User
-from .delivery import adapter
+from .delivery import adapter, intervals_icu
+from .security import decrypt_json
 
 CAPABILITIES = {
     "import_activities": "Import activities",
@@ -89,6 +90,8 @@ def platforms_out(db: DbSession, athlete: User, full: bool = True) -> list[dict]
         else:
             status = {"export": "export_only", "unavailable": "not_available"}[p["integration"]]
         can_auto = "deliver_workouts" in p["capabilities"] and status == "connected"
+        if can_auto and p["id"] == "intervals_icu" and not intervals_icu.can_send(decrypt_json(conn.token_enc)):
+            can_auto = False  # connected without calendar access
         # The athlete's choice stays on while a connection needs fixing; nothing is sent meanwhile.
         auto_on = (
             bool(auto.get(p["id"])) and "deliver_workouts" in p["capabilities"] and status in ("connected", "error")

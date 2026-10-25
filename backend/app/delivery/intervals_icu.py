@@ -33,7 +33,9 @@ from ..config import settings
 from .base import Adapter, AuthFailed, Delivered, Forbidden, NotSupported, RateLimited, Rejected, Transient
 
 BASE = settings.intervals_base_url  # https://intervals.icu
-SCOPE = "CALENDAR:WRITE"
+# Calendar write sends workouts; activity and wellness read let the athlete import from Intervals.icu.
+CALENDAR = "CALENDAR:WRITE"
+SCOPE = "CALENDAR:WRITE,ACTIVITY:READ,WELLNESS:READ"
 TIMEOUT = 20
 
 # Tests swap this for an httpx.MockTransport; nothing real is called in tests.
@@ -84,8 +86,8 @@ async def exchange_code(code: str) -> dict:
     if not body.get("access_token"):
         raise LinkError("Intervals.icu returned no access token")
     granted = set((body.get("scope") or "").split(","))
-    if SCOPE not in granted:
-        raise LinkError("Calendar access wasn't granted. Connect again and allow access to your calendar.")
+    if not granted & set(SCOPE.split(",")):
+        raise LinkError("No access was granted. Connect again and allow access.")
     athlete = body.get("athlete") or {}
     return {
         "access_token": body["access_token"],
@@ -114,6 +116,11 @@ def _raise_for(r: httpx.Response) -> None:
     if r.status_code >= 500:
         raise Transient(f"Intervals.icu had a problem (HTTP {r.status_code})")
     raise Rejected(f"Intervals.icu rejected the workout (HTTP {r.status_code}): {detail}")
+
+
+def can_send(token: dict) -> bool:
+    """Was calendar access granted (needed to send workouts)?"""
+    return CALENDAR in set((token.get("scope") or "").split(","))
 
 
 class IntervalsIcu(Adapter):

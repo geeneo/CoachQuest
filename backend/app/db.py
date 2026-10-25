@@ -183,6 +183,8 @@ class WellnessDay(Base):
     body_battery_max: Mapped[float | None] = mapped_column(Float, nullable=True)
     stress_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
     steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Who filled the day: garmin, or intervals_icu (which only fills what Garmin left empty).
+    source: Mapped[str] = mapped_column(String(20), default="garmin")
 
 
 class Grant(Base):
@@ -438,6 +440,7 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 _ADDED_COLUMNS = {
     "connections": {"options": "JSON", "backfill": "JSON"},
     "plans": {"start_date": "DATE", "weeks": "JSON"},
+    "wellness_days": {"source": "VARCHAR(20) NOT NULL DEFAULT 'garmin'"},
     "scheduled_workouts": {
         "plan_id": "INTEGER",
         "plan_managed": "BOOLEAN NOT NULL DEFAULT 0",

@@ -296,6 +296,7 @@ def _store(db: DbSession, user: User, wellness: list, activities: list | None, w
         if day is None:
             day = WellnessDay(user_id=user.id, day=row["day"])
             db.add(day)
+        day.source = "garmin"  # Garmin's values win over gaps filled from Intervals.icu
         for key, value in row.items():
             if key != "day" and value is not None:
                 setattr(day, key, value)

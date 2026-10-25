@@ -25,12 +25,11 @@ def activities_since(db: DbSession, athlete_id: int, since: datetime) -> list[Ac
 
 
 def wellness_since(db: DbSession, athlete_id: int, since: date) -> list[WellnessDay]:
-    if "garmin" in hidden_sources(db, athlete_id, "wellness"):
-        return []
+    hidden = hidden_sources(db, athlete_id, "wellness")
     return list(
         db.scalars(
             select(WellnessDay)
-            .where(WellnessDay.user_id == athlete_id, WellnessDay.day >= since)
+            .where(WellnessDay.user_id == athlete_id, WellnessDay.day >= since, WellnessDay.source.not_in(hidden))
             .order_by(WellnessDay.day)
         ).all()
     )

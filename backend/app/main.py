@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
     if settings.enable_scheduler:
         scheduler.add_job(sync_all, "interval", hours=6, args=["strava"], id="strava")
         scheduler.add_job(sync_all, "cron", hour="6,18", minute=15, args=["garmin"], id="garmin")
+        scheduler.add_job(sync_all, "interval", hours=6, args=["intervals_icu"], id="intervals_icu")
         scheduler.add_job(backfill.resume_due, "interval", minutes=15, id="backfill")
         scheduler.add_job(sync_engine.run_due, "interval", minutes=1, id="workout-sync")
         # After the morning Garmin sync window, so last night's sleep and HRV are in.

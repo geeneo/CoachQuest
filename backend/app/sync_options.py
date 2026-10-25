@@ -11,12 +11,19 @@ from sqlalchemy.orm import Session as DbSession
 from .db import Connection
 
 # "weight" copies the latest Garmin weigh-in into the Profile; "thresholds" does the same for FTP, LTHR and max HR.
-KINDS = {"strava": ("activities",), "garmin": ("activities", "wellness", "weight", "thresholds")}
+KINDS = {
+    "strava": ("activities",),
+    "garmin": ("activities", "wellness", "weight", "thresholds"),
+    # Intervals.icu mostly holds copies of Strava/Garmin data, so its imports start off.
+    # Sending workouts there is a separate switch (platform_prefs, see platforms.py).
+    "intervals_icu": ("activities", "wellness"),
+}
+DEFAULT_OFF = {("intervals_icu", "activities"), ("intervals_icu", "wellness")}
 
 
 def options(conn: Connection) -> dict[str, bool]:
     saved = conn.options or {}
-    return {kind: bool(saved.get(kind, True)) for kind in KINDS[conn.provider]}
+    return {kind: bool(saved.get(kind, (conn.provider, kind) not in DEFAULT_OFF)) for kind in KINDS[conn.provider]}
 
 
 def hidden_sources(db: DbSession, user_id: int, kind: str) -> set[str]:

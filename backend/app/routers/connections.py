@@ -2,7 +2,7 @@
 
 import logging
 import secrets
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -16,6 +16,7 @@ from ..db import Activity, Connection, OAuthState, SessionLocal, User, UserStrav
 from ..delivery import intervals_icu
 from ..deps import current_user
 from ..providers import garmin, strava
+from ..providers import intervals_icu as intervals_import
 from ..security import decrypt_json, encrypt_json
 
 log = logging.getLogger("coachquest.connections")
@@ -23,6 +24,9 @@ log = logging.getLogger("coachquest.connections")
 router = APIRouter(prefix="/api/connections", tags=["connections"])
 
 PROVIDERS = ("strava", "garmin")
+# Data sources with import choices; Intervals.icu also receives workouts (see /intervals routes).
+SOURCES = (*PROVIDERS, "intervals_icu")
+SYNC = {"strava": strava.sync, "garmin": garmin.sync, "intervals_icu": intervals_import.sync}
 
 
 def conn_out(conn: Connection) -> dict:
@@ -35,6 +39,12 @@ def conn_out(conn: Connection) -> dict:
         "options": sync_options.options(conn),
         "backfill": backfill.state(conn),
         "created_at": conn.created_at,
+        # What the athlete allowed on Intervals.icu (scope names only, never the token).
+        **(
+            {"scopes": (decrypt_json(conn.token_enc).get("scope") or "").split(",")}
+            if conn.provider == "intervals_icu"
+            else {}
+        ),
     }
 
 
@@ -43,16 +53,14 @@ async def run_sync(conn_id: int) -> None:
     try:
         conn = db.get(Connection, conn_id)
         if conn:
-            await (strava.sync if conn.provider == "strava" else garmin.sync)(db, conn)
+            await SYNC[conn.provider](db, conn)
     finally:
         db.close()
 
 
 @router.get("")
 def list_connections(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    conns = db.scalars(
-        select(Connection).where(Connection.user_id == user.id, Connection.provider.in_(PROVIDERS))
-    ).all()
+    conns = db.scalars(select(Connection).where(Connection.user_id == user.id, Connection.provider.in_(SOURCES))).all()
     own = strava.own_app(db, user.id)
     return {
         "connections": [conn_out(c) for c in conns],
@@ -200,8 +208,9 @@ async def intervals_callback(
 
 
 @router.delete("/intervals")
-async def intervals_unlink(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    """Stop sending workouts. Workouts already on the Intervals.icu calendar stay there."""
+async def intervals_unlink(purge: bool = False, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Stop sending and importing. Workouts already on the Intervals.icu calendar stay there.
+    With purge, activities and wellness imported from Intervals.icu are deleted here too."""
     conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "intervals_icu"))
     if conn is None:
         raise HTTPException(status_code=404, detail="Not connected")
@@ -209,6 +218,9 @@ async def intervals_unlink(user: User = Depends(current_user), db: DbSession = D
     db.delete(conn)
     db.commit()
     sync_engine.disconnected(db, user.id, "intervals_icu")
+    if purge:
+        db.execute(delete(Activity).where(Activity.user_id == user.id, Activity.source == "intervals_icu"))
+        db.execute(delete(WellnessDay).where(WellnessDay.user_id == user.id, WellnessDay.source == "intervals_icu"))
     prefs = dict(user.platform_prefs or {})
     prefs["auto"] = {**(prefs.get("auto") or {}), "intervals_icu": False}
     user.platform_prefs = prefs
@@ -263,15 +275,17 @@ async def garmin_mfa(
 
 @router.post("/{provider}/sync")
 async def sync_now(provider: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == provider))
-    if conn is None:
-        raise HTTPException(status_code=404, detail="Not connected")
-    if conn.last_sync_at and conn.last_sync_at > utcnow() - timedelta(minutes=5):
+    conn = _conn(db, user, provider, SOURCES)
+    last = conn.last_sync_at
+    if provider == "intervals_icu":  # last_sync_at also moves when workouts are sent; use the last import
+        imported = (conn.options or {}).get("imported_at")
+        last = datetime.fromisoformat(imported) if imported else None
+    if last and last > utcnow() - timedelta(minutes=5):
         raise HTTPException(
             status_code=429,
             detail="Already synced in the last 5 minutes. New activities will come in on the next sync.",
         )
-    count = await (strava.sync if provider == "strava" else garmin.sync)(db, conn)
+    count = await SYNC[provider](db, conn)
     return {"fetched": count, "connection": conn_out(conn)}
 
 
@@ -280,9 +294,10 @@ class SyncOptions(BaseModel):
     wellness: bool | None = None
 
 
-def _conn(db: DbSession, user: User, provider: str) -> Connection:
+def _conn(db: DbSession, user: User, provider: str, allowed: tuple = PROVIDERS) -> Connection:
+    """The user's connection to a provider. Backfill and data tools exist for Strava and Garmin only."""
     conn = None
-    if provider in PROVIDERS:
+    if provider in allowed:
         conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == provider))
     if conn is None:
         raise HTTPException(status_code=404, detail="Not connected")
@@ -298,7 +313,7 @@ def set_options(
     db: DbSession = Depends(get_db),
 ):
     """Choose what to import from this provider."""
-    conn = _conn(db, user, provider)
+    conn = _conn(db, user, provider, SOURCES)
     current = sync_options.options(conn)
     changes = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in current}
     if not changes:
@@ -374,7 +389,7 @@ def delete_data(provider: str, kind: str, user: User = Depends(current_user), db
     if kind == "activities":
         result = db.execute(delete(Activity).where(Activity.user_id == user.id, Activity.source == provider))
     else:
-        result = db.execute(delete(WellnessDay).where(WellnessDay.user_id == user.id))
+        result = db.execute(delete(WellnessDay).where(WellnessDay.user_id == user.id, WellnessDay.source == provider))
     db.commit()
     return {"deleted": result.rowcount}
 
@@ -398,6 +413,6 @@ async def unlink(
     if purge or provider == "strava":
         db.execute(delete(Activity).where(Activity.user_id == user.id, Activity.source == provider))
         if provider == "garmin":
-            db.execute(delete(WellnessDay).where(WellnessDay.user_id == user.id))
+            db.execute(delete(WellnessDay).where(WellnessDay.user_id == user.id, WellnessDay.source == "garmin"))
     db.commit()
     return {"ok": True}
