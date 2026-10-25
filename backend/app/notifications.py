@@ -1,4 +1,4 @@
-"""Emails about sharing: invitations, acceptances and changes.
+"""Emails about sharing (invitations, acceptances, changes) and comments on plans.
 
 Sent in the background after the request has finished, only when email is
 set up and the recipient hasn't switched these off in Profile. A failed send
@@ -36,11 +36,19 @@ async def _send(to: str, subject: str, text: str) -> None:
         log.warning("Sharing email to %s not sent: %s", to, exc)
 
 
-def notify(background: BackgroundTasks, to: User, subject: str, body: str) -> None:
-    if not to.notify_sharing or not to.is_active or not mailer.configured():
+def notify(
+    background: BackgroundTasks,
+    to: User,
+    subject: str,
+    body: str,
+    link: tuple[str, str] = ("Sharing", "/sharing"),
+    setting: str = "notify_sharing",
+) -> None:
+    """`link` is (label, path) of the page the email points to; `setting` the Profile switch that allows it."""
+    if not getattr(to, setting) or not to.is_active or not mailer.configured():
         return
     text = (
-        f"Hi {to.display_name},\n\n{body}\n\nOpen Sharing: {settings.public_base_url}/sharing\n\n"
+        f"Hi {to.display_name},\n\n{body}\n\nOpen {link[0]}: {settings.public_base_url}{link[1]}\n\n"
         "You can turn these emails off in CoachQuest under Profile."
     )
     background.add_task(_send, to.email, f"CoachQuest: {subject}", text)

@@ -49,7 +49,10 @@ weeks where they belong.
 - When `request.replan` is present you are re-planning a plan already under way: return weeks from \
 `request.start_date` only. Days listed in `request.replan.keep` are fixed (already done or locked by the \
 athlete); repeat them as they are and plan the other days around them. Use `request.replan.so_far` \
-(planned vs logged per earlier week) and `request.replan.reason` to decide what to change.
+(planned vs logged per earlier week) and `request.replan.reason` to decide what to change. \
+`request.replan.comments` are notes on the plan from the athlete ("athlete") and their human coach \
+("coach"). Follow the coach's comments unless the flags make that unsafe, then say why; take the \
+athlete's into account. In summary_md, say briefly how the comments changed the plan.
 - Days of type "Zwift / indoor" get a structured `workout` the athlete can ride in Zwift or MyWhoosh \
 (unless `request.structured_workouts` is false): a short name and steps. Power is a fraction of FTP \
 (0.75 = 75% FTP); steps are warmup/cooldown/ramp (power_start to power_end), steady/recovery (power), \

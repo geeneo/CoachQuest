@@ -276,6 +276,15 @@
       - Users can pause their own account from Profile (same effect, they can
         come back by asking an admin), as a step before deleting it.
       - Admins can't disable themselves or the last admin.
+- [ ] **Athletes delete activities.** In My training → Activities, a
+      delete button per activity (and select several to delete at once),
+      with "are you sure?". Only the athlete, never a coach.
+      - Deleted activities stay deleted: the next Strava / Garmin /
+        Intervals.icu sync must not bring them back (keep a small "deleted"
+        list of source + id, with an "Undo" / "show deleted" option).
+      - Removes the activity from load (CTL/ATL/TSB), volume stats, plan vs
+        actual and workout completion, and recalculates them.
+      - Never deletes anything on Strava, Garmin or Intervals.icu itself.
 
 ## Later
 
@@ -283,7 +292,9 @@
       on the Sharing page
 - [ ] Optional two-factor sign-in (TOTP)
 - [ ] Strava webhooks instead of 6-hourly polling
-- [ ] Coach comments on plans
+- [x] Coach comments on plans (done: comments on the plan or a day by the athlete
+      and coaches with Training plans; anyone there can edit or delete; emails
+      with their own Profile switch; re-plans read them)
 - [ ] Postgres + Alembic migrations when SQLite gets tight
 - [ ] Ask Strava to raise the shared app's athlete limit (if not every user
       brings their own app)

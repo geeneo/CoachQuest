@@ -1378,3 +1378,39 @@ tr.sub-row td {
   border-color: var(--c1);
   color: var(--c1);
 }
+
+/* ---- Plan comments ---- */
+.comments {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 1rem;
+  display: grid;
+  gap: 0.6rem;
+}
+.comment {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  background: var(--panel-2);
+}
+.comment.coach {
+  border-left-color: var(--c1);
+}
+.comment.athlete {
+  border-left-color: var(--accent);
+}
+.comment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.comment-body {
+  margin: 0.3rem 0;
+  white-space: pre-wrap;
+}
+.icon-btn .count {
+  font-size: 0.7rem;
+  margin-left: 2px;
+}

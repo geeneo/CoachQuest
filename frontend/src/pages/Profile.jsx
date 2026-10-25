@@ -28,6 +28,7 @@ export default function Profile() {
     goal: user.goal || "",
     week_start: user.week_start ?? 0,
     notify_sharing: user.notify_sharing ?? true,
+    notify_comments: user.notify_comments ?? true,
     timezone: user.timezone || "",
     ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, user[k] ?? ""])),
   }));
@@ -42,6 +43,7 @@ export default function Profile() {
       goal: form.goal || null,
       week_start: Number(form.week_start),
       notify_sharing: form.notify_sharing,
+      notify_comments: form.notify_comments,
       ...(form.timezone ? { timezone: form.timezone } : {}),
     };
     for (const [k] of NUMBER_FIELDS) body[k] = form[k] === "" ? null : Number(form[k]);
@@ -94,6 +96,14 @@ export default function Profile() {
             onChange={(e) => setForm({ ...form, notify_sharing: e.target.checked })}
           />
           Email me when someone invites me as their coach, accepts my invitation, or changes or stops sharing
+        </label>
+        <label className="check wide">
+          <input
+            type="checkbox"
+            checked={form.notify_comments}
+            onChange={(e) => setForm({ ...form, notify_comments: e.target.checked })}
+          />
+          Email me when someone comments on my training plan, or on a plan of an athlete I coach
         </label>
         <label className="wide">
           Goal

@@ -39,6 +39,7 @@ class ProfileUpdate(BaseModel):
     goal: str | None = Field(default=None, max_length=2000)
     week_start: int | None = Field(default=None, ge=0, le=6)
     notify_sharing: bool | None = None
+    notify_comments: bool | None = None
     timezone: str | None = Field(default=None, max_length=64)
 
     @field_validator("timezone")

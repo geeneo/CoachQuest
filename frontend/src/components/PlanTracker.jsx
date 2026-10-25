@@ -1,9 +1,10 @@
-import { ArrowLeftRight, Lock, Unlock } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeftRight, Lock, MessageSquare, Unlock } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
 import { duration } from "../lib/format.js";
 import Markdown from "./Markdown.jsx";
+import PlanComments from "./PlanComments.jsx";
 
 const PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition"];
 const DAY_LABEL = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
@@ -51,7 +52,18 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
     }
   };
 
-  const ctx = { prefs: prefs.data, editDay, swap, swapFrom };
+  const [comments, setComments] = useState([]);
+  const [commentDay, setCommentDay] = useState(null);
+  useEffect(() => {
+    api(`${base}/comments`).then(setComments, () => {});
+  }, [base]);
+  const countByDay = comments.reduce((m, c) => (c.day ? { ...m, [c.day]: (m[c.day] || 0) + 1 } : m), {});
+  const openComments = (date) => {
+    setCommentDay(date);
+    document.getElementById("plan-comments")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const ctx = { prefs: prefs.data, editDay, swap, swapFrom, countByDay, openComments };
   return (
     <>
       <div className="row between tracker-bar">
@@ -110,6 +122,7 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
       {plan.weeks.map((w, i) => (
         <Week key={w.start} week={w} index={i} editWeek={editWeek} ctx={ctx} />
       ))}
+      <PlanComments base={base} comments={comments} setComments={setComments} day={commentDay} setDay={setCommentDay} />
       {plan.content_md && (
         <details className="card">
           <summary>Coach's summary and "adjust if" rules</summary>
@@ -205,6 +218,15 @@ function Day({ day, ctx }) {
             onClick={() => save({ locked: !day.locked })}
           >
             {day.locked ? <Lock size={14} /> : <Unlock size={14} />}
+          </button>
+          <button
+            className={`icon-btn ${ctx.countByDay[day.date] ? "active" : ""}`}
+            title="Comments on this day"
+            aria-label="Comments"
+            onClick={() => ctx.openComments(day.date)}
+          >
+            <MessageSquare size={14} />
+            {ctx.countByDay[day.date] ? <span className="count">{ctx.countByDay[day.date]}</span> : null}
           </button>
         </div>
       </div>

@@ -4,7 +4,7 @@ import logging
 import secrets
 from datetime import timedelta
 
-from sqlalchemy import delete, or_, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session as DbSession
 
 from . import mailer
@@ -22,6 +22,7 @@ from .db import (
     PasswordReset,
     PendingMfa,
     Plan,
+    PlanComment,
     Race,
     ScheduledWorkout,
     Session,
@@ -93,6 +94,11 @@ def delete_account(db: DbSession, user: User) -> None:
     only enforces foreign keys when asked to.
     """
     uid = user.id
+    # Comments on their own plans go; comments they wrote on others' plans stay, unsigned.
+    own_plans = select(Plan.id).where(Plan.athlete_id == uid)
+    db.execute(delete(PlanComment).where(PlanComment.plan_id.in_(own_plans)))
+    db.execute(update(PlanComment).where(PlanComment.author_id == uid).values(author_id=None))
+    db.execute(update(PlanComment).where(PlanComment.edited_by == uid).values(edited_by=None))
     for model, column in (
         (Activity, Activity.user_id),
         (WellnessDay, WellnessDay.user_id),

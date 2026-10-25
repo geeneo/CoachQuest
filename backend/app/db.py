@@ -43,6 +43,8 @@ class User(Base):
     approved: Mapped[bool] = mapped_column(Boolean, default=True)
     # Email me when someone invites me, accepts, or changes or stops sharing.
     notify_sharing: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Email me when someone comments on one of my plans (or a plan I coach).
+    notify_comments: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     # Athlete profile, used for TSS and by the AI coach
@@ -243,6 +245,21 @@ class Plan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class PlanComment(Base):
+    """A comment on a training plan, or on one day of it, by the athlete or a coach."""
+
+    __tablename__ = "plan_comments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    day: Mapped[date | None] = mapped_column(Date, nullable=True)  # None = about the whole plan
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    edited_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
 class Workout(Base):
     """A reusable workout in someone's library (see workouts.py for the steps format)."""
 
@@ -441,6 +458,7 @@ _ADDED_COLUMNS = {
     "connections": {"options": "JSON", "backfill": "JSON"},
     "plans": {"start_date": "DATE", "weeks": "JSON"},
     "wellness_days": {"source": "VARCHAR(20) NOT NULL DEFAULT 'garmin'"},
+    "plan_comments": {"edited_by": "INTEGER"},
     "scheduled_workouts": {
         "plan_id": "INTEGER",
         "plan_managed": "BOOLEAN NOT NULL DEFAULT 0",
@@ -469,6 +487,7 @@ _ADDED_COLUMNS = {
         "week_start": "INTEGER NOT NULL DEFAULT 0",
         "approved": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_sharing": "BOOLEAN NOT NULL DEFAULT 1",
+        "notify_comments": "BOOLEAN NOT NULL DEFAULT 1",
         "timezone": "VARCHAR(64)",
         "platform_prefs": "JSON",
     },

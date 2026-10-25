@@ -5,13 +5,14 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import localtime, plan_tracker, plan_workouts, sync_engine
 from ..coach import PHASES, CoachError, build_facts, generate_plan
-from ..db import Plan, User, get_db
+from ..db import Grant, Plan, PlanComment, User, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
+from ..notifications import notify
 from ..queries import activities_since
 from .preferences import SESSION_TYPES, preferences_out
 
@@ -303,6 +304,11 @@ async def replan(
             "reason": body.reason,
             "keep": keep,
             "so_far": [{"start": w["start"], "phase": w["phase"], **w["summary"]} for w in tracked[:first]],
+            # What the athlete and their coach said about the plan (newest 30).
+            "comments": [
+                {"by": c["role"], "day": c["day"], "text": c["text"]}
+                for c in [{"role": x["role"], "day": x["day"], "text": x["body"]} for x in _comments(db, p, user)][-30:]
+            ],
         },
     }
     facts = build_facts(db, target, allowed_scopes(db, user, p.athlete_id), request, today)
@@ -320,6 +326,123 @@ async def replan(
     return {**plan_out(p, db, full=True), "changed": changed}
 
 
+# ---- Comments ----
+
+
+def _role(p: Plan, user_id: int | None) -> str:
+    return "athlete" if user_id == p.athlete_id else "coach"
+
+
+def comment_out(c: PlanComment, p: Plan, viewer: User, names: dict[int, str]) -> dict:
+    return {
+        "id": c.id,
+        "author": names.get(c.author_id, "Former user"),
+        "role": _role(p, c.author_id),
+        "day": c.day.isoformat() if c.day else None,
+        "body": c.body,
+        "created_at": c.created_at,
+        "edited_at": c.edited_at,
+        "edited_by": names.get(c.edited_by) if c.edited_by else None,
+        # Everyone who can see the plan (the athlete and coaches with the plans scope) can edit and delete.
+        "can_edit": True,
+        "can_delete": True,
+    }
+
+
+def _comments(db: DbSession, p: Plan, viewer: User) -> list[dict]:
+    rows = db.scalars(
+        select(PlanComment).where(PlanComment.plan_id == p.id).order_by(PlanComment.created_at, PlanComment.id)
+    ).all()
+    ids = {c.author_id for c in rows if c.author_id} | {c.edited_by for c in rows if c.edited_by}
+    names = {u.id: u.display_name for u in db.scalars(select(User).where(User.id.in_(ids)))} if ids else {}
+    return [comment_out(c, p, viewer, names) for c in rows]
+
+
+class CommentIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+    day: date | None = None
+
+
+@router.get("/{plan_id}/comments")
+def list_comments(athlete: str, plan_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    return _comments(db, _plan(db, user, athlete, plan_id), user)
+
+
+def _others(db: DbSession, p: Plan, author: User) -> list[User]:
+    """Who hears about a comment: the athlete, and coaches who can see the plan, except the author."""
+    ids = {p.athlete_id} | {
+        g.coach_id
+        for g in db.scalars(select(Grant).where(Grant.athlete_id == p.athlete_id, Grant.status == "active"))
+        if "plans" in (g.scopes or [])
+    }
+    ids.discard(author.id)
+    return list(db.scalars(select(User).where(User.id.in_(ids)))) if ids else []
+
+
+@router.post("/{plan_id}/comments")
+def add_comment(
+    athlete: str,
+    plan_id: int,
+    body: CommentIn,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """The athlete and coaches with the plans scope can comment on the plan or on one of its days."""
+    p = _plan(db, user, athlete, plan_id)
+    if body.day is not None:
+        try:
+            plan_tracker.find_day(p.weeks or [], body.day.isoformat())
+        except KeyError:
+            raise HTTPException(status_code=404, detail="That day is not in this plan") from None
+    c = PlanComment(plan_id=p.id, author_id=user.id, day=body.day, body=body.body.strip())
+    db.add(c)
+    db.commit()
+    where = f" on {body.day.strftime('%a %d %b')}" if body.day else ""
+    path = f"/athletes/{p.athlete_id}/plans/{p.id}"
+    for other in _others(db, p, user):
+        notify(
+            background,
+            other,
+            f"{user.display_name} commented on {p.title}",
+            f'{user.display_name} commented{where} on the training plan "{p.title}":\n\n{c.body}',
+            ("the plan", path),
+            setting="notify_comments",
+        )
+    return _comments(db, p, user)
+
+
+@router.patch("/{plan_id}/comments/{comment_id}")
+def edit_comment(
+    athlete: str,
+    plan_id: int,
+    comment_id: int,
+    body: CommentIn,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    p = _plan(db, user, athlete, plan_id)
+    c = db.get(PlanComment, comment_id)
+    if c is None or c.plan_id != p.id:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    c.body, c.edited_at, c.edited_by = body.body.strip(), utcnow(), user.id
+    db.commit()
+    return _comments(db, p, user)
+
+
+@router.delete("/{plan_id}/comments/{comment_id}")
+def delete_comment(
+    athlete: str, plan_id: int, comment_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    p = _plan(db, user, athlete, plan_id)
+    c = db.get(PlanComment, comment_id)
+    if c is None or c.plan_id != p.id:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    db.delete(c)
+    db.commit()
+    return _comments(db, p, user)
+
+
 @router.delete("/{plan_id}")
 def delete_plan(
     athlete: str,
@@ -333,6 +456,7 @@ def delete_plan(
         raise HTTPException(status_code=403, detail="Only the athlete or the author can delete a plan")
     plan_workouts.plan_deleted(db, p, localtime.today(db.get(User, p.athlete_id)))
     background.add_task(sync_engine.run_due)
+    db.execute(delete(PlanComment).where(PlanComment.plan_id == p.id))
     db.delete(p)
     db.commit()
     return {"ok": True}
