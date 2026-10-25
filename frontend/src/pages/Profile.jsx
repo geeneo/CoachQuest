@@ -56,6 +56,9 @@ export default function Profile() {
             {k === "weight_kg" && user.weight_source === "garmin" && (
               <span className="hint">From Garmin, weighed {dateTime(user.weight_updated_at)}</span>
             )}
+            {user.profile_sources?.[k]?.source === "garmin" && (
+              <span className="hint">From Garmin, {dateTime(user.profile_sources[k].at)}</span>
+            )}
           </label>
         ))}
         <label className="wide">

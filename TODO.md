@@ -27,11 +27,11 @@
       - Garmin wellness goes back day by day, so long ranges are slow; cap it
         or run it overnight.
       - The fitness chart and CTL get more accurate with more history.
-- [ ] **Fill Profile from Garmin and/or Strava.** A "Pull from…" button per
+- [x] **Fill Profile from Garmin and/or Strava.** A "Pull from…" button per
       field (FTP, lactate threshold HR, max HR, weight), with a choice of
       Garmin, Strava or manual. Optionally keep it in sync on every sync.
-      - Weight from Garmin is done. FTP, LTHR and max HR are still to do
-        (`get_cycling_ftp`, `get_lactate_threshold`, `get_heart_rate_zones`).
+      - Done from Garmin: weight, FTP, LTHR and max HR (from Garmin's
+        power and heart-rate zones). Strava is skipped for now: see below.
       - Strava has FTP and weight only when the athlete set them there. It
         needs the `profile:read_all` scope, so Strava users reconnect once.
       - Show where each value came from and when, e.g. "FTP 265 W · Garmin ·
@@ -93,6 +93,28 @@
       Add, rename (click a tag), remove. The AI coach reads tagged activities
       as explained (e.g. a light week marked "illness" is disclosed, not a
       gap in training).
+- [ ] **Training plan tracker** (like the old hub's Training plan page).
+      The AI coach writes plans as structured weeks and days (not just
+      Markdown) so they can be tracked against what was actually done.
+      - Week cards: phase badge (Base / Build / Recovery / Taper / Race),
+        dates, focus note ("build week toward DC"), draft or confirmed,
+        current week highlighted and "today" marked.
+      - Each day:
+        - Session type (Rest, Road, Zwift / MyWhoosh, MTB, E-MTB, Run,
+          Strength…). Click to change.
+        - Description and intensity chips (e.g. "95–105% FTP", "Z2").
+          Click to edit.
+        - Bike / gear.
+        - Actions: route, swap with another day, lock (the AI won't change
+          it when it re-plans), "fits a workout" (indoor workout match).
+      - Plan vs actual: each day is matched to the logged activity.
+        - "Goal met: 120.7 km · 1213 m · 4h55m · RE 169 · 138 W avg".
+        - Or "Not logged" with a "why missed?" dropdown that uses the
+          activity note tags.
+      - Uses weekday preferences, races (event date, target CTL) and note
+        tags. Re-planning keeps locked and past days.
+      - Coaches with the plans scope can view and edit; the athlete sees
+        changes.
 - [ ] **AI coach: assessments of wellness and training progress.** A new
       "AI coach" page per athlete, next to Plans. Same rules as plans:
       CoachQuest computes the facts, Claude writes the words, and only the
@@ -128,7 +150,6 @@
       on the Sharing page
 - [ ] Optional two-factor sign-in (TOTP)
 - [ ] Strava webhooks instead of 6-hourly polling
-- [ ] AI plan → calendar of dated workouts, with plan vs actual
 - [ ] Coach comments on plans
 - [ ] Postgres + Alembic migrations when SQLite gets tight
 - [ ] Ask Strava to raise the shared app's athlete limit (if not every user

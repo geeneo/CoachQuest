@@ -125,6 +125,7 @@ const KIND_LABELS = {
   activities: "Activities (rides, runs, swims)",
   wellness: "Wellness (sleep, HRV, resting HR, Body Battery, stress, steps)",
   weight: "Weight → Profile (latest weigh-in from Garmin or a Garmin Index scale)",
+  thresholds: "Thresholds → Profile (cycling FTP, lactate threshold HR, max HR from your Garmin zones)",
 };
 
 const BACKFILL_CHOICES = [

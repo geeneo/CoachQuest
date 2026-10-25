@@ -122,10 +122,10 @@ def test_garmin_backfill_steps_back_two_weeks(monkeypatch, make_user):
     uid = p.get("/api/auth/me").json()["id"]
     calls = []
 
-    def fake_fetch(tokens, wellness_days, activity_range, want_weight):
+    def fake_fetch(tokens, wellness_days, activity_range, want_weight, want_thresholds=False):
         calls.append((len(wellness_days), activity_range))
         rows = [{"day": d, "resting_hr": 50} for d in wellness_days]
-        return "{}", rows, [], None
+        return "{}", rows, [], None, None
 
     monkeypatch.setattr(garmin, "_fetch", fake_fetch)
     monkeypatch.setattr(backfill, "GARMIN_PAUSE_S", 0)

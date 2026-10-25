@@ -39,7 +39,7 @@ def test_defaults_import_everything_and_dedupe(make_user):
     conns = {c["provider"]: c["options"] for c in p.get("/api/connections").json()["connections"]}
     assert conns == {
         "strava": {"activities": True},
-        "garmin": {"activities": True, "wellness": True, "weight": True},
+        "garmin": {"activities": True, "wellness": True, "weight": True, "thresholds": True},
     }
 
 
@@ -47,7 +47,12 @@ def test_garmin_wellness_only_hides_garmin_activities(make_user):
     p = make_user("a@example.com")
     _seed(p.get("/api/auth/me").json()["id"])
     r = p.patch("/api/connections/garmin/options", json={"activities": False})
-    assert r.status_code == 200 and r.json()["options"] == {"activities": False, "wellness": True, "weight": True}
+    assert r.status_code == 200 and r.json()["options"] == {
+        "activities": False,
+        "wellness": True,
+        "weight": True,
+        "thresholds": True,
+    }
     assert _names(p) == [("strava", "Ride")]
     assert len(p.get("/api/athletes/me/wellness").json()) == 1
 

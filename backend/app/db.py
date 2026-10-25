@@ -50,6 +50,8 @@ class User(Base):
     # Where weight_kg came from ("garmin" | "manual") and when it was measured or entered.
     weight_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     weight_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Where FTP / LTHR / max HR came from: {"ftp_watts": {"source": "garmin", "at": "...", "garmin_seen": 265}}
+    profile_sources: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class Session(Base):
@@ -250,7 +252,7 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 # tables, so add missing columns to existing ones here.
 _ADDED_COLUMNS = {
     "connections": {"options": "JSON", "backfill": "JSON"},
-    "users": {"weight_source": "VARCHAR(20)", "weight_updated_at": "DATETIME"},
+    "users": {"weight_source": "VARCHAR(20)", "weight_updated_at": "DATETIME", "profile_sources": "JSON"},
 }
 
 

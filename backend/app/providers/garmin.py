@@ -18,7 +18,7 @@ import garminconnect
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import sync_options
+from .. import profile_sync, sync_options
 from ..db import Activity, Connection, PendingMfa, User, WellnessDay, utcnow
 from ..fitness import estimate_tss
 from ..security import decrypt_json, encrypt_json
@@ -130,8 +130,61 @@ def latest_weight(data) -> tuple[float, datetime] | None:
     return (kg, when or datetime.now(UTC).replace(tzinfo=None)) if 20 <= kg <= 300 else None
 
 
-def _fetch(tokens: str, wellness_days: list[date], activity_range: tuple[date, date] | None, want_weight: bool):
-    """Blocking Garmin calls; runs in a thread. Returns (tokens, wellness rows, activities, weight)."""
+def _first_number(*candidates):
+    for value in candidates:
+        if isinstance(value, (int, float)) and value > 0:
+            return int(round(value))
+    return None
+
+
+def _by_sport(zones, *sports) -> dict:
+    """Pick the zone settings for the first matching sport (Garmin uses e.g. CYCLING, DEFAULT)."""
+    if not isinstance(zones, list):
+        return {}
+    for sport in sports:
+        for z in zones:
+            if isinstance(z, dict) and str(z.get("sport", "")).upper() == sport:
+                return z
+    return next((z for z in zones if isinstance(z, dict)), {})
+
+
+def parse_thresholds(ftp_reply, power_zones, hr_zones) -> dict:
+    """FTP, LTHR and max HR from Garmin's replies. Missing values come back as None."""
+    if isinstance(ftp_reply, list):
+        ftp_reply = ftp_reply[0] if ftp_reply else {}
+    ftp_reply = ftp_reply if isinstance(ftp_reply, dict) else {}
+    power = _by_sport(power_zones, "CYCLING")
+    hr = _by_sport(hr_zones, "CYCLING", "DEFAULT")
+    ftp = _first_number(ftp_reply.get("functionalThresholdPower"), power.get("functionalThresholdPower"))
+    return {
+        "ftp_watts": ftp if ftp and 50 <= ftp <= 600 else None,
+        "lthr_bpm": _first_number(hr.get("lactateThresholdHeartRateUsed")),
+        "max_hr_bpm": _first_number(hr.get("maxHeartRateUsed")),
+    }
+
+
+def _thresholds(api) -> dict:
+    replies = []
+    for call in (api.get_cycling_ftp, api.get_power_zones, api.get_heart_rate_zones_v2):
+        try:
+            replies.append(call())
+        except Exception as exc:
+            log.debug("%s failed: %s", call.__name__, exc)
+            replies.append(None)
+    return parse_thresholds(*replies)
+
+
+def _fetch(
+    tokens: str,
+    wellness_days: list[date],
+    activity_range: tuple[date, date] | None,
+    want_weight: bool,
+    want_thresholds: bool = False,
+):
+    """Blocking Garmin calls; runs in a thread.
+
+    Returns (tokens, wellness rows, activities, weight, thresholds).
+    """
     api = garminconnect.Garmin()
     api.login(tokenstore=tokens)
     wellness = []
@@ -167,10 +220,11 @@ def _fetch(tokens: str, wellness_days: list[date], activity_range: tuple[date, d
             weight = latest_weight(api.get_latest_weight())
         except Exception as exc:
             log.debug("latest weight failed: %s", exc)
+    thresholds = _thresholds(api) if want_thresholds else None
     activities = []
     if activity_range:
         activities = api.get_activities_by_date(activity_range[0].isoformat(), activity_range[1].isoformat())
-    return api.client.dumps(), wellness, activities, weight
+    return api.client.dumps(), wellness, activities, weight, thresholds
 
 
 def _upsert_activity(db: DbSession, user: User, item: dict) -> None:
@@ -204,13 +258,15 @@ async def sync(db: DbSession, conn: Connection) -> int:
     try:
         tokens = decrypt_json(conn.token_enc)["tokens"]
         opts = sync_options.options(conn)
-        new_tokens, wellness, activities, weight = await asyncio.to_thread(
+        new_tokens, wellness, activities, weight, thresholds = await asyncio.to_thread(
             _fetch,
             tokens,
             days if opts["wellness"] else [],
             (days[0], days[-1]) if opts["activities"] else None,
             opts["weight"],
+            opts["thresholds"],
         )
+
     except Exception as exc:
         conn.status = "error"
         conn.last_error = f"{type(exc).__name__}: {exc}"[:500]
@@ -219,6 +275,8 @@ async def sync(db: DbSession, conn: Connection) -> int:
         return 0
     conn.token_enc = encrypt_json({"tokens": new_tokens})
     _store(db, user, wellness, activities, weight)
+    if thresholds:
+        profile_sync.apply_from_provider(db, user, "garmin", thresholds)
     conn.last_sync_at = utcnow()
     conn.status = "active"
     conn.last_error = None
@@ -264,7 +322,7 @@ async def backfill_step(db: DbSession, conn: Connection, target: date, cursor: d
     wellness_days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
     wellness_days = [d for d in wellness_days if d >= oldest_wellness] if opts["wellness"] else []
     tokens = decrypt_json(conn.token_enc)["tokens"]
-    new_tokens, wellness, activities, _ = await asyncio.to_thread(
+    new_tokens, wellness, activities, _, _ = await asyncio.to_thread(
         _fetch, tokens, wellness_days, (start, end) if opts["activities"] else None, False
     )
     conn.token_enc = encrypt_json({"tokens": new_tokens})

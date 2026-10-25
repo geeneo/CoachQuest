@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from .. import profile_sync
 from ..db import Connection, Grant, User, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
-from ..fitness import estimate_tss
 from ..queries import activities_since, activity_out, load_curve, profile_out, wellness_out, wellness_since
 from .auth import user_out
 
@@ -37,12 +37,9 @@ def update_profile(body: ProfileUpdate, user: User = Depends(current_user), db: 
         # A value typed in by hand wins until Garmin records a newer weigh-in.
         user.weight_source = "manual" if changes["weight_kg"] is not None else None
         user.weight_updated_at = utcnow()
+    profile_sync.mark_manual(user, changes)
     if {"ftp_watts", "lthr_bpm"} & changes.keys():
-        # Thresholds changed, so every activity's TSS changes too.
-        for a in activities_since(db, user.id, datetime(1970, 1, 1)):
-            a.tss, a.tss_method = estimate_tss(
-                a.duration_s, a.norm_power, a.avg_power, a.avg_hr, a.relative_effort, user.ftp_watts, user.lthr_bpm
-            )
+        profile_sync.recalculate_tss(db, user)
     db.commit()
     return user_out(user)
 

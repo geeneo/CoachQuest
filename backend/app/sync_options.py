@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session as DbSession
 
 from .db import Connection
 
-# "weight" copies the latest Garmin weigh-in into the Profile.
-KINDS = {"strava": ("activities",), "garmin": ("activities", "wellness", "weight")}
+# "weight" copies the latest Garmin weigh-in into the Profile; "thresholds" does the same for FTP, LTHR and max HR.
+KINDS = {"strava": ("activities",), "garmin": ("activities", "wellness", "weight", "thresholds")}
 
 
 def options(conn: Connection) -> dict[str, bool]:
