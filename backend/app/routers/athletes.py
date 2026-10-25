@@ -6,11 +6,11 @@
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import profile_sync
+from .. import localtime, profile_sync
 from ..activity_types import CHOICES
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -39,6 +39,14 @@ class ProfileUpdate(BaseModel):
     goal: str | None = Field(default=None, max_length=2000)
     week_start: int | None = Field(default=None, ge=0, le=6)
     notify_sharing: bool | None = None
+    timezone: str | None = Field(default=None, max_length=64)
+
+    @field_validator("timezone")
+    @classmethod
+    def _timezone(cls, v):
+        if v is not None and not localtime.valid(v):
+            raise ValueError("Pick a timezone from the list, e.g. Africa/Johannesburg")
+        return v
 
 
 @router.patch("/me")

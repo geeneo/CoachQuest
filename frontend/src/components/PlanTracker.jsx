@@ -1,7 +1,7 @@
 import { ArrowLeftRight, Lock, Unlock } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../hooks/useApi.js";
-import { api } from "../lib/api.js";
+import { api, download } from "../lib/api.js";
 import { duration } from "../lib/format.js";
 import Markdown from "./Markdown.jsx";
 
@@ -62,6 +62,17 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
         <div className="row">
           <button className="btn" onClick={applyPrefs}>
             Apply weekday preferences to future days
+          </button>
+          <button
+            className="btn"
+            title="Workouts scheduled on the calendar in this plan's dates, as Zwift files"
+            onClick={() =>
+              download(`/api/athletes/${athleteId}/workouts/export.zip?plan_id=${plan.id}`).catch((err) =>
+                setError(err.message),
+              )
+            }
+          >
+            Download plan workouts (ZIP)
           </button>
           <button className="btn primary" onClick={() => setReplan(replan === null ? "" : null)}>
             Re-plan from this week

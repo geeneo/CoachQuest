@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import plan_tracker
+from .. import localtime, plan_tracker
 from ..coach import PHASES, CoachError, build_facts, generate_plan
 from ..db import Plan, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -42,11 +42,14 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
         "structured": bool(p.weeks),
     }
     if full:
-        today = today or date.today()
+        athlete = db.get(User, p.athlete_id)
+        today = today or localtime.today(athlete)
         out.update(content_md=p.content_md, facts=p.facts)
         if p.weeks:
-            start = datetime.combine(date.fromisoformat(p.weeks[0]["start"]), datetime.min.time())
-            out["weeks"] = plan_tracker.with_actuals(p.weeks, activities_since(db, p.athlete_id, start), today)
+            # A day early: a ride late on the first local day can be stored as the day before in UTC.
+            start = datetime.combine(date.fromisoformat(p.weeks[0]["start"]), datetime.min.time()) - timedelta(1)
+            acts = activities_since(db, p.athlete_id, start)
+            out["weeks"] = plan_tracker.with_actuals(p.weeks, acts, today, localtime.zone(athlete.timezone))
     return out
 
 
@@ -82,7 +85,7 @@ def current_plan(athlete: str, user: User = Depends(current_user), db: DbSession
     """The newest structured plan that covers today (or starts within a week), or null."""
     athlete_id = resolve_athlete_id(athlete, user)
     require_scope(db, user, athlete_id, "plans")
-    today = date.today()
+    today = localtime.today(db.get(User, athlete_id))
     rows = db.scalars(
         select(Plan).where(Plan.athlete_id == athlete_id, Plan.start_date.is_not(None)).order_by(Plan.created_at.desc())
     ).all()
@@ -105,7 +108,7 @@ async def create_plan(
     athlete_id = resolve_athlete_id(athlete, user)
     require_scope(db, user, athlete_id, "plans")
     target = db.get(User, athlete_id)
-    monday = plan_tracker.first_week_start(body.start_date, date.today(), target.week_start or 0)
+    monday = plan_tracker.first_week_start(body.start_date, localtime.today(target), target.week_start or 0)
     request = body.model_dump(mode="json", exclude={"title"})
     request["start_date"] = monday.isoformat()
     facts = build_facts(db, target, allowed_scopes(db, user, athlete_id), request)
@@ -229,8 +232,9 @@ def apply_preferences(athlete: str, plan_id: int, user: User = Depends(current_u
     """Set future, unlocked days to the athlete's preferred type for that weekday."""
     p = _plan(db, user, athlete, plan_id)
     weeks = _editable(p)
-    prefs = preferences_out(db.get(User, p.athlete_id))["weekday_prefs"]
-    changed = plan_tracker.apply_preferences(weeks, prefs, date.today())
+    athlete_user = db.get(User, p.athlete_id)
+    prefs = preferences_out(athlete_user)["weekday_prefs"]
+    changed = plan_tracker.apply_preferences(weeks, prefs, localtime.today(athlete_user))
     _save_weeks(db, p, weeks)
     return {**plan_out(p, db, full=True), "changed": changed}
 
@@ -247,7 +251,8 @@ async def replan(
     p = _plan(db, user, athlete, plan_id)
     if not p.weeks:
         raise HTTPException(status_code=400, detail="This older plan has no day-by-day schedule")
-    today = date.today()
+    target = db.get(User, p.athlete_id)
+    today = localtime.today(target)
     weeks = _editable(p)
     first = plan_tracker.replan_from(weeks, today)
     if first == len(weeks):
@@ -269,7 +274,6 @@ async def replan(
             "so_far": [{"start": w["start"], "phase": w["phase"], **w["summary"]} for w in tracked[:first]],
         },
     }
-    target = db.get(User, p.athlete_id)
     facts = build_facts(db, target, allowed_scopes(db, user, p.athlete_id), request, today)
     try:
         answer, model = await generate_plan(db, user, target, facts)

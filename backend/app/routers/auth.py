@@ -53,6 +53,7 @@ def user_out(user: User) -> dict:
         "goal": user.goal,
         "week_start": user.week_start or 0,
         "notify_sharing": user.notify_sharing,
+        "timezone": user.timezone,
     }
 
 

@@ -12,6 +12,7 @@ import Glossary from "./pages/Glossary.jsx";
 import Profile from "./pages/Profile.jsx";
 import Races from "./pages/Races.jsx";
 import Sharing from "./pages/Sharing.jsx";
+import Workouts from "./pages/Workouts.jsx";
 
 export default function App() {
   const { user } = useAuth();
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="athletes" element={<Athletes />} />
         <Route path="athletes/:athleteId" element={<AthleteView />} />
         <Route path="athletes/:athleteId/plans/:planId" element={<PlanView />} />
+        <Route path="workouts" element={<Workouts />} />
         <Route path="races" element={<Races />} />
         <Route path="profile" element={<Profile />} />
         <Route path="glossary" element={<Glossary />} />

@@ -62,6 +62,11 @@ class User(Base):
     # {"daily": bool, "weekly": bool, "email": bool}: scheduled AI coach notes
     ai_settings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     week_start: Mapped[int] = mapped_column(Integer, default=0)  # 0 = Monday ... 6 = Sunday
+    # IANA name, e.g. "Africa/Johannesburg". Decides "today" and which day an activity
+    # (stored in UTC) falls on. None = UTC.
+    timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # {"preferred": ["zwift"], "auto": {"zwift": false}}; see platforms.py
+    platform_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class Session(Base):
@@ -236,6 +241,44 @@ class Plan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class Workout(Base):
+    """A reusable workout in someone's library (see workouts.py for the steps format)."""
+
+    __tablename__ = "workouts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    sport: Mapped[str] = mapped_column(String(20), default="bike")
+    steps: Mapped[list] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ScheduledWorkout(Base):
+    """A workout on an athlete's calendar. A copy of the steps, so editing the library
+    workout later doesn't change what was assigned."""
+
+    __tablename__ = "scheduled_workouts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    assigned_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    template_id: Mapped[int | None] = mapped_column(ForeignKey("workouts.id", ondelete="SET NULL"), nullable=True)
+    # The athlete's local calendar day (in their timezone), not a UTC date.
+    day: Mapped[date] = mapped_column(Date, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    sport: Mapped[str] = mapped_column(String(20), default="bike")
+    steps: Mapped[list] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(20), default="planned")  # planned | skipped | cancelled
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Assessment(Base):
     """AI coach note: a daily readiness check or a weekly review."""
 
@@ -349,6 +392,8 @@ _ADDED_COLUMNS = {
         "week_start": "INTEGER NOT NULL DEFAULT 0",
         "approved": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_sharing": "BOOLEAN NOT NULL DEFAULT 1",
+        "timezone": "VARCHAR(64)",
+        "platform_prefs": "JSON",
     },
 }
 

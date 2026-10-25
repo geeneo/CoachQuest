@@ -55,6 +55,8 @@ class Settings:
     build_commit: str = os.getenv("BUILD_COMMIT", "dev")
     build_time: str = os.getenv("BUILD_TIME", "")
     enable_scheduler: bool = _bool("ENABLE_SCHEDULER", True)
+    # Feature flag for the unofficial MyWhoosh API. Off; nothing uses it until its terms are checked.
+    mywhoosh_experimental: bool = _bool("MYWHOOSH_EXPERIMENTAL", False)
 
     @property
     def db_url(self) -> str:

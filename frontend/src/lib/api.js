@@ -40,3 +40,26 @@ export async function api(path, { method = "GET", body } = {}) {
   }
   return data;
 }
+
+// Download a file from the API (e.g. a .zwo or a ZIP). Errors come back as messages, not as a saved JSON file.
+export async function download(path) {
+  const res = await fetch(path, { credentials: "same-origin", headers: { "X-Requested-With": "CoachQuest" } });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      detail = (await res.json()).detail || detail;
+    } catch {
+      // not JSON
+    }
+    throw new ApiError(res.status, detail);
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "")?.[1] || "download";
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

@@ -189,7 +189,7 @@
       and CoachQuest delivers them to Zwift / MyWhoosh / Garmin where an
       authorised integration allows it, with ZWO file export everywhere
       else.
-      - [ ] **Phase 1 — working MVP:** review the code, a platform-neutral
+      - [x] **Phase 1 — working MVP:** review the code, a platform-neutral
         workout model, the graphical workout builder (with templates,
         TSS/IF estimate and preview chart), the training calendar (built on
         the existing plan tracker), ZWO and plan-ZIP export, and the

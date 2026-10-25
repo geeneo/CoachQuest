@@ -69,7 +69,108 @@ export default function Connections() {
         reload={conns.reload}
       />
       <GarminCard conn={byProvider.garmin} reload={conns.reload} />
+      <ConnectedPlatforms />
     </>
+  );
+}
+
+const PLATFORM_STATUS = {
+  connected: { label: "Connected", cls: "ok" },
+  error: { label: "Needs attention", cls: "bad" },
+  not_connected: { label: "Not connected", cls: "" },
+  export_only: { label: "File download only", cls: "" },
+  not_available: { label: "Not available yet", cls: "" },
+};
+
+// Settings > Connected platforms: every training platform, what CoachQuest can do with it
+// today, and the athlete's choices. Automatic delivery is only offered where it really works.
+function ConnectedPlatforms() {
+  const platforms = useApi("/api/athletes/me/platforms");
+  const [error, setError] = useState(null);
+  const list = platforms.data || [];
+
+  const savePrefs = async (changes) => {
+    setError(null);
+    const preferred = list.filter((p) => p.preferred).map((p) => p.id);
+    const auto = Object.fromEntries(list.filter((p) => p.auto_sync).map((p) => [p.id, true]));
+    const body = { preferred, auto, ...changes(preferred, auto) };
+    try {
+      await api("/api/me/platforms", { method: "PUT", body });
+      platforms.reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const togglePreferred = (id, on) =>
+    savePrefs((preferred) => ({ preferred: on ? [...preferred, id] : preferred.filter((x) => x !== id) }));
+  const toggleAuto = (id, on) => savePrefs((_, auto) => ({ auto: { ...auto, [id]: on } }));
+
+  return (
+    <section className="card" id="platforms">
+      <h2>Connected platforms</h2>
+      <p className="muted small">
+        Where your workouts go and where your rides come from. Workouts you or your coach schedule can be downloaded as
+        Zwift files (.zwo) from the calendar today. Automatic delivery to an account is only switched on for an official,
+        authorised integration, and none is available yet.
+      </p>
+      {error && <div className="error">{error}</div>}
+      {platforms.error && <div className="error">{platforms.error.message}</div>}
+      <div className="table-wrap">
+        <table className="platforms">
+          <thead>
+            <tr>
+              <th>Platform</th>
+              <th>Status</th>
+              <th>Account</th>
+              <th>Last sync</th>
+              <th>Can do</th>
+              <th>I use it</th>
+              <th>Auto-send workouts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((p) => (
+              <tr key={p.id}>
+                <td>
+                  <strong>{p.name}</strong>
+                  {p.experimental && <span className="badge"> Experimental</span>}
+                  <div className="small muted">{p.note}</div>
+                </td>
+                <td>
+                  <span className={`badge ${PLATFORM_STATUS[p.status].cls}`}>{PLATFORM_STATUS[p.status].label}</span>
+                  {p.last_error && <div className="small error-text">{p.last_error}</div>}
+                </td>
+                <td className="small">{p.account || "–"}</td>
+                <td className="small">{p.last_sync_at ? dateTime(p.last_sync_at) : "–"}</td>
+                <td className="small">{p.capabilities.map((c) => c.label).join("; ") || "–"}</td>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`I train on ${p.name}`}
+                    checked={p.preferred}
+                    onChange={(e) => togglePreferred(p.id, e.target.checked)}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`Send workouts to ${p.name} automatically`}
+                    checked={p.auto_sync}
+                    disabled={!p.auto_sync_available}
+                    title={p.auto_sync_available ? "" : "Not available for this platform yet"}
+                    onChange={(e) => toggleAuto(p.id, e.target.checked)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="small muted">
+        Strava and Garmin are connected and disconnected with their cards above. CoachQuest never asks for your password
+        on another platform.
+      </p>
+    </section>
   );
 }
 

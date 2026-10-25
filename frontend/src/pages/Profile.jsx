@@ -28,6 +28,7 @@ export default function Profile() {
     goal: user.goal || "",
     week_start: user.week_start ?? 0,
     notify_sharing: user.notify_sharing ?? true,
+    timezone: user.timezone || "",
     ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, user[k] ?? ""])),
   }));
   const [msg, setMsg] = useState(null);
@@ -41,6 +42,7 @@ export default function Profile() {
       goal: form.goal || null,
       week_start: Number(form.week_start),
       notify_sharing: form.notify_sharing,
+      ...(form.timezone ? { timezone: form.timezone } : {}),
     };
     for (const [k] of NUMBER_FIELDS) body[k] = form[k] === "" ? null : Number(form[k]);
     try {
@@ -84,6 +86,7 @@ export default function Profile() {
           </select>
           <span className="hint">Weekly totals, charts, plans and weekly reviews use this.</span>
         </label>
+        <TimezoneField value={form.timezone} onChange={(timezone) => setForm({ ...form, timezone })} />
         <label className="check wide">
           <input
             type="checkbox"
@@ -260,5 +263,41 @@ function PullFromGarmin({ onPulled }) {
         </ul>
       )}
     </section>
+  );
+}
+
+const BROWSER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const ZONES = (() => {
+  try {
+    return Intl.supportedValuesOf("timeZone");
+  } catch {
+    return [BROWSER_TZ];
+  }
+})();
+
+function TimezoneField({ value, onChange }) {
+  return (
+    <label>
+      My timezone
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {!value && <option value="">Not set (UTC)</option>}
+        {ZONES.map((z) => (
+          <option key={z} value={z}>
+            {z.replaceAll("_", " ")}
+          </option>
+        ))}
+      </select>
+      <span className="hint">
+        Decides which day a ride counts on and what "today" is in plans and the calendar.
+        {value !== BROWSER_TZ && (
+          <>
+            {" "}
+            <button type="button" className="link-btn inline-link" onClick={() => onChange(BROWSER_TZ)}>
+              Use this device's ({BROWSER_TZ})
+            </button>
+          </>
+        )}
+      </span>
+    </label>
   );
 }

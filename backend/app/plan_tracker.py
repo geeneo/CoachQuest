@@ -12,8 +12,10 @@ Whether a day was done is decided here, in code, from the logged activities.
 
 from collections import defaultdict
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 from .activity_types import category
+from .localtime import local_date
 
 WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 GOAL_SHARE = 0.7  # logged time at least 70% of planned time counts as done
@@ -89,11 +91,12 @@ def _actual(acts: list) -> dict:
     }
 
 
-def with_actuals(weeks: list[dict], activities: list, today: date) -> list[dict]:
-    """Copy of the plan with each day's status and what was logged that day."""
+def with_actuals(weeks: list[dict], activities: list, today: date, tz: ZoneInfo | None = None) -> list[dict]:
+    """Copy of the plan with each day's status and what was logged that day (in the athlete's timezone)."""
     by_date = defaultdict(list)
     for a in activities:
-        by_date[a.start_time.date().isoformat()].append(a)
+        day = local_date(a.start_time, tz) if tz else a.start_time.date()
+        by_date[day.isoformat()].append(a)
     out = []
     for week in weeks:
         days = []

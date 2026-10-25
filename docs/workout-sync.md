@@ -344,3 +344,62 @@ again against the code before building.
   - Garmin workout delivery uses the Training API from Garmin's official
     developer program; the current Garmin connection is the unofficial
     library.
+
+## Status
+
+### Phase 1 — done (25 Oct 2026)
+
+- **Workout model** (`backend/app/workouts.py`): steps are warm-up,
+  cool-down, ramp, steady, recovery, intervals (repeat on/off) and free ride.
+  Power is a fraction of FTP, with optional cadence and an on-screen cue per
+  step. Validated on save (max 100 steps, 8 hours). Duration, IF and TSS are
+  estimated in code: normalised power of the target profile, 30 s rolling
+  average. Free-ride time has no target and is left out of TSS. Watts are
+  only worked out for display, from the athlete's FTP.
+- **Database:**
+  - `workouts` is the owner's private library of templates.
+  - `scheduled_workouts` holds the athlete's calendar: a copy of the steps,
+    the local day, status planned / skipped / cancelled, and who assigned
+    it.
+  - Steps are stored as JSON on the workout rather than in a separate table.
+  - New user columns: `timezone` and `platform_prefs`.
+  - The migration runs automatically at start-up.
+- **Builder** (Workouts page): the step editor, a live chart and estimate
+  computed by the API, starter templates, a reusable library, scheduling for
+  yourself or a coached athlete, and .zwo download.
+- **Calendar** (Calendar tab on My training and on each athlete):
+  - Week and day views, with the plan's session and rest days on each day.
+  - Drag a library workout onto a day, or tap it and then tap a day on a
+    phone. Drag a workout to reschedule it.
+  - Skip, cancel or remove a workout.
+  - Status is planned, today, done, partly done or missed. A day's bike
+    rides from Strava or Garmin are matched in the athlete's timezone.
+  - Planned vs actual: duration, completion %, average and normalised
+    power, IF, TSS, heart rate and cadence. Only measured values are shown.
+- **Access:** the athlete, and coaches with the "Training plans" scope. A
+  coach sees platform status but not error text.
+- **Export** (`backend/app/zwo.py`):
+  - One .zwo per workout.
+  - A ZIP for a week, a day or a whole plan, with install steps for Zwift on
+    Windows and Mac.
+  - Every download is labelled as a manual file, not account sync.
+- **Connected platforms** (Connections page): Zwift, MyWhoosh, Garmin,
+  Strava and Intervals.icu, each with status, account, last sync, last
+  error, what CoachQuest can do with it, an "I use it" choice, and an
+  automatic delivery switch. The switch is refused by the API until an
+  authorised integration exists.
+- **Timezone:** set in Profile. It decides "today" and which day a ride
+  counts on, in the calendar and the plan tracker.
+- **Configuration:** `MYWHOOSH_EXPERIMENTAL` (default false). Nothing uses
+  it yet.
+- **Tests:** `backend/tests/test_workouts.py` covers ZWO structure, FTP
+  conversion, interval expansion, the TSS/IF estimate, validation,
+  timezones, access control, rescheduling, statuses, plan ZIP and
+  platforms.
+
+### Still depends on others
+
+- **Zwift:** Training API partner approval (Mode A).
+- **MyWhoosh:** an official API, or a check of the community API's terms.
+- **Garmin:** the official developer program, for sending workouts.
+- **Intervals.icu:** Phase 2 investigation.
