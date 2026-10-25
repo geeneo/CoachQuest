@@ -50,7 +50,9 @@ export default function Activities({ id, editable }) {
   const types = useApi(editable ? "/api/activity-types" : null);
   const [rows, setRows] = useState([]);
   const [error, setError] = useState(null);
-  useEffect(() => setRows(res.data || []), [res.data]);
+  useEffect(() => {
+    setRows(res.data || []);
+  }, [res.data]);
 
   const present = useMemo(() => ["All", ...new Set(rows.map((r) => r.category))], [rows]);
   const shown = rows.filter(

@@ -118,7 +118,7 @@
       - Still to do: "Re-plan from this week" (Claude rewrites the remaining
         weeks, keeping locked and past days) and indoor workout matching
         ("fits a workout").
-- [ ] **AI coach: assessments of wellness and training progress.** A new
+- [x] **AI coach: assessments of wellness and training progress.** A new
       "AI coach" page per athlete, next to Plans. Same rules as plans:
       CoachQuest computes the facts, Claude writes the words, and only the
       scopes granted to the viewer go in.

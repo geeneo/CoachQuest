@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Activities from "../components/ActivitiesTable.jsx";
 import FitnessChart from "../components/FitnessChart.jsx";
+import AiCoach from "../components/AiCoach.jsx";
 import UpcomingRaces from "../components/UpcomingRaces.jsx";
 import VolumeStats from "../components/VolumeStats.jsx";
 import WellnessPanel, { Stat } from "../components/WellnessPanel.jsx";
@@ -12,7 +13,8 @@ import PlansPanel from "./PlansPanel.jsx";
 const TABS = [
   { id: "overview", label: "Overview", needs: ["activities", "fitness", "wellness", "plans"] },
   { id: "activities", label: "Activities", needs: ["activities"] },
-  { id: "plans", label: "Plans & AI coach", needs: ["plans"] },
+  { id: "coach", label: "AI coach", needs: ["plans"] },
+  { id: "plans", label: "Plans", needs: ["plans"] },
 ];
 
 export default function AthleteView({ self }) {
@@ -52,6 +54,7 @@ export default function AthleteView({ self }) {
       </div>
       {current === "overview" && <Overview id={id} scopes={scopes} isMe={!!self} />}
       {current === "activities" && <Activities id={id} editable={!!self} />}
+      {current === "coach" && <AiCoach id={id} isMe={!!self} />}
       {current === "plans" && <PlansPanel id={id} athlete={s} />}
     </>
   );

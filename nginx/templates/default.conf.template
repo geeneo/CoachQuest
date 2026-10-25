@@ -11,7 +11,12 @@
 
 limit_req_zone $binary_remote_addr zone=cq_auth:10m rate=10r/m;
 limit_req_zone $binary_remote_addr zone=cq_api:10m rate=20r/s;
-limit_req_zone $binary_remote_addr zone=cq_ai:10m rate=6r/m;
+# Only requests that start AI work (POST) count against the AI limit.
+map $request_method $cq_ai_key {
+    POST    $binary_remote_addr;
+    default "";
+}
+limit_req_zone $cq_ai_key zone=cq_ai:10m rate=6r/m;
 limit_req_status 429;
 
 upstream cq_api {
@@ -78,8 +83,8 @@ server {
         proxy_pass http://cq_api;
     }
 
-    # ---- AI plan generation: authenticated, slower rate, long timeout ----
-    location ~ ^/api/athletes/[^/]+/plans$ {
+    # ---- AI coach (plans, assessments, chat): authenticated, slower rate, long timeout ----
+    location ~ ^/api/athletes/[^/]+/(plans|coach/assessments|coach/chats)$ {
         auth_request /_auth;
         auth_request_set $cq_user_id $upstream_http_x_auth_user_id;
         error_page 401 = @unauthorized;

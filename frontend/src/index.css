@@ -963,3 +963,71 @@ label.inline.grow input {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* ---- AI coach ---- */
+.readiness {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+.verdict {
+  border-radius: var(--radius);
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border: 1px solid currentColor;
+}
+.verdict strong {
+  font-size: 1.6rem;
+  letter-spacing: 0.05em;
+}
+.verdict span {
+  font-size: 0.85rem;
+}
+.verdict-go {
+  color: var(--accent);
+}
+.verdict-easy {
+  color: var(--warn);
+}
+.verdict-rest {
+  color: var(--danger);
+}
+.review {
+  border-top: 1px solid var(--border);
+  padding: 0.6rem 0;
+}
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 460px;
+  overflow-y: auto;
+  margin-bottom: 0.6rem;
+}
+.bubble {
+  max-width: 85%;
+  padding: 0.55rem 0.8rem;
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+.bubble.user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--c1) 18%, var(--panel-2));
+}
+.bubble .markdown p:first-child {
+  margin-top: 0;
+}
+.bubble .markdown p:last-child {
+  margin-bottom: 0;
+}
+.chat-input input {
+  flex: 1;
+}
+@media (max-width: 768px) {
+  .readiness {
+    grid-template-columns: 1fr;
+  }
+}

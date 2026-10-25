@@ -90,6 +90,29 @@ A user's own app wins over the shared one. Secrets are stored encrypted and
 never shown again. Tokens only refresh with the app that issued them, so after
 switching apps a user disconnects and connects Strava again (the page says so).
 
+### AI coach tab
+
+All AI features follow one rule: CoachQuest computes the facts and decisions,
+and Claude writes the words. Only data the viewer may see goes in.
+
+- **Daily readiness.** Code decides go / easy / rest from last night's HRV,
+  resting HR, sleep and Body Battery against the athlete's own 30-day
+  baseline, plus TSB. Claude explains the verdict and adjusts today's planned
+  session.
+- **Weekly review.** Covers last week's plan vs actual, volume, load,
+  wellness vs the week before, notes, races and progress. Saved week by
+  week.
+- **Progress.** CTL trend, bests and projected CTL at the next race against
+  its target. No AI involved.
+- **Ask the coach.** A chat where Claude looks data up through tools.
+  - Each tool checks the viewer's scope and writes the access log.
+  - Conversations are stored server-side exactly as sent, thinking blocks
+    included.
+- **Automatic notes.** Each athlete can opt in to daily readiness (06:40
+  UTC) and a Monday weekly review, optionally by email.
+- **Cost control.** Admin → Settings → "Monthly AI calls per user", with
+  per-user usage on the Admin page.
+
 ### What to import from where
 
 Each connection has its own import choices on the Connections page:

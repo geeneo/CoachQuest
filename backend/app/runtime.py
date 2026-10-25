@@ -76,6 +76,13 @@ EDITABLE: dict[str, Editable] = {
         choices=("open", "closed"),
         help="Closed: only emails in ADMIN_EMAILS can create accounts.",
     ),
+    "ai_monthly_limit": Editable(
+        "Monthly AI calls per user",
+        "AI coach",
+        pattern=r"[0-9]{1,5}",
+        help="Every request to Claude counts: a plan or note is 1, a chat answer that looks things up 2-4. "
+        "0 means no limit.",
+    ),
     "smtp_host": Editable(
         "SMTP server", "Email", pattern=r"[A-Za-z0-9.\-]{1,253}", help="e.g. smtp.gmail.com or smtp.office365.com."
     ),

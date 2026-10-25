@@ -8,10 +8,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from . import backfill, runtime
+from . import assessments, backfill, runtime
 from .config import check_required, settings
 from .db import Connection, SessionLocal, init_db
-from .routers import admin, athletes, auth, connections, grants, plans, preferences, races
+from .routers import admin, athletes, auth, coach_ai, connections, grants, plans, preferences, races
 from .routers.connections import run_sync
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -41,6 +41,11 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(sync_all, "interval", hours=6, args=["strava"], id="strava")
         scheduler.add_job(sync_all, "cron", hour="6,18", minute=15, args=["garmin"], id="garmin")
         scheduler.add_job(backfill.resume_due, "interval", minutes=15, id="backfill")
+        # After the morning Garmin sync window, so last night's sleep and HRV are in.
+        scheduler.add_job(assessments.run_scheduled, "cron", hour=6, minute=40, args=["daily"], id="ai-daily")
+        scheduler.add_job(
+            assessments.run_scheduled, "cron", day_of_week="mon", hour=6, minute=50, args=["weekly"], id="ai-weekly"
+        )
         scheduler.start()
     yield
     if scheduler.running:
@@ -65,6 +70,7 @@ async def csrf_guard(request: Request, call_next):
 
 for r in (
     admin.router,
+    coach_ai.router,
     auth.router,
     auth.internal,
     connections.router,

@@ -17,7 +17,9 @@ export default function TrainingPreferences() {
   const res = useApi("/api/athletes/me/preferences");
   const [prefs, setPrefs] = useState(null);
   const [error, setError] = useState(null);
-  useEffect(() => setPrefs(res.data), [res.data]);
+  useEffect(() => {
+    setPrefs(res.data);
+  }, [res.data]);
 
   const save = async (body) => {
     setError(null);

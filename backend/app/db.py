@@ -55,6 +55,8 @@ class User(Base):
     # {"mon": ["Rest"], "tue": ["Zwift / indoor"], ...}; see preferences.py
     weekday_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     note_tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # {"daily": bool, "weekly": bool, "email": bool}: scheduled AI coach notes
+    ai_settings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class Session(Base):
@@ -229,6 +231,36 @@ class Plan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class Assessment(Base):
+    """AI coach note: a daily readiness check or a weekly review."""
+
+    __tablename__ = "assessments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None when scheduled
+    kind: Mapped[str] = mapped_column(String(10))  # daily | weekly
+    period_start: Mapped[date] = mapped_column(Date, index=True)
+    verdict: Mapped[str | None] = mapped_column(String(10), nullable=True)  # go | easy | rest (daily)
+    facts: Mapped[dict] = mapped_column(JSON, default=dict)
+    content_md: Mapped[str] = mapped_column(Text)
+    model: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class CoachChat(Base):
+    """An 'Ask the coach' conversation. Messages are stored exactly as sent to Claude."""
+
+    __tablename__ = "coach_chats"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    viewer_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    messages: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class AccessLog(Base):
     """Every time someone other than the athlete reads the athlete's data."""
 
@@ -308,6 +340,7 @@ _ADDED_COLUMNS = {
         "profile_sources": "JSON",
         "weekday_prefs": "JSON",
         "note_tags": "JSON",
+        "ai_settings": "JSON",
     },
 }
 

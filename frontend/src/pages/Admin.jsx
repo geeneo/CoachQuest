@@ -22,6 +22,7 @@ export default function Admin() {
       </p>
       <Settings />
       <Users onChange={() => setRev((r) => r + 1)} />
+      <AiUsage rev={rev} />
       <Storage rev={rev} />
       <section className="card">
         <h2>Usage</h2>
@@ -402,6 +403,48 @@ function Storage({ rev }) {
       <p className="hint">
         Files: {Object.entries(s.data.files).map(([f, n]) => `${f} ${bytes(n)}`).join(" · ")} · in {disk.path}
       </p>
+    </section>
+  );
+}
+
+function AiUsage({ rev }) {
+  const u = useApi(`/api/admin/ai-usage?rev=${rev}`);
+  if (!u.data) return null;
+  return (
+    <section className="card">
+      <h2>AI use this month</h2>
+      <p className="muted small">
+        Limit: {u.data.limit ? `${u.data.limit} requests per user` : "none"} (change it under Settings → AI coach).
+      </p>
+      {u.data.users.length === 0 ? (
+        <p className="muted">No AI requests yet this month.</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th className="num">Requests</th>
+                <th className="num">Tokens in</th>
+                <th className="num">Tokens out</th>
+              </tr>
+            </thead>
+            <tbody>
+              {u.data.users.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.name}</td>
+                  <td className="num">
+                    {r.calls}
+                    {u.data.limit ? ` / ${u.data.limit}` : ""}
+                  </td>
+                  <td className="num">{r.input_tokens.toLocaleString()}</td>
+                  <td className="num">{r.output_tokens.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

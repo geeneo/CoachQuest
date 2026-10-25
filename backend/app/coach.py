@@ -12,10 +12,11 @@ from datetime import date, datetime, timedelta
 
 import anthropic
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
 from . import runtime
-from .db import AiCall, User
+from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import load_curve, profile_out, wellness_since
 from .routers.preferences import SESSION_TYPES, preferences_out
@@ -129,16 +130,44 @@ class CoachError(Exception):
         self.status = status
 
 
+def calls_this_month(db: DbSession, user_id: int) -> int:
+    start = utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return db.scalar(select(func.count()).where(AiCall.user_id == user_id, AiCall.at >= start)) or 0
+
+
+def claude_client(db: DbSession, viewer: User) -> anthropic.AsyncAnthropic:
+    """Checks the key and the viewer's monthly allowance before any call."""
+    api_key = runtime.get("anthropic_api_key")
+    if not api_key:
+        raise CoachError("The AI coach is not configured on this server.", 503)
+    limit = int(runtime.get("ai_monthly_limit") or 0)
+    if limit and calls_this_month(db, viewer.id) >= limit:
+        raise CoachError(f"You've used this month's {limit} AI coach requests. Ask your administrator for more.", 429)
+    return anthropic.AsyncAnthropic(api_key=api_key)
+
+
+def log_call(db: DbSession, viewer: User, athlete: User, model: str, status: str, started: float, usage=None) -> None:
+    db.add(
+        AiCall(
+            user_id=viewer.id,
+            athlete_id=athlete.id,
+            model=model,
+            status=status,
+            latency_ms=int((time.monotonic() - started) * 1000),
+            input_tokens=getattr(usage, "input_tokens", 0) or 0,
+            output_tokens=getattr(usage, "output_tokens", 0) or 0,
+        )
+    )
+    db.commit()
+
+
 async def ask_claude(
     db: DbSession, viewer: User, athlete: User, system: str, content: str, output_format: dict | None = None
 ) -> tuple[str, str]:
     """One Claude call with logging of metadata only. Returns (text, model that served it)."""
-    api_key = runtime.get("anthropic_api_key")
-    if not api_key:
-        raise CoachError("The AI coach is not configured on this server.", 503)
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    client = claude_client(db, viewer)
     started = time.monotonic()
-    status, usage_in, usage_out, model = "ok", 0, 0, runtime.get("anthropic_model")
+    status, usage, model = "ok", None, runtime.get("anthropic_model")
     output_config = {"effort": runtime.get("anthropic_effort")}
     if output_format:
         output_config["format"] = output_format
@@ -153,8 +182,7 @@ async def ask_claude(
             messages=[{"role": "user", "content": content}],
         ) as stream:
             message = await stream.get_final_message()
-        model = message.model
-        usage_in, usage_out = message.usage.input_tokens, message.usage.output_tokens
+        model, usage = message.model, message.usage
         if message.stop_reason == "refusal":
             status = "refusal"
             raise CoachError("The AI coach declined this request. Try rephrasing the notes.", 422)
@@ -177,18 +205,7 @@ async def ask_claude(
         status = "connection"
         raise CoachError("Could not reach the AI coach.") from None
     finally:
-        db.add(
-            AiCall(
-                user_id=viewer.id,
-                athlete_id=athlete.id,
-                model=model,
-                status=status,
-                latency_ms=int((time.monotonic() - started) * 1000),
-                input_tokens=usage_in,
-                output_tokens=usage_out,
-            )
-        )
-        db.commit()
+        log_call(db, viewer, athlete, model, status, started, usage)
 
 
 WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]

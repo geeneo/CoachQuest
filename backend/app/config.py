@@ -43,6 +43,7 @@ class Settings:
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
     anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "high")
+    ai_monthly_limit: str = os.getenv("AI_MONTHLY_LIMIT", "200")
 
     smtp_host: str = os.getenv("SMTP_HOST", "")
     smtp_port: str = os.getenv("SMTP_PORT", "587")

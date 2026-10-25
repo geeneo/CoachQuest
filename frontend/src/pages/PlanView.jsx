@@ -13,7 +13,9 @@ export default function PlanView() {
   const plan = useApi(`/api/athletes/${athleteId}/plans/${planId}`);
   const back = String(user.id) === athleteId ? "/" : `/athletes/${athleteId}`;
   const [p, setP] = useState(null);
-  useEffect(() => setP(plan.data), [plan.data]);
+  useEffect(() => {
+    setP(plan.data);
+  }, [plan.data]);
 
   if (plan.loading && !p) return <p className="muted">Loading…</p>;
   if (plan.error) return <div className="error">{plan.error.message}</div>;

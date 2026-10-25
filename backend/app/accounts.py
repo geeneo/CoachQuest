@@ -13,6 +13,8 @@ from .db import (
     AccessLog,
     Activity,
     AiCall,
+    Assessment,
+    CoachChat,
     Connection,
     Grant,
     OAuthState,
@@ -97,11 +99,13 @@ def delete_account(db: DbSession, user: User) -> None:
         (PasswordReset, PasswordReset.user_id),
         (Plan, Plan.athlete_id),
         (Race, Race.user_id),
+        (Assessment, Assessment.athlete_id),
     ):
         db.execute(delete(model).where(column == uid))
     db.execute(delete(Grant).where(or_(Grant.athlete_id == uid, Grant.coach_id == uid)))
     db.execute(delete(AccessLog).where(or_(AccessLog.athlete_id == uid, AccessLog.viewer_id == uid)))
     db.execute(delete(AiCall).where(or_(AiCall.user_id == uid, AiCall.athlete_id == uid)))
+    db.execute(delete(CoachChat).where(or_(CoachChat.athlete_id == uid, CoachChat.viewer_id == uid)))
     # Plans this user wrote for other athletes stay with those athletes.
     db.execute(update(Plan).where(Plan.author_id == uid).values(author_id=None))
     db.delete(user)

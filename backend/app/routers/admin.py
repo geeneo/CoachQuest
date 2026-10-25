@@ -13,7 +13,19 @@ from sqlalchemy.orm import Session as DbSession
 
 from .. import accounts, mailer, runtime
 from ..config import settings
-from ..db import AccessLog, Activity, AiCall, Connection, Grant, Plan, Session, User, WellnessDay, get_db
+from ..db import (
+    AccessLog,
+    Activity,
+    AiCall,
+    Connection,
+    Grant,
+    Plan,
+    Session,
+    User,
+    WellnessDay,
+    get_db,
+    utcnow,
+)
 from ..deps import admin_user
 
 log = logging.getLogger("coachquest.admin")
@@ -37,6 +49,29 @@ def stats(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
             "input": db.scalar(select(func.coalesce(func.sum(AiCall.input_tokens), 0))),
             "output": db.scalar(select(func.coalesce(func.sum(AiCall.output_tokens), 0))),
         },
+    }
+
+
+@router.get("/ai-usage")
+def ai_usage(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """AI calls and tokens per user this month, against the monthly limit."""
+    start = utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    rows = db.execute(
+        select(
+            User.id,
+            User.display_name,
+            func.count(AiCall.id),
+            func.coalesce(func.sum(AiCall.input_tokens), 0),
+            func.coalesce(func.sum(AiCall.output_tokens), 0),
+        )
+        .join(AiCall, AiCall.user_id == User.id)
+        .where(AiCall.at >= start)
+        .group_by(User.id)
+        .order_by(func.count(AiCall.id).desc())
+    ).all()
+    return {
+        "limit": int(runtime.get("ai_monthly_limit") or 0),
+        "users": [{"id": r[0], "name": r[1], "calls": r[2], "input_tokens": r[3], "output_tokens": r[4]} for r in rows],
     }
 
 
