@@ -9,6 +9,9 @@ const ERRORS = {
   state: "The Strava link expired or did not match your session. Try again.",
   denied: "Strava access was not granted.",
   strava: "Strava did not accept the link. Check that activity access is ticked.",
+  session:
+    `Strava sent you back, but you weren't signed in on ${window.location.host} at that moment. ` +
+    "Make sure you sign in on this exact address (not the server's IP), then click Connect with Strava again.",
 };
 
 export default function Connections() {

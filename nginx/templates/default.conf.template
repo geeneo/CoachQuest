@@ -23,6 +23,8 @@ server {
     listen 8080;
     server_name _;
     server_tokens off;
+    # Redirects stay relative, so they keep the outer proxy's https host and port.
+    absolute_redirect off;
     client_max_body_size 1m;
 
     root /usr/share/nginx/html;
@@ -86,6 +88,20 @@ server {
         proxy_set_header X-Auth-User-Id $cq_user_id;
         proxy_read_timeout 300s;
         proxy_pass http://cq_api;
+    }
+
+    # ---- Strava sends the browser back here; without a session, show a page, not JSON ----
+    location = /api/connections/strava/callback {
+        auth_request /_auth;
+        auth_request_set $cq_user_id $upstream_http_x_auth_user_id;
+        error_page 401 = @strava_no_session;
+        include /etc/nginx/conf.d/cq_proxy.inc;
+        proxy_set_header X-Auth-User-Id $cq_user_id;
+        proxy_pass http://cq_api;
+    }
+
+    location @strava_no_session {
+        return 302 /connections?error=session;
     }
 
     # ---- everything else under /api requires a valid session ----
