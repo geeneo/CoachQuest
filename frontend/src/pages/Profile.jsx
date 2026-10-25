@@ -1,4 +1,5 @@
 import { useState } from "react";
+import TrainingPreferences from "../components/TrainingPreferences.jsx";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { dateTime } from "../lib/format.js";
@@ -69,6 +70,7 @@ export default function Profile() {
         {msg?.error && <div className="error wide">{msg.error}</div>}
         <button className="btn primary">Save</button>
       </form>
+      <TrainingPreferences />
       <Appearance />
       <ChangePassword />
       <section className="card">

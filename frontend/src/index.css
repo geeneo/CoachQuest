@@ -700,3 +700,53 @@ code {
 .stats.race-cards {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
+
+.weekday-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.weekday-row {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+.weekday-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.chip.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding-right: 0.35rem;
+}
+.tag-name,
+.tag-x {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+}
+.tag-x {
+  color: var(--muted);
+}
+.tag-x:hover {
+  color: var(--danger);
+}
+.tag-edit {
+  width: 140px;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+}
+.weekday-grid .chip {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.55rem;
+}
+.weekday-grid .chips {
+  gap: 0.25rem;
+}

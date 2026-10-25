@@ -18,6 +18,7 @@ from . import runtime
 from .db import AiCall, User
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import load_curve, profile_out, wellness_since
+from .routers.preferences import preferences_out
 from .routers.races import race_out, upcoming
 
 log = logging.getLogger("coachquest.ai")
@@ -36,6 +37,10 @@ How to write the plan:
 recovery first when fatigue is flagged). Don't invent flags of your own from missing data.
 - If a data category is missing because it was not shared, say once what that limits and move on.
 - Fit the plan inside the requested weekly hours and available days.
+- When `weekday_preferences` is given, put each session on a day whose preferred types include it, and keep
+  "Rest" days as rest unless the request says otherwise.
+- An activity with a `note` (e.g. illness, travel, mechanical) explains itself: treat a light or missed
+  week with such notes as disclosed, not as lost fitness to chase.
 - Give intensities as zones (Z1-Z5) and, when FTP or LTHR is known, as watts or bpm ranges.
 - Lay out the first two weeks day by day, and the remaining weeks as their weekly structure and \
 key sessions. Include recovery weeks where they belong.
@@ -78,6 +83,7 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
                 "avg_hr": a.avg_hr,
                 "norm_power": a.norm_power,
                 "tss": a.tss,
+                **({"note": a.note_tag} if a.note_tag else {}),
             }
             for a in acts
             if a.start_time >= cutoff
@@ -100,6 +106,8 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
             },
         }
     if "plans" in scopes:
+        prefs = preferences_out(athlete)
+        facts["weekday_preferences"] = {d: t for d, t in prefs["weekday_prefs"].items() if t}
         facts["upcoming_races"] = [
             {k: v for k, v in race_out(r, today).items() if k not in ("id", "active")}
             for r in upcoming(db, athlete.id, today)

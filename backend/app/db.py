@@ -52,6 +52,9 @@ class User(Base):
     weight_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Where FTP / LTHR / max HR came from: {"ftp_watts": {"source": "garmin", "at": "...", "garmin_seen": 265}}
     profile_sources: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # {"mon": ["Rest"], "tue": ["Zwift / indoor"], ...}; see preferences.py
+    weekday_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    note_tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
 
 class Session(Base):
@@ -295,7 +298,13 @@ _ADDED_COLUMNS = {
         "race_id": "INTEGER",
         "note_tag": "VARCHAR(40)",
     },
-    "users": {"weight_source": "VARCHAR(20)", "weight_updated_at": "DATETIME", "profile_sources": "JSON"},
+    "users": {
+        "weight_source": "VARCHAR(20)",
+        "weight_updated_at": "DATETIME",
+        "profile_sources": "JSON",
+        "weekday_prefs": "JSON",
+        "note_tags": "JSON",
+    },
 }
 
 

@@ -82,12 +82,12 @@
         "Upcoming races" on My training, and the AI coach (event date and
         target CTL go into plans and assessments).
       - Coaches see races with the plans scope.
-- [ ] **Training preferences: weekday riding preferences.** One row per day
+- [x] **Training preferences: weekday riding preferences.** One row per day
       (Mon–Sun), choose one or more: Rest, E-MTB, MTB, Road, Hill repeats,
       Zwift / indoor, Treadmill run, Outdoor run, Race. Other sports can be
       added. The AI coach reads this when planning (it replaces the plan
       form's "training days"). Option to apply it to weeks already planned.
-- [ ] **Training preferences: activity note tags.** Each user manages their
+- [x] **Training preferences: activity note tags.** Each user manages their
       own preset tags for the Recent activities "Note" dropdown: illness,
       mechanical, travel, weather, adventure, group, solo, wind, work, other…
       Add, rename (click a tag), remove. The AI coach reads tagged activities
