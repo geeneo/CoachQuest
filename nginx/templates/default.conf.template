@@ -1,0 +1,119 @@
+# CoachQuest reverse proxy: the authentication layer.
+#
+# Every /api/ request except the public auth endpoints goes through
+# `auth_request /_auth` first. /_auth asks the API's /internal/auth/verify
+# whether the session cookie is valid. On 200, nginx forwards the request
+# with X-Auth-User-Id plus X-Proxy-Secret; on 401 the request never reaches
+# the API. Identity headers sent by the client are always overwritten.
+#
+# ${PROXY_SHARED_SECRET} and ${API_UPSTREAM} are filled in from the
+# environment by the nginx image's envsubst step when the container starts.
+
+limit_req_zone $binary_remote_addr zone=cq_auth:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=cq_api:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=cq_ai:10m rate=6r/m;
+limit_req_status 429;
+
+upstream cq_api {
+    server ${API_UPSTREAM};
+    keepalive 16;
+}
+
+server {
+    listen 8080;
+    server_name _;
+    server_tokens off;
+    client_max_body_size 1m;
+
+    root /usr/share/nginx/html;
+
+    # Use the client IP set by an outer proxy / tunnel, if there is one.
+    # set_real_ip_from 172.16.0.0/12;
+    # real_ip_header X-Forwarded-For;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "same-origin" always;
+    add_header Permissions-Policy "geolocation=(), camera=(), microphone=()" always;
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    # Turn on once the site is only reachable over HTTPS:
+    # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # ---- internal: session check used by auth_request ----
+    location = /_auth {
+        internal;
+        proxy_pass http://cq_api/internal/auth/verify;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header X-Original-Method $request_method;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header X-Proxy-Secret "${PROXY_SHARED_SECRET}";
+        proxy_set_header X-Auth-User-Id "";
+    }
+
+    # Never reachable from outside, even if someone guesses the path.
+    location /internal/ {
+        return 404;
+    }
+
+    # ---- public API: login / register / logout / health ----
+    location ~ ^/api/auth/(login|register)$ {
+        limit_req zone=cq_auth burst=5 nodelay;
+        include /etc/nginx/conf.d/cq_proxy.inc;
+        proxy_set_header X-Auth-User-Id "";
+        proxy_pass http://cq_api;
+    }
+
+    location ~ ^/api/(auth/logout|health)$ {
+        include /etc/nginx/conf.d/cq_proxy.inc;
+        proxy_set_header X-Auth-User-Id "";
+        proxy_pass http://cq_api;
+    }
+
+    # ---- AI plan generation: authenticated, slower rate, long timeout ----
+    location ~ ^/api/athletes/[^/]+/plans$ {
+        auth_request /_auth;
+        auth_request_set $cq_user_id $upstream_http_x_auth_user_id;
+        error_page 401 = @unauthorized;
+        limit_req zone=cq_ai burst=2 nodelay;
+        include /etc/nginx/conf.d/cq_proxy.inc;
+        proxy_set_header X-Auth-User-Id $cq_user_id;
+        proxy_read_timeout 300s;
+        proxy_pass http://cq_api;
+    }
+
+    # ---- everything else under /api requires a valid session ----
+    location /api/ {
+        auth_request /_auth;
+        auth_request_set $cq_user_id $upstream_http_x_auth_user_id;
+        error_page 401 = @unauthorized;
+        limit_req zone=cq_api burst=40 nodelay;
+        include /etc/nginx/conf.d/cq_proxy.inc;
+        proxy_set_header X-Auth-User-Id $cq_user_id;
+        proxy_read_timeout 120s;
+        proxy_pass http://cq_api;
+    }
+
+    location @unauthorized {
+        default_type application/json;
+        return 401 '{"detail":"Not authenticated"}';
+    }
+
+    # ---- single-page app ----
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    location / {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "same-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        try_files $uri /index.html;
+    }
+}

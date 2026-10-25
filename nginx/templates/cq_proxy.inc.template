@@ -1,0 +1,9 @@
+# Shared proxy settings for every location that talks to the API.
+# Rendered by envsubst to /etc/nginx/conf.d/cq_proxy.inc (not *.conf, so it is only used where included).
+proxy_http_version 1.1;
+proxy_set_header Connection "";
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Proxy-Secret "${PROXY_SHARED_SECRET}";

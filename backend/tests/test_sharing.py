@@ -1,0 +1,100 @@
+from datetime import datetime, timedelta
+
+from app.db import Activity, SessionLocal, WellnessDay
+
+
+def _seed(athlete_id: int):
+    db = SessionLocal()
+    db.add(
+        Activity(
+            user_id=athlete_id,
+            source="strava",
+            external_id="1",
+            name="Ride",
+            sport="Ride",
+            start_time=datetime.now() - timedelta(days=1),
+            duration_s=3600,
+            distance_m=30000,
+            tss=60,
+        )
+    )
+    db.add(WellnessDay(user_id=athlete_id, day=datetime.now().date(), resting_hr=48, hrv_ms=70))
+    db.commit()
+    db.close()
+
+
+def _setup(make_user, scopes):
+    athlete = make_user("athlete@example.com", "Athlete")
+    coach = make_user("coach@example.com", "Coach")
+    athlete_id = athlete.get("/api/auth/me").json()["id"]
+    _seed(athlete_id)
+    g = athlete.post("/api/grants", json={"coach_email": "coach@example.com", "scopes": scopes})
+    assert g.status_code == 200, g.text
+    return athlete, coach, athlete_id, g.json()["id"]
+
+
+def test_pending_grant_gives_no_access(make_user):
+    _, coach, athlete_id, _ = _setup(make_user, ["activities"])
+    assert coach.get(f"/api/athletes/{athlete_id}/activities").status_code == 404
+
+
+def test_coach_sees_only_granted_scopes(make_user):
+    athlete, coach, athlete_id, grant_id = _setup(make_user, ["activities"])
+    assert coach.post(f"/api/grants/{grant_id}/accept").status_code == 200
+    r = coach.get(f"/api/athletes/{athlete_id}/activities")
+    assert r.status_code == 200 and len(r.json()) == 1
+    assert coach.get(f"/api/athletes/{athlete_id}/wellness").status_code == 404
+    assert coach.get(f"/api/athletes/{athlete_id}/fitness").status_code == 404
+    assert [a["id"] for a in coach.get("/api/athletes").json()] == [athlete_id]
+    log = athlete.get("/api/grants/access-log").json()
+    assert log[0]["viewer"] == "Coach" and log[0]["resource"] == "activities"
+
+
+def test_athlete_changes_scopes_and_revokes(make_user):
+    athlete, coach, athlete_id, grant_id = _setup(make_user, ["activities"])
+    coach.post(f"/api/grants/{grant_id}/accept")
+    assert coach.patch(f"/api/grants/{grant_id}", json={"scopes": ["wellness"]}).status_code == 403
+    assert athlete.patch(f"/api/grants/{grant_id}", json={"scopes": ["wellness"]}).status_code == 200
+    assert coach.get(f"/api/athletes/{athlete_id}/wellness").status_code == 200
+    assert coach.get(f"/api/athletes/{athlete_id}/activities").status_code == 404
+    athlete.delete(f"/api/grants/{grant_id}")
+    assert coach.get(f"/api/athletes/{athlete_id}/wellness").status_code == 404
+
+
+def test_unknown_scope_rejected(make_user):
+    athlete = make_user("athlete@example.com")
+    make_user("coach@example.com")
+    r = athlete.post("/api/grants", json={"coach_email": "coach@example.com", "scopes": ["everything"]})
+    assert r.status_code == 422
+
+
+def test_stranger_cannot_read(make_user):
+    _, _, athlete_id, _ = _setup(make_user, ["activities"])
+    stranger = make_user("stranger@example.com")
+    assert stranger.get(f"/api/athletes/{athlete_id}").status_code == 404
+    assert stranger.get(f"/api/athletes/{athlete_id}/activities").status_code == 404
+
+
+def test_plan_prompt_contains_only_shared_data(make_user, monkeypatch):
+    seen = {}
+
+    async def fake_generate(db, viewer, athlete, facts):
+        seen.update(facts)
+        return "# Plan", "claude-test"
+
+    monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
+    athlete, coach, athlete_id, grant_id = _setup(make_user, ["activities", "plans"])
+    coach.post(f"/api/grants/{grant_id}/accept")
+    r = coach.post(f"/api/athletes/{athlete_id}/plans", json={"title": "Base", "goal": "Gran fondo", "weeks": 4})
+    assert r.status_code == 200, r.text
+    assert "recent_activities" in seen
+    assert "wellness" not in seen and "load" not in seen
+    assert r.json()["content_md"] == "# Plan"
+    assert len(athlete.get("/api/athletes/me/plans").json()) == 1
+
+
+def test_plans_need_plans_scope(make_user):
+    _, coach, athlete_id, grant_id = _setup(make_user, ["activities"])
+    coach.post(f"/api/grants/{grant_id}/accept")
+    r = coach.post(f"/api/athletes/{athlete_id}/plans", json={"title": "x", "goal": "y"})
+    assert r.status_code == 404

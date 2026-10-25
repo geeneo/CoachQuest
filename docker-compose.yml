@@ -1,0 +1,35 @@
+# Production stack. Works with `docker compose` and as a Portainer stack.
+# Every value comes from .env (or Portainer's stack environment variables).
+# Images are built on the server by build.sh, so pull_policy is never.
+
+name: ${COMPOSE_PROJECT:-coachquest}
+
+services:
+  api:
+    image: ${APP_NAME:-coachquest}-api:latest
+    pull_policy: never
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ${DATA_PATH:-./data}:/data
+    networks: [internal]
+    # No ports: the API is reachable only through the proxy.
+
+  proxy:
+    image: ${APP_NAME:-coachquest}-proxy:latest
+    pull_policy: never
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:?set PROXY_SHARED_SECRET in .env}
+      API_UPSTREAM: api:8000
+      # Only these two variables are substituted into the nginx templates.
+      NGINX_ENVSUBST_FILTER: "^(PROXY_SHARED_SECRET|API_UPSTREAM)$$"
+    ports:
+      - "${APP_PORT:-3040}:8080"
+    networks: [internal]
+
+networks:
+  internal:

@@ -1,0 +1,46 @@
+import { ArrowLeft } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
+import Markdown from "../components/Markdown.jsx";
+import { useApi } from "../hooks/useApi.js";
+import { useAuth } from "../lib/auth.jsx";
+import { dateTime } from "../lib/format.js";
+
+export default function PlanView() {
+  const { athleteId, planId } = useParams();
+  const { user } = useAuth();
+  const plan = useApi(`/api/athletes/${athleteId}/plans/${planId}`);
+  const back = String(user.id) === athleteId ? "/" : `/athletes/${athleteId}`;
+
+  if (plan.loading) return <p className="muted">Loading…</p>;
+  if (plan.error) return <div className="error">{plan.error.message}</div>;
+  const p = plan.data;
+  return (
+    <>
+      <Link to={back} className="small">
+        <ArrowLeft size={14} /> Back
+      </Link>
+      <h1>{p.title}</h1>
+      <p className="muted small">
+        {p.request.goal} · {p.request.weeks} weeks · {p.request.hours_per_week} h/week · by {p.author} ·{" "}
+        {dateTime(p.created_at)} · {p.model}
+      </p>
+      {p.facts?.flags?.length > 0 && (
+        <div className="card flags">
+          <strong>Readiness flags (computed from data)</strong>
+          <ul>
+            {p.facts.flags.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <article className="card">
+        <Markdown>{p.content_md}</Markdown>
+      </article>
+      <details className="card">
+        <summary>Data sent to the AI coach</summary>
+        <pre className="facts">{JSON.stringify(p.facts, null, 2)}</pre>
+      </details>
+    </>
+  );
+}
