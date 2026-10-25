@@ -25,6 +25,8 @@ SESSION_TYPES = (
     "Treadmill run",
     "Outdoor run",
     "Trail run",
+    "Walk",
+    "Hike",
     "Swim",
     "Strength",
     "Yoga / mobility",

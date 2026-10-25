@@ -63,3 +63,9 @@ def test_coach_needs_plans_scope(make_user):
     g = athlete.post("/api/grants", json={"coach_email": "c@example.com", "scopes": ["activities"]}).json()
     coach.post(f"/api/grants/{g['id']}/accept")
     assert coach.get(f"/api/athletes/{aid}/preferences").status_code == 404
+
+
+def test_walk_and_hike_are_session_types(make_user):
+    p = make_user("w@example.com")
+    r = p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"sun": ["Walk", "Hike"]}})
+    assert r.status_code == 200 and r.json()["weekday_prefs"]["sun"] == ["Walk", "Hike"]
