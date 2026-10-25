@@ -165,6 +165,24 @@
     sharing.
   - Each person can turn these off in Profile.
   - Needs email (SMTP) set up.
+- [ ] **Training plan page layout like the old hub** (screenshot 25 Oct).
+      - A "This week — Week 4" heading above the current week, and the plan
+        title and length under the page title ("8-week Old Mutual Wealth
+        Double Century plan").
+      - Week header: phase badge, dates, then "DRAFT — focus text — review
+        and adjust" on one line. Click the focus text to edit it.
+      - One row per day: weekday on the left, with a coloured bar showing the
+        day's state (rest, done, missed, planned).
+      - A narrow column per day holding the type badge (with an icon: Rest,
+        Zwift, Road…), the bike under it (e.g. "Trek Domane SLR6"), and
+        stacked small buttons: route, MyWhoosh, fits a workout, swap, lock.
+      - Indoor days show the MyWhoosh and "fits a workout" buttons (indoor
+        workout matching).
+      - On the right: the full description, then intensity chips with icons
+        (⚡ 95–105% FTP, ❤ Z2), then "✓ Goal met · Logged: 120.7km · 1213m ·
+        4h55m · RE 169 · 138W avg · 122bpm avg (Ride)", or "✗ Not logged"
+        with the "why missed?" dropdown.
+      - Compact, so a whole week fits on one screen.
 
 ## Later
 
