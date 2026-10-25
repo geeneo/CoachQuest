@@ -1,5 +1,6 @@
 """Link and unlink Strava and Garmin."""
 
+import logging
 import secrets
 from datetime import timedelta
 
@@ -14,6 +15,8 @@ from ..db import Activity, Connection, OAuthState, SessionLocal, User, UserStrav
 from ..deps import current_user
 from ..providers import garmin, strava
 from ..security import encrypt_json
+
+log = logging.getLogger("coachquest.connections")
 
 router = APIRouter(prefix="/api/connections", tags=["connections"])
 
@@ -117,7 +120,11 @@ async def strava_callback(
         return RedirectResponse("/connections?error=denied", status_code=303)
     try:
         conn = await strava.exchange_code(db, user, code, scope)
+    except strava.StravaLinkError as exc:
+        log.warning("Strava link failed for user %s: %s", user.id, exc)
+        return RedirectResponse(f"/connections?error={exc.reason}", status_code=303)
     except Exception:
+        log.exception("Strava link failed for user %s", user.id)
         return RedirectResponse("/connections?error=strava", status_code=303)
     background.add_task(run_sync, conn.id)
     return RedirectResponse("/connections?connected=strava", status_code=303)

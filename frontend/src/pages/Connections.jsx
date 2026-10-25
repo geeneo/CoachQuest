@@ -8,7 +8,17 @@ import { dateTime } from "../lib/format.js";
 const ERRORS = {
   state: "The Strava link expired or did not match your session. Try again.",
   denied: "Strava access was not granted.",
-  strava: "Strava did not accept the link. Check that activity access is ticked.",
+  strava: "Strava did not accept the link. Try again; if it keeps failing, the server log (api container) has the details.",
+  scope:
+    "Strava was connected without access to your activities. Click Connect with Strava again and leave " +
+    "\"View data about your activities\" ticked.",
+  secret:
+    "Strava rejected the Client Secret. Copy the Client Secret from strava.com/settings/api again " +
+    "(the 40-character value, not the access or refresh token) into the Strava settings here, then reconnect.",
+  client_id: "Strava rejected the Client ID. Check it is the short number at the top of strava.com/settings/api.",
+  code: "Strava's one-time code had already been used or expired. Click Connect with Strava again (don't reload the return page).",
+  network: "The server could not reach strava.com. Check the server's internet access and try again.",
+  no_app: "No Strava API app is set up yet. Add one below, then connect.",
   session:
     `Strava sent you back, but you weren't signed in on ${window.location.host} at that moment. ` +
     "Make sure you sign in on this exact address (not the server's IP), then click Connect with Strava again.",

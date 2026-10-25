@@ -37,6 +37,30 @@ class StravaApp:
     own: bool  # the user's own app, not the server-wide one
 
 
+class StravaLinkError(Exception):
+    """Linking failed. `reason` is a short code the Connections page explains."""
+
+    def __init__(self, reason: str, detail: str = ""):
+        super().__init__(f"{reason}: {detail}" if detail else reason)
+        self.reason = reason
+
+
+def _token_error(resp: httpx.Response) -> StravaLinkError:
+    """Turn Strava's token endpoint error into a reason the user can act on."""
+    try:
+        fields = {e.get("field") for e in resp.json().get("errors", [])}
+    except ValueError:
+        fields = set()
+    detail = f"HTTP {resp.status_code}: {resp.text[:300]}"
+    if "client_secret" in fields:
+        return StravaLinkError("secret", detail)
+    if "client_id" in fields:
+        return StravaLinkError("client_id", detail)
+    if "code" in fields:
+        return StravaLinkError("code", detail)
+    return StravaLinkError("strava", detail)
+
+
 class StravaAppChanged(Exception):
     """The app that issued this connection's tokens is no longer configured."""
 
@@ -95,21 +119,25 @@ def _store_tokens(conn: Connection, payload: dict, client_id: str) -> None:
 
 async def exchange_code(db: DbSession, user: User, code: str, granted_scope: str) -> Connection:
     if "activity:read" not in granted_scope:
-        raise ValueError("Strava access to activities was not granted.")
+        raise StravaLinkError("scope", f"granted scope was {granted_scope!r}")
     app = app_for(db, user.id)
     if app is None:
-        raise ValueError("No Strava API app configured.")
-    async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.post(
-            TOKEN_URL,
-            data={
-                "client_id": app.client_id,
-                "client_secret": app.client_secret,
-                "code": code,
-                "grant_type": "authorization_code",
-            },
-        )
-    resp.raise_for_status()
+        raise StravaLinkError("no_app")
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                TOKEN_URL,
+                data={
+                    "client_id": app.client_id,
+                    "client_secret": app.client_secret,
+                    "code": code,
+                    "grant_type": "authorization_code",
+                },
+            )
+    except httpx.RequestError as exc:
+        raise StravaLinkError("network", repr(exc)) from exc
+    if resp.is_error:
+        raise _token_error(resp)
     payload = resp.json()
     conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "strava"))
     if conn is None:
