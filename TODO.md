@@ -183,32 +183,29 @@
         4h55m · RE 169 · 138W avg · 122bpm avg (Ride)", or "✗ Not logged"
         with the "why missed?" dropdown.
       - Compact, so a whole week fits on one screen.
-- [ ] **Multi-platform workout sync (Zwift, MyWhoosh).** Coaches build
-      structured cycling workouts, schedule them for an athlete, and, where an
-      authorised integration allows it, CoachQuest delivers them to the
-      athlete's training platform with no manual file upload.
-      - **Review first.** Reuse the existing pieces: plan days, the plans
-        scope, coach/athlete grants, Connections, styling. Check the Garmin
-        and Strava sync so a workout ridden on Zwift doesn't import twice.
-        Write an implementation plan before any big architectural change.
-      - **Settings → Connected Platforms.** For each platform show:
-        connection status, the athlete's account on that platform, last
-        successful sync, last error, and what it can do.
-
-        | Platform | Integration |
-        |---|---|
-        | Zwift | Official Training API once approved; ZWO file export until then |
-        | MyWhoosh | Official integration if one exists; an experimental API behind a feature flag |
-        | Garmin | Reuse the existing connection; send workouts only where authorised |
-        | Strava | Reuse the existing activity integration |
-
-      - Notes:
-        - Zwift's API needs a partner application and approval, so ZWO
-          export ships first.
-        - MyWhoosh has no public workout API as far as we know. Plan on
-          file export unless they offer one.
-        - This replaces the plan tracker's "MyWhoosh" and "fits a workout"
-          buttons idea: indoor plan days become real workouts.
+- [ ] **Multi-platform workout sync (Zwift, MyWhoosh, Intervals.icu).**
+      Full spec: [docs/workout-sync.md](docs/workout-sync.md). Coaches build
+      structured cycling workouts, schedule them on the athlete's calendar,
+      and CoachQuest delivers them to Zwift / MyWhoosh / Garmin where an
+      authorised integration allows it, with ZWO file export everywhere
+      else.
+      - [ ] **Phase 1 — working MVP:** review the code, a platform-neutral
+        workout model, the graphical workout builder (with templates,
+        TSS/IF estimate and preview chart), the training calendar (built on
+        the existing plan tracker), ZWO and plan-ZIP export, and the
+        Settings → Connected Platforms page.
+      - [ ] **Phase 2 — integration framework:** provider adapters, a
+        background sync queue with retries and history, sync errors shown
+        to the athlete, Intervals.icu investigation, tests against mocked
+        platform APIs.
+      - [ ] **Phase 3 — automatic delivery:** Zwift official API once
+        approved, MyWhoosh if its terms allow, automatic scheduling,
+        completion data, planned vs actual analysis.
+      - This replaces the training plan page's "MyWhoosh" and "fits a
+        workout" buttons: indoor plan days link to real workouts.
+      - Needs from outside: Zwift partner approval; a check of MyWhoosh's
+        terms; possibly Garmin's official developer program for sending
+        workouts to Garmin.
 
 ## Later
 
