@@ -661,3 +661,42 @@ code {
   color: var(--muted);
   font-size: 0.75rem;
 }
+
+.edit-table input,
+.edit-table select {
+  padding: 0.3rem 0.45rem;
+  font-size: 0.88rem;
+  min-width: 0;
+}
+.edit-table .wide-cell input {
+  min-width: 200px;
+}
+.edit-table .short-cell input {
+  width: 80px;
+}
+.edit-table .num-cell input {
+  width: 80px;
+}
+.edit-table tr.past td {
+  opacity: 0.6;
+}
+.add-race {
+  border-top: 1px solid var(--border);
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+}
+.add-race h3 {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.add-race input,
+.add-race select {
+  width: auto;
+  max-width: 170px;
+}
+.stats.race-cards {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}

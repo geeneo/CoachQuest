@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ActivitiesTable from "../components/ActivitiesTable.jsx";
 import FitnessChart from "../components/FitnessChart.jsx";
+import UpcomingRaces from "../components/UpcomingRaces.jsx";
 import VolumeStats from "../components/VolumeStats.jsx";
 import WellnessPanel, { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
@@ -9,7 +10,7 @@ import { dateTime, formLabel } from "../lib/format.js";
 import PlansPanel from "./PlansPanel.jsx";
 
 const TABS = [
-  { id: "overview", label: "Overview", needs: ["activities", "fitness", "wellness"] },
+  { id: "overview", label: "Overview", needs: ["activities", "fitness", "wellness", "plans"] },
   { id: "activities", label: "Activities", needs: ["activities"] },
   { id: "plans", label: "Plans & AI coach", needs: ["plans"] },
 ];
@@ -49,19 +50,20 @@ export default function AthleteView({ self }) {
           </button>
         ))}
       </div>
-      {current === "overview" && <Overview id={id} scopes={scopes} />}
+      {current === "overview" && <Overview id={id} scopes={scopes} isMe={!!self} />}
       {current === "activities" && <Activities id={id} />}
       {current === "plans" && <PlansPanel id={id} athlete={s} />}
     </>
   );
 }
 
-function Overview({ id, scopes }) {
+function Overview({ id, scopes, isMe }) {
   const fitness = useApi(scopes.has("fitness") ? `/api/athletes/${id}/fitness?days=120` : null);
   const wellness = useApi(scopes.has("wellness") ? `/api/athletes/${id}/wellness?days=30` : null);
   const today = fitness.data?.[fitness.data.length - 1];
   return (
     <>
+      {scopes.has("plans") && <UpcomingRaces id={id} isMe={isMe} ctl={today?.ctl} />}
       {scopes.has("activities") && <VolumeStats id={id} />}
       {scopes.has("fitness") && (
         <section className="card">

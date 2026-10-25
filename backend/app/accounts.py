@@ -19,6 +19,7 @@ from .db import (
     PasswordReset,
     PendingMfa,
     Plan,
+    Race,
     Session,
     User,
     UserStravaApp,
@@ -95,6 +96,7 @@ def delete_account(db: DbSession, user: User) -> None:
         (Session, Session.user_id),
         (PasswordReset, PasswordReset.user_id),
         (Plan, Plan.athlete_id),
+        (Race, Race.user_id),
     ):
         db.execute(delete(model).where(column == uid))
     db.execute(delete(Grant).where(or_(Grant.athlete_id == uid, Grant.coach_id == uid)))

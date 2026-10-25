@@ -187,6 +187,28 @@ class Grant(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class Race(Base):
+    """An event an athlete is training for (or has done)."""
+
+    __tablename__ = "races"
+    __table_args__ = (UniqueConstraint("user_id", "code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(20))  # short id, e.g. "k2c"
+    name: Mapped[str] = mapped_column(String(120))
+    short_name: Mapped[str] = mapped_column(String(20), default="")
+    distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
+    elevation_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    discipline: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    start_time: Mapped[str | None] = mapped_column(String(5), nullable=True)  # "06:30"
+    target_ctl: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    days: Mapped[int] = mapped_column(Integer, default=1)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Plan(Base):
     __tablename__ = "plans"
 

@@ -68,7 +68,7 @@
         and the override/race/note columns. Plus a small Races list (name,
         date, distance) to link to.
       - Coaches see it with the activities scope; only the athlete can edit.
-- [ ] **Races / event plan** (like the old hub's Races table, but per user and
+- [x] **Races / event plan** (like the old hub's Races table, but per user and
       in the database).
       - Fields: short code, name, short name, distance (km), elevation (m),
         discipline, target date, start time, target CTL, days (stage races),

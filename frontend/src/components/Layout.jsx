@@ -1,10 +1,11 @@
-import { Activity, LayoutDashboard, Link2, LogOut, Menu, Settings, Share2, Shield, Users } from "lucide-react";
+import { Activity, Flag, LayoutDashboard, Link2, LogOut, Menu, Settings, Share2, Shield, Users } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth.jsx";
 
 const NAV = [
   { to: "/", label: "My training", icon: LayoutDashboard, end: true },
+  { to: "/races", label: "Races", icon: Flag },
   { to: "/connections", label: "Connections", icon: Link2 },
   { to: "/sharing", label: "Sharing", icon: Share2 },
   { to: "/athletes", label: "My athletes", icon: Users },

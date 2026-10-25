@@ -11,12 +11,14 @@ import time
 from datetime import date, datetime, timedelta
 
 import anthropic
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session as DbSession
 
 from . import runtime
 from .db import AiCall, User
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import load_curve, profile_out, wellness_since
+from .routers.races import race_out, upcoming
 
 log = logging.getLogger("coachquest.ai")
 
@@ -97,12 +99,18 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
                 "hrv_ms": avg([w.hrv_ms for w in wellness]),
             },
         }
+    if "plans" in scopes:
+        facts["upcoming_races"] = [
+            {k: v for k, v in race_out(r, today).items() if k not in ("id", "active")}
+            for r in upcoming(db, athlete.id, today)
+        ][:5]
     facts["flags"] = readiness_flags(
         curve if "fitness" in scopes else [],
         wellness,
         facts.get("weekly_volume", []),
     )
-    return facts
+    # Saved with the plan as JSON, so dates become ISO strings here.
+    return jsonable_encoder(facts)
 
 
 class CoachError(Exception):
