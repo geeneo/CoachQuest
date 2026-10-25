@@ -147,6 +147,24 @@
       - Admin → Storage: database size on disk, rows per table (activities,
         wellness days, plans, users), and free disk space where the data lives.
 
+- [ ] **Admin approves new users.** A third registration mode, "approval",
+      next to open and closed:
+      - New accounts are created as "waiting for approval" and can't sign in
+        yet; the sign-in page says so.
+      - Admins get an email per sign-up, and Admin → Users shows them at the
+        top with Approve / Reject.
+      - The user is emailed when approved, with a link to sign in.
+- [ ] **"Walk" as a session type** in weekday preferences and plan days (and
+      "Hike"), so walks can be planned and the AI coach can suggest them.
+- [ ] **Email updates for sharing invitations.**
+  - The coach is emailed when an athlete invites them, with a link to
+    Sharing.
+  - The athlete is emailed when the coach accepts or leaves.
+  - The coach is emailed when the athlete changes what's shared or stops
+    sharing.
+  - Each person can turn these off in Profile.
+  - Needs email (SMTP) set up.
+
 ## Later
 
 - [ ] Account export and delete (POPIA/GDPR), privacy notice and consent text
