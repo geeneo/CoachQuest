@@ -17,6 +17,16 @@
       - Rate limited in nginx.
       - Resetting signs out every session.
       - Needs SMTP.
+- [ ] **Backfill older data.** First sync imports 180 days of Strava and 30
+      days of Garmin. Add a "Import older data" option on Connections:
+      - Pick a start date (e.g. 1 year, 2 years, everything).
+      - Runs in the background with progress shown on the card.
+      - Respects Strava's rate limits (200 requests / 15 min, 2,000 a day,
+        shared with Home Assistant and the old hub), pausing and resuming
+        instead of failing.
+      - Garmin wellness goes back day by day, so long ranges are slow; cap it
+        or run it overnight.
+      - The fitness chart and CTL get more accurate with more history.
 - [ ] **Admin sets a user's password.** Admin → Users: "Set password", or
       "Send reset link" once SMTP works. Signs that user out everywhere. Logged.
 
