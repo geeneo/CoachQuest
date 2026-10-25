@@ -26,6 +26,13 @@ export default function Connections() {
       {params.get("connected") && <div className="ok">Strava connected. Your first sync is running.</div>}
       {params.get("error") && <div className="error">{ERRORS[params.get("error")] || "Linking failed."}</div>}
       {conns.error && <div className="error">{conns.error.message}</div>}
+      {byProvider.strava?.options.activities && byProvider.garmin?.options.activities && (
+        <div className="card flags small">
+          Activities come from both Strava and Garmin. CoachQuest hides an activity when both sources have one starting
+          within 10 minutes of each other, keeping the Strava copy. To avoid duplicates entirely, untick{" "}
+          <strong>Activities</strong> under Garmin and keep Garmin for wellness only.
+        </div>
+      )}
       <StravaCard conn={byProvider.strava} configured={conns.data?.strava_configured} reload={conns.reload} />
       <GarminCard conn={byProvider.garmin} reload={conns.reload} />
     </>
@@ -61,6 +68,7 @@ function Status({ conn, provider, reload }) {
         {dateTime(conn.last_sync_at)}
       </p>
       {conn.last_error && <p className="error small">{conn.last_error}</p>}
+      <SyncChoices conn={conn} provider={provider} run={run} busy={busy} />
       {msg && <p className="error small">{msg}</p>}
       <div className="row">
         <button className="btn" disabled={busy} onClick={sync}>
@@ -74,6 +82,33 @@ function Status({ conn, provider, reload }) {
         <p className="hint">Disconnecting Strava also deletes the Strava activities imported here.</p>
       )}
     </>
+  );
+}
+
+const KIND_LABELS = {
+  activities: "Activities (rides, runs, swims)",
+  wellness: "Wellness (sleep, HRV, resting HR, Body Battery, stress, steps)",
+};
+
+function SyncChoices({ conn, provider, run, busy }) {
+  const name = provider === "strava" ? "Strava" : "Garmin";
+  const toggle = (kind, on) =>
+    run(async () => {
+      await api(`/api/connections/${provider}/options`, { method: "PATCH", body: { [kind]: on } });
+      if (!on && confirm(`Stopped importing ${kind} from ${name}, and hid what was already imported.\n\nAlso delete those ${kind} from CoachQuest? Cancel keeps them hidden; switching back on shows them again.`)) {
+        await api(`/api/connections/${provider}/data/${kind}`, { method: "DELETE" });
+      }
+    });
+  return (
+    <fieldset className="sync-choices">
+      <legend>Import from {name}</legend>
+      {Object.entries(conn.options).map(([kind, on]) => (
+        <label key={kind} className="check">
+          <input type="checkbox" checked={on} disabled={busy} onChange={(e) => toggle(kind, e.target.checked)} />
+          {KIND_LABELS[kind]}
+        </label>
+      ))}
+    </fieldset>
   );
 }
 

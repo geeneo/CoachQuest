@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import runtime
+from .. import runtime, sync_options
 from ..db import Activity, Connection, OAuthState, SessionLocal, User, WellnessDay, get_db, utcnow
 from ..deps import current_user
 from ..providers import garmin, strava
@@ -26,6 +26,7 @@ def conn_out(conn: Connection) -> dict:
         "external_id": conn.external_id,
         "last_sync_at": conn.last_sync_at,
         "last_error": conn.last_error,
+        "options": sync_options.options(conn),
         "created_at": conn.created_at,
     }
 
@@ -139,6 +140,58 @@ async def sync_now(provider: str, user: User = Depends(current_user), db: DbSess
         raise HTTPException(status_code=429, detail="Synced less than 5 minutes ago")
     count = await (strava.sync if provider == "strava" else garmin.sync)(db, conn)
     return {"fetched": count, "connection": conn_out(conn)}
+
+
+class SyncOptions(BaseModel):
+    activities: bool | None = None
+    wellness: bool | None = None
+
+
+def _conn(db: DbSession, user: User, provider: str) -> Connection:
+    conn = None
+    if provider in PROVIDERS:
+        conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == provider))
+    if conn is None:
+        raise HTTPException(status_code=404, detail="Not connected")
+    return conn
+
+
+@router.patch("/{provider}/options")
+def set_options(
+    provider: str,
+    body: SyncOptions,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Choose what to import from this provider."""
+    conn = _conn(db, user, provider)
+    current = sync_options.options(conn)
+    changes = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in current}
+    if not changes:
+        raise HTTPException(status_code=422, detail=f"{provider} supports: {', '.join(current)}")
+    turned_on = any(v and not current[k] for k, v in changes.items())
+    conn.options = {**current, **changes}
+    if turned_on:
+        # Start the next sync from scratch so the newly enabled data is backfilled.
+        conn.last_sync_at = None
+    db.commit()
+    if turned_on:
+        background.add_task(run_sync, conn.id)
+    return conn_out(conn)
+
+
+@router.delete("/{provider}/data/{kind}")
+def delete_data(provider: str, kind: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Delete already-imported data of one type from one provider."""
+    if kind not in sync_options.KINDS.get(provider, ()):
+        raise HTTPException(status_code=404, detail="Unknown data type")
+    if kind == "activities":
+        result = db.execute(delete(Activity).where(Activity.user_id == user.id, Activity.source == provider))
+    else:
+        result = db.execute(delete(WellnessDay).where(WellnessDay.user_id == user.id))
+    db.commit()
+    return {"deleted": result.rowcount}
 
 
 @router.delete("/{provider}")

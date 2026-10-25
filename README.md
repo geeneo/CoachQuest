@@ -68,6 +68,23 @@ Athletes grant a coach any combination of these scopes (Sharing page):
 - Every read by someone other than the athlete is written to an access log,
   which the athlete sees on the Sharing page.
 
+### What to import from where
+
+Each connection has its own import choices on the Connections page:
+
+- **Strava:** activities.
+- **Garmin:** activities and wellness.
+
+A common setup is activities from Strava and wellness only from Garmin. That
+is the default when Garmin is linked after Strava.
+
+- **Switching a type off** stops importing it and hides what was already
+  imported from that source. Load numbers and AI plans update straight away.
+  You're also offered the option to delete that data.
+- **Switching a type back on** backfills it on the next sync.
+- **Activities on from both sources:** an activity that both sources have,
+  starting within 10 minutes of each other, is shown once, as the Strava copy.
+
 ### AI coach
 
 `POST /api/athletes/{id}/plans` builds a JSON "facts" document in code:

@@ -574,3 +574,14 @@ code {
   border-radius: 4px;
   font-size: 0.85em;
 }
+
+.sync-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0.9rem;
+}
+.sync-choices legend {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}

@@ -7,18 +7,25 @@ from sqlalchemy.orm import Session as DbSession
 
 from .db import Activity, WellnessDay
 from .fitness import daily_tss, dedupe, pmc
+from .sync_options import hidden_sources
 
 
 def activities_since(db: DbSession, athlete_id: int, since: datetime) -> list[Activity]:
     rows = db.scalars(
         select(Activity)
-        .where(Activity.user_id == athlete_id, Activity.start_time >= since)
+        .where(
+            Activity.user_id == athlete_id,
+            Activity.start_time >= since,
+            Activity.source.not_in(hidden_sources(db, athlete_id, "activities")),
+        )
         .order_by(Activity.start_time)
     ).all()
     return dedupe(list(rows))
 
 
 def wellness_since(db: DbSession, athlete_id: int, since: date) -> list[WellnessDay]:
+    if "garmin" in hidden_sources(db, athlete_id, "wellness"):
+        return []
     return list(
         db.scalars(
             select(WellnessDay)

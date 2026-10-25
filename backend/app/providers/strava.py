@@ -8,7 +8,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import runtime
+from .. import runtime, sync_options
 from ..config import settings
 from ..db import Activity, Connection, User, utcnow
 from ..fitness import estimate_tss
@@ -127,6 +127,8 @@ def _upsert(db: DbSession, user: User, item: dict) -> None:
 
 async def sync(db: DbSession, conn: Connection) -> int:
     """Pull activities since the last sync. Returns the number fetched."""
+    if not sync_options.options(conn)["activities"]:
+        return 0
     user = db.get(User, conn.user_id)
     since = conn.last_sync_at - timedelta(days=2) if conn.last_sync_at else utcnow() - timedelta(days=INITIAL_DAYS)
     after = int(since.replace(tzinfo=UTC).timestamp())

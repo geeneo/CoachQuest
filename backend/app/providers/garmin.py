@@ -18,6 +18,7 @@ import garminconnect
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from .. import sync_options
 from ..db import Activity, Connection, PendingMfa, User, WellnessDay, utcnow
 from ..fitness import estimate_tss
 from ..security import decrypt_json, encrypt_json
@@ -35,7 +36,13 @@ class GarminLinkError(Exception):
 def _save_tokens(db: DbSession, user: User, api: garminconnect.Garmin) -> Connection:
     conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "garmin"))
     if conn is None:
-        conn = Connection(user_id=user.id, provider="garmin", token_enc="")
+        # With Strava already bringing in activities, start Garmin on wellness only
+        # so the same ride isn't imported twice. The user can change this.
+        strava = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "strava"))
+        uses_strava = strava is not None and sync_options.options(strava)["activities"]
+        conn = Connection(
+            user_id=user.id, provider="garmin", token_enc="", options={"activities": not uses_strava, "wellness": True}
+        )
         db.add(conn)
     conn.token_enc = encrypt_json({"tokens": api.client.dumps()})
     conn.external_id = getattr(api, "display_name", None)
@@ -97,12 +104,12 @@ def _num(d: dict | None, *path):
     return cur if isinstance(cur, (int, float)) else None
 
 
-def _fetch(tokens: str, days: list[date]):
+def _fetch(tokens: str, days: list[date], want_wellness: bool, want_activities: bool):
     """Blocking Garmin calls; runs in a thread."""
     api = garminconnect.Garmin()
     api.login(tokenstore=tokens)
     wellness = []
-    for d in days:
+    for d in days if want_wellness else []:
         iso = d.isoformat()
         row = {"day": d}
         try:
@@ -128,7 +135,9 @@ def _fetch(tokens: str, days: list[date]):
         except Exception as exc:
             log.debug("hrv %s failed: %s", iso, exc)
         wellness.append(row)
-    activities = api.get_activities_by_date(days[0].isoformat(), days[-1].isoformat())
+    activities = []
+    if want_activities:
+        activities = api.get_activities_by_date(days[0].isoformat(), days[-1].isoformat())
     return api.client.dumps(), wellness, activities
 
 
@@ -162,7 +171,10 @@ async def sync(db: DbSession, conn: Connection) -> int:
     days = [start + timedelta(days=i) for i in range((today - start).days + 1)]
     try:
         tokens = decrypt_json(conn.token_enc)["tokens"]
-        new_tokens, wellness, activities = await asyncio.to_thread(_fetch, tokens, days)
+        opts = sync_options.options(conn)
+        new_tokens, wellness, activities = await asyncio.to_thread(
+            _fetch, tokens, days, opts["wellness"], opts["activities"]
+        )
     except Exception as exc:
         conn.status = "error"
         conn.last_error = f"{type(exc).__name__}: {exc}"[:500]

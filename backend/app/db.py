@@ -14,6 +14,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     create_engine,
+    inspect,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -76,6 +78,9 @@ class Connection(Base):
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | error
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What to import from this provider, e.g. {"activities": false, "wellness": true}.
+    # Missing keys mean "on"; see sync_options.py.
+    options: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -212,8 +217,20 @@ engine = create_engine(settings.db_url, connect_args=_connect_args)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
+# Columns added after the first release. create_all() only creates missing
+# tables, so add missing columns to existing ones here.
+_ADDED_COLUMNS = {"connections": {"options": "JSON"}}
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    existing = inspect(engine)
+    with engine.begin() as conn:
+        for table, columns in _ADDED_COLUMNS.items():
+            have = {c["name"] for c in existing.get_columns(table)}
+            for name, sql_type in columns.items():
+                if name not in have:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"))
 
 
 def get_db():
