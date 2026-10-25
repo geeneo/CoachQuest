@@ -206,6 +206,22 @@
       - Needs from outside: Zwift partner approval; a check of MyWhoosh's
         terms; possibly Garmin's official developer program for sending
         workouts to Garmin.
+- [ ] **Edit access for My coaches.** On Sharing → My coaches, choose per
+      coach whether each shared item is view only or view and edit (screenshot
+      25 Oct). Today "Training plans" lets a coach both view and change plans
+      and workouts, and everything else is view only.
+      - Per item: View, or View + edit. For example: profile (FTP, threshold
+        and max HR, goal), weight, races, training plans and calendar
+        workouts, activity notes and types.
+      - Default for new and existing coaches: view only, except training
+        plans, which keep view + edit so nothing changes for current coaches.
+      - The API checks edit rights on every change, not only the buttons.
+        Edits made by a coach are recorded in the access log, with what
+        changed.
+      - The athlete sees who last changed something ("FTP 265 W · set by
+        Coach Mike · 2 days ago").
+      - The coach is emailed when edit access is given or removed (with the
+        existing sharing emails).
 
 ## Later
 
