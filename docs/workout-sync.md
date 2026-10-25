@@ -466,6 +466,66 @@ again against the code before building.
     access, the Zwift and MyWhoosh adapters doing nothing, and account
     deletion.
 
+### Phase 3 — done (25 Oct 2026), except Zwift's own API
+
+- **Zwift official Training API (mode A): not started, on purpose.** It needs
+  partner approval, and its endpoints and authentication come with it.
+  `delivery/zwift.py` stays a stub that makes no calls. Intervals.icu, an
+  approved Zwift partner, already delivers to Zwift.
+- **MyWhoosh feasibility: checked, not feasible directly.**
+  - The [community API](https://github.com/mywhoosh-community/mywhoosh-api)
+    describes itself as unofficial documentation. It logs in with the
+    athlete's MyWhoosh email and password, and MyWhoosh hasn't endorsed it.
+    Collecting platform passwords is ruled out, so it stays off and enables
+    no operations.
+  - Intervals.icu users report that it puts the coming week's planned
+    workouts into MyWhoosh when MyWhoosh is linked there
+    ([forum](https://forum.intervals.icu/t/mywhoosh-integration/79532)).
+    Ramps in ERG mode and cadence targets reportedly don't carry over.
+  - So MyWhoosh is reached through the Intervals.icu adapter, and the
+    Connected platforms page says so.
+- **Automatic scheduling from plans** (`backend/app/plan_workouts.py`):
+  - The AI coach's plan schema gives each "Zwift / indoor" day a structured
+    workout, using a step format mirroring `workouts.py`. Invalid steps are
+    dropped, and the day keeps its text.
+  - Creating, re-planning, editing a day, swapping days or applying
+    preferences reconciles the calendar from today on. Plan workouts are
+    created, updated or removed, then queued for delivery.
+  - A plan workout edited or moved by hand stops being managed. Re-plans
+    leave it alone and don't duplicate that day.
+  - Deleting a plan removes its upcoming managed workouts.
+  - The plan form has an option to switch this off.
+- **Completion** (`backend/app/completion.py`; columns `activity_id`,
+  `match`, `plan_id`, `plan_managed`, `plan_day` on `scheduled_workouts`):
+  - The ride that completed a workout is stored.
+  - Automatic matching:
+    - A bike ride on the local day.
+    - Prefers the ride named like the workout (Zwift and MyWhoosh name
+      rides after it), then indoor rides, then the closest length.
+    - One ride completes one workout.
+  - The athlete can pick the ride by hand (from the day before to the day
+    after), mark the workout "not done", or hand it back to automatic
+    matching.
+  - Strava/Garmin duplicates were already merged.
+- **Planned vs actual** (`backend/app/compliance.py`,
+  `GET /api/athletes/{a}/compliance`):
+  - Per workout: completion (ridden vs planned time), normalised power vs
+    plan, TSS, heart rate, and flags (short, under or over target by more
+    than 10%).
+  - Per week: done, partly done, missed and skipped; time and TSS planned
+    vs actual; and compliance %.
+  - Shown under the calendar, and given to the AI weekly review as
+    `workout_compliance`.
+  - Limited by sharing permissions: ride details need Activities, planned
+    watts need Profile.
+- **Tests:** `backend/tests/test_phase3.py` (12 tests), covering:
+  - the strict plan schema;
+  - plan workouts, including invalid and switched-off ones;
+  - day edits, swaps, re-plans with hand edits, plan deletion, and delivery
+    of plan workouts;
+  - name-based matching, manual pick, "not done" and auto;
+  - compliance and its scopes, and the weekly review facts.
+
 ### Setting up Intervals.icu (once, by the admin)
 
 1. Sign in to intervals.icu and apply for an app at
@@ -479,7 +539,7 @@ again against the code before building.
      account.
    - Keeps their FTP the same in CoachQuest, Intervals.icu and Zwift.
 
-### Still depends on others
+### Still depends on others (as of Phase 3)
 
 - **Zwift:** Training API partner approval (Mode A).
 - **MyWhoosh:** an official API, or a check of the community API's terms.

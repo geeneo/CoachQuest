@@ -38,8 +38,10 @@ PLATFORMS = [
         "integration": "unavailable",
         "experimental": True,
         "capabilities": [],
-        "note": "MyWhoosh has no official API. A community-documented API exists; it stays switched off "
-        "until its terms are checked, and is labelled experimental if it is ever turned on.",
+        "note": "No official API. Intervals.icu users report it puts the coming week's planned workouts into "
+        "MyWhoosh when MyWhoosh is linked in Intervals.icu (ramps in ERG mode and cadence targets don't carry "
+        "over). A community API exists but signs in with your MyWhoosh password, which CoachQuest never asks "
+        "for, so it stays off.",
     },
     {
         "id": "garmin",
@@ -64,7 +66,7 @@ PLATFORMS = [
         "capabilities": ["deliver_workouts", "update_workouts"],
         "note": "Scheduled workouts go onto your Intervals.icu calendar. Link Zwift in Intervals.icu "
         "(Settings > Zwift) and the coming week's workouts appear in Zwift under Workouts > Custom > "
-        "Intervals.icu. Power is % of FTP, so keep FTP the same in both.",
+        "Intervals.icu; users report the same for MyWhoosh. Power is % of FTP, so keep FTP the same everywhere.",
     },
 ]
 IDS = [p["id"] for p in PLATFORMS]

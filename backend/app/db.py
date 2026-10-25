@@ -275,6 +275,14 @@ class ScheduledWorkout(Base):
     sport: Mapped[str] = mapped_column(String(20), default="bike")
     steps: Mapped[list] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(20), default="planned")  # planned | skipped | cancelled
+    # Made from a training plan's indoor day. Managed by the plan (kept in step with it) until
+    # someone edits the workout itself on the calendar; see plan_workouts.py.
+    plan_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    plan_managed: Mapped[bool] = mapped_column(Boolean, default=False)
+    plan_day: Mapped[date | None] = mapped_column(Date, nullable=True)  # the plan day it was made for
+    # The activity that completed it (see completion.py). match: auto | manual | none ("not done").
+    activity_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    match: Mapped[str] = mapped_column(String(10), default="auto")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -430,6 +438,13 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 _ADDED_COLUMNS = {
     "connections": {"options": "JSON", "backfill": "JSON"},
     "plans": {"start_date": "DATE", "weeks": "JSON"},
+    "scheduled_workouts": {
+        "plan_id": "INTEGER",
+        "plan_managed": "BOOLEAN NOT NULL DEFAULT 0",
+        "plan_day": "DATE",
+        "activity_id": "INTEGER",
+        "match": "VARCHAR(10) NOT NULL DEFAULT 'auto'",
+    },
     "activities": {
         "avg_cadence": "FLOAT",
         "avg_speed_ms": "FLOAT",

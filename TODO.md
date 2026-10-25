@@ -118,7 +118,9 @@
       - Done: "Re-plan from this week" (Claude rewrites the remaining weeks
         from what was logged, with an optional "what changed?" note, keeping
         locked and past days).
-      - Still to do: indoor workout matching ("fits a workout").
+      - Done: indoor days carry a structured workout, put on the calendar
+        and sent to Zwift / MyWhoosh through Intervals.icu (workout sync
+        phase 3).
 - [x] **AI coach: assessments of wellness and training progress.** A new
       "AI coach" page per athlete, next to Plans. Same rules as plans:
       CoachQuest computes the facts, Claude writes the words, and only the
@@ -198,9 +200,14 @@
         background sync queue with retries and history, sync errors shown
         to the athlete, Intervals.icu investigation, tests against mocked
         platform APIs.
-      - [ ] **Phase 3 — automatic delivery:** Zwift official API once
-        approved, MyWhoosh if its terms allow, automatic scheduling,
-        completion data, planned vs actual analysis.
+      - [x] **Phase 3 — automatic delivery:** AI plans schedule their
+        indoor sessions as structured workouts (sent on automatically),
+        completion is stored with manual correction, planned vs actual per
+        week (also in the AI weekly review). MyWhoosh checked: no usable API
+        (the community one needs the athlete's password), but Intervals.icu
+        reaches it.
+        - [ ] Still open: Zwift's own Training API, only once Zwift approves
+          CoachQuest as a partner (Intervals.icu covers Zwift until then).
       - This replaces the training plan page's "MyWhoosh" and "fits a
         workout" buttons: indoor plan days link to real workouts.
       - Needs from outside: Zwift partner approval; a check of MyWhoosh's

@@ -217,13 +217,18 @@ function Day({ day, ctx }) {
             {day.duration_min > 0 && <span className="muted"> ~{duration(day.duration_min * 60)}</span>}
           </button>
         )}
-        {!editing && (day.intensity.length > 0 || day.gear || day.route) && (
+        {!editing && (day.intensity.length > 0 || day.gear || day.route || day.workout) && (
           <div className="chips tight">
             {day.intensity.map((c) => (
               <span key={c} className="badge intensity">
                 {c}
               </span>
             ))}
+            {day.workout && (
+              <span className="badge workout" title="Structured workout on the calendar">
+                ▤ {day.workout.name}
+              </span>
+            )}
             {day.gear && <span className="badge">🚲 {day.gear}</span>}
             {day.route && <span className="badge">🗺 {day.route}</span>}
           </div>

@@ -20,6 +20,7 @@ export default function PlansPanel({ id, athlete }) {
     hours_per_week: 8,
     available_days: ["Tue", "Thu", "Sat", "Sun"],
     notes: "",
+    structured_workouts: true,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -140,6 +141,15 @@ export default function PlansPanel({ id, athlete }) {
               maxLength={2000}
               placeholder="Indoor trainer on weekdays, knee niggle, travelling week 3…"
             />
+          </label>
+          <label className="check wide">
+            <input
+              type="checkbox"
+              checked={form.structured_workouts}
+              onChange={(e) => setForm({ ...form, structured_workouts: e.target.checked })}
+            />
+            Turn indoor sessions into structured workouts on the calendar (sent to Zwift through Intervals.icu when
+            auto-send is on)
           </label>
           {error && <div className="error wide">{error}</div>}
           <button className="btn primary" disabled={busy}>

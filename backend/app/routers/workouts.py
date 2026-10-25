@@ -13,16 +13,15 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import localtime, platforms, sync_engine, workouts, zwo
+from .. import completion, compliance, localtime, platforms, sync_engine, workouts, zwo
 from ..activity_types import category
-from ..db import Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
+from ..db import Activity, Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..plan_tracker import GOAL_SHARE
 from ..queries import activities_since
 
 router = APIRouter(prefix="/api", tags=["workouts"])
 
-BIKE = {"Road", "Virtual", "MTB", "E-MTB", "E-Bike", "Gravel"}
 MAX_RANGE_DAYS = 120
 
 
@@ -213,6 +212,9 @@ def scheduled_out(
         "assigned_by": names.get(sw.assigned_by),
         # Where it was sent automatically, if anywhere; it can always be downloaded by hand.
         "delivery": delivery or [],
+        "match": sw.match,  # auto | manual | none
+        "plan_id": sw.plan_id,
+        "from_plan": sw.plan_managed,
     }
 
 
@@ -235,15 +237,8 @@ def _plan_days(db: DbSession, athlete_id: int, start: date, end: date) -> dict[s
     return out
 
 
-def _match(scheduled: list[ScheduledWorkout], rides: list[dict]) -> dict[int, list[dict]]:
-    """Pair one day's workouts with that day's rides: in order, extra rides go to the last workout."""
-    live = [s for s in scheduled if s.status != "cancelled"]
-    out: dict[int, list[dict]] = defaultdict(list)
-    if not live:
-        return out
-    for i, r in enumerate(rides):
-        out[live[min(i, len(live) - 1)].id].append(r)
-    return out
+def _rides(sw: ScheduledWorkout, briefs: dict[int, dict]) -> list[dict]:
+    return [briefs[sw.activity_id]] if sw.activity_id in briefs else []
 
 
 @router.get("/athletes/{athlete}/calendar")
@@ -261,14 +256,17 @@ def calendar(
     scopes = allowed_scopes(db, user, target.id)
     tz = localtime.zone(target.timezone)
     today = localtime.today(target)
+    completion.refresh(db, target, start, end)
 
     # Fetch a day either side: a UTC timestamp can fall on the next or previous local day.
     since = datetime.combine(start - timedelta(days=1), datetime.min.time())
     acts_by_day: dict[str, list[dict]] = defaultdict(list)
+    briefs: dict[int, dict] = {}
     for a in activities_since(db, target.id, since):
         d = localtime.local_date(a.start_time, tz)
+        briefs[a.id] = _activity_brief(a, d)
         if start <= d <= end:
-            acts_by_day[d.isoformat()].append(_activity_brief(a, d))
+            acts_by_day[d.isoformat()].append(briefs[a.id])
 
     rows = db.scalars(
         select(ScheduledWorkout)
@@ -279,6 +277,12 @@ def calendar(
     for sw in rows:
         by_day[sw.day.isoformat()].append(sw)
 
+    # A ride picked by hand can be from the day before or after the range.
+    for sw in rows:
+        if sw.activity_id and sw.activity_id not in briefs:
+            a = db.get(Activity, sw.activity_id)
+            if a and a.user_id == target.id:
+                briefs[a.id] = _activity_brief(a, localtime.local_date(a.start_time, tz))
     ids = {sw.assigned_by for sw in rows if sw.assigned_by}
     names = {u.id: u.display_name for u in db.scalars(select(User).where(User.id.in_(ids)))} if ids else {}
     delivery = sync_engine.status_for(db, [sw.id for sw in rows])
@@ -288,14 +292,13 @@ def calendar(
         d = start + timedelta(days=i)
         key = d.isoformat()
         acts = acts_by_day.get(key, [])
-        matched = _match(by_day.get(key, []), [a for a in acts if a["type"] in BIKE])
         days.append(
             {
                 "date": key,
                 "is_today": d == today,
                 "plan": plan_days.get(key),
                 "workouts": [
-                    scheduled_out(sw, target, today, matched.get(sw.id, []), names, scopes, delivery.get(sw.id))
+                    scheduled_out(sw, target, today, _rides(sw, briefs), names, scopes, delivery.get(sw.id))
                     for sw in by_day.get(key, [])
                 ],
                 "activities": acts if "activities" in scopes else [],
@@ -373,6 +376,10 @@ class ScheduledEdit(BaseModel):
     description: str | None = Field(default=None, max_length=2000)
     instructions: str | None = Field(default=None, max_length=2000)
     steps: list | None = None
+    # Completion: pick the ride (activity_id, needs the activities scope), "none" = not done,
+    # "auto" = let CoachQuest match it again.
+    activity_id: int | None = None
+    match: str | None = Field(default=None, pattern="^(auto|none)$")
 
     @field_validator("steps")
     @classmethod
@@ -397,9 +404,30 @@ def edit_scheduled(
     changes = body.model_dump(exclude_unset=True)
     if changes.get("steps") is not None:
         changes["steps"] = _steps(changes["steps"])
+    picked, match = changes.pop("activity_id", None), changes.pop("match", None)
+    if picked is not None:
+        require_scope(db, user, target.id, "activities")
+        a = db.get(Activity, picked)
+        if a is None or a.user_id != target.id:
+            raise HTTPException(status_code=404, detail="Activity not found")
+        for other in db.scalars(
+            select(ScheduledWorkout).where(
+                ScheduledWorkout.athlete_id == target.id,
+                ScheduledWorkout.activity_id == picked,
+                ScheduledWorkout.id != sw.id,
+            )
+        ):
+            other.activity_id, other.match = None, "auto"  # one ride completes one workout
+        sw.activity_id, sw.match = picked, "manual"
+    elif match == "none":
+        sw.activity_id, sw.match = None, "none"
+    elif match == "auto":
+        sw.activity_id, sw.match = None, "auto"
     for k, v in changes.items():
         if v is not None:
             setattr(sw, k, v)
+    if changes.keys() & {"day", "name", "description", "instructions", "steps"}:
+        sw.plan_managed = False  # edited by hand: the training plan no longer rewrites it
     sw.updated_at = utcnow()
     db.commit()
     reason = "cancelled" if changes.get("status") in ("cancelled", "skipped") else "changed"
@@ -424,6 +452,40 @@ def delete_scheduled(
     if sync_engine.workout_removed(db, target.id, workout_id, name):
         background.add_task(sync_engine.run_due)
     return {"ok": True}
+
+
+@router.get("/athletes/{athlete}/workouts/{workout_id}/candidates")
+def ride_candidates(athlete: str, workout_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Rides from the day before to the day after, to pick which one completed the workout."""
+    target = _athlete(db, user, athlete)
+    require_scope(db, user, target.id, "activities")
+    sw = _scheduled(db, target, workout_id)
+    tz = localtime.zone(target.timezone)
+    used = {
+        w.activity_id: w.name
+        for w in db.scalars(
+            select(ScheduledWorkout).where(
+                ScheduledWorkout.athlete_id == target.id, ScheduledWorkout.activity_id.is_not(None)
+            )
+        )
+        if w.id != sw.id
+    }
+    return [
+        {**_activity_brief(a, localtime.local_date(a.start_time, tz)), "used_by": used.get(a.id)}
+        for a in completion.candidates(db, target, sw)
+    ]
+
+
+@router.get("/athletes/{athlete}/compliance")
+def compliance_report(
+    athlete: str,
+    weeks: int = Query(default=6, ge=1, le=26),
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Planned vs actual per week, newest first: what was done, how much of it, and how hard."""
+    target = _athlete(db, user, athlete)
+    return compliance.weekly(db, target, allowed_scopes(db, user, target.id), weeks)
 
 
 # ---- Downloads ----

@@ -3,12 +3,12 @@
 import copy
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import localtime, plan_tracker
+from .. import localtime, plan_tracker, plan_workouts, sync_engine
 from ..coach import PHASES, CoachError, build_facts, generate_plan
 from ..db import Plan, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -27,6 +27,8 @@ class PlanRequest(BaseModel):
     hours_per_week: float = Field(default=8, ge=1, le=30)
     available_days: list[str] = Field(default_factory=lambda: ["Tue", "Thu", "Sat", "Sun"])
     notes: str = Field(default="", max_length=2000)
+    # Indoor days become structured workouts on the calendar (and go to the athlete's platforms).
+    structured_workouts: bool = True
 
 
 def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = None) -> dict:
@@ -67,9 +69,16 @@ def _editable(p: Plan) -> list[dict]:
     return copy.deepcopy(p.weeks or [])
 
 
-def _save_weeks(db: DbSession, p: Plan, weeks: list[dict]) -> None:
+def _save_weeks(db: DbSession, p: Plan, weeks: list[dict], background: BackgroundTasks | None = None) -> None:
+    """Store the weeks and bring the plan's calendar workouts in line (sent on in the background)."""
     p.weeks = weeks
     db.commit()
+    _workouts(db, p, background)
+
+
+def _workouts(db: DbSession, p: Plan, background: BackgroundTasks | None) -> None:
+    if plan_workouts.reconcile(db, p, localtime.today(db.get(User, p.athlete_id))) and background:
+        background.add_task(sync_engine.run_due)
 
 
 @router.get("")
@@ -103,7 +112,11 @@ def get_plan(athlete: str, plan_id: int, user: User = Depends(current_user), db:
 
 @router.post("")
 async def create_plan(
-    athlete: str, body: PlanRequest, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+    athlete: str,
+    body: PlanRequest,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
 ):
     athlete_id = resolve_athlete_id(athlete, user)
     require_scope(db, user, athlete_id, "plans")
@@ -130,6 +143,7 @@ async def create_plan(
     )
     db.add(plan)
     db.commit()
+    _workouts(db, plan, background)
     return plan_out(plan, db, full=True)
 
 
@@ -150,6 +164,7 @@ def edit_day(
     plan_id: int,
     day: date,
     body: DayEdit,
+    background: BackgroundTasks,
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),
 ):
@@ -168,7 +183,7 @@ def edit_day(
     if changes.get("intensity") is not None:
         changes["intensity"] = [c.strip()[:30] for c in changes["intensity"] if c.strip()]
     weeks[wi]["days"][di].update(changes)
-    _save_weeks(db, p, weeks)
+    _save_weeks(db, p, weeks, background)
     return plan_out(p, db, full=True)
 
 
@@ -206,7 +221,12 @@ class Swap(BaseModel):
 
 @router.post("/{plan_id}/swap")
 def swap_days(
-    athlete: str, plan_id: int, body: Swap, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+    athlete: str,
+    plan_id: int,
+    body: Swap,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
 ):
     """Swap the sessions on two days (dates stay put). Locked days can't be swapped."""
     p = _plan(db, user, athlete, plan_id)
@@ -219,23 +239,29 @@ def swap_days(
     day_a, day_b = weeks[wa]["days"][da], weeks[wb]["days"][db_]
     if day_a["locked"] or day_b["locked"]:
         raise HTTPException(status_code=409, detail="Unlock both days first")
-    fields = ("type", "description", "duration_min", "intensity", "gear", "route")
-    moved_a, moved_b = {k: day_a[k] for k in fields}, {k: day_b[k] for k in fields}
+    fields = ("type", "description", "duration_min", "intensity", "gear", "route", "workout")
+    moved_a, moved_b = {k: day_a.get(k) for k in fields}, {k: day_b.get(k) for k in fields}
     day_a.update(moved_b)
     day_b.update(moved_a)
-    _save_weeks(db, p, weeks)
+    _save_weeks(db, p, weeks, background)
     return plan_out(p, db, full=True)
 
 
 @router.post("/{plan_id}/apply-preferences")
-def apply_preferences(athlete: str, plan_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+def apply_preferences(
+    athlete: str,
+    plan_id: int,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
     """Set future, unlocked days to the athlete's preferred type for that weekday."""
     p = _plan(db, user, athlete, plan_id)
     weeks = _editable(p)
     athlete_user = db.get(User, p.athlete_id)
     prefs = preferences_out(athlete_user)["weekday_prefs"]
     changed = plan_tracker.apply_preferences(weeks, prefs, localtime.today(athlete_user))
-    _save_weeks(db, p, weeks)
+    _save_weeks(db, p, weeks, background)
     return {**plan_out(p, db, full=True), "changed": changed}
 
 
@@ -245,7 +271,12 @@ class Replan(BaseModel):
 
 @router.post("/{plan_id}/replan")
 async def replan(
-    athlete: str, plan_id: int, body: Replan, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+    athlete: str,
+    plan_id: int,
+    body: Replan,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
 ):
     """Claude rewrites the plan from this week on. Past and locked days stay as they are."""
     p = _plan(db, user, athlete, plan_id)
@@ -285,15 +316,23 @@ async def replan(
     summary = (answer.get("summary_md") or "").strip()
     p.content_md = f"**Re-planned {today.isoformat()}.** {summary}\n\n" + plan_tracker.markdown(weeks)
     p.model = model
-    _save_weeks(db, p, weeks)
+    _save_weeks(db, p, weeks, background)
     return {**plan_out(p, db, full=True), "changed": changed}
 
 
 @router.delete("/{plan_id}")
-def delete_plan(athlete: str, plan_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+def delete_plan(
+    athlete: str,
+    plan_id: int,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
     p = _plan(db, user, athlete, plan_id)
     if user.id not in (p.athlete_id, p.author_id):
         raise HTTPException(status_code=403, detail="Only the athlete or the author can delete a plan")
+    plan_workouts.plan_deleted(db, p, localtime.today(db.get(User, p.athlete_id)))
+    background.add_task(sync_engine.run_due)
     db.delete(p)
     db.commit()
     return {"ok": True}

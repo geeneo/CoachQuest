@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
@@ -206,6 +206,7 @@ export default function TrainingCalendar({ id, isMe }) {
           </div>
         ))}
       </div>
+      {data && <Compliance id={id} key={complianceKey(data)} />}
       {current && (
         <WorkoutDetail
           w={current}
@@ -332,7 +333,9 @@ function WorkoutDetail({ w, ftp, id, edit, remove, onError, close, reload }) {
             : "Ridden. Ride details are shown only with the Activities permission. "}
         {w.assigned_by && `Assigned by ${w.assigned_by}. `}
         {w.delivery.length ? "" : "Delivery: download (.zwo) — not sent to any platform."}
+        {w.from_plan ? " Made by the training plan: re-planning updates it until you edit it here." : ""}
       </p>
+      <RideMatch w={w} id={id} edit={edit} />
       {w.delivery.length > 0 && <DeliveryList w={w} id={id} onError={onError} reload={reload} />}
       <div className="row wrap">
         <button
@@ -421,5 +424,124 @@ function DeliveryList({ w, id, onError, reload }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+// Which ride completed this workout: matched automatically, picked by hand, or "not done".
+function RideMatch({ w, id, edit }) {
+  const cands = useApi(w.date <= localToday() ? `/api/athletes/${id}/workouts/${w.id}/candidates` : null);
+  if (!cands.data) return null; // future workout, or no access to activities
+  const value = w.match === "manual" ? String(w.actual?.activities[0]?.id ?? "auto") : w.match;
+  const change = (v) =>
+    edit(w.id, v === "auto" ? { match: "auto" } : v === "none" ? { match: "none" } : { activity_id: Number(v) });
+  return (
+    <label className="inline small ride-match">
+      Completed by
+      <select value={value} onChange={(e) => change(e.target.value)}>
+        <option value="auto">Match automatically{w.match === "auto" && w.actual ? " (current)" : ""}</option>
+        <option value="none">Not done</option>
+        {cands.data.map((c) => (
+          <option key={c.id} value={String(c.id)}>
+            {c.date} · {c.name} · {c.minutes}′{c.used_by ? ` (now on "${c.used_by}")` : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function complianceKey(data) {
+  return data.days
+    .flatMap((d) => d.workouts.map((w) => `${w.id}:${w.status}:${w.actual?.minutes ?? ""}`))
+    .join(",");
+}
+
+const FLAG = { short: "short", under_target: "under target", over_target: "over target" };
+
+// Planned vs actual, week by week (computed by the API from the matched rides).
+function Compliance({ id }) {
+  const res = useApi(`/api/athletes/${id}/compliance?weeks=6`);
+  const [open, setOpen] = useState(null);
+  const weeks = (res.data?.weeks || []).filter((w) => w.scheduled);
+  if (!weeks.length) return null;
+  return (
+    <section className="card compliance">
+      <h2>Planned vs actual</h2>
+      <p className="muted small">
+        Structured workouts against the rides that completed them. Compliance is ridden time against the time planned so
+        far (skipped workouts don't count against it).
+      </p>
+      <div className="table-wrap">
+        <table className="compact">
+          <thead>
+            <tr>
+              <th>Week of</th>
+              <th>Done</th>
+              <th>Time</th>
+              <th>Compliance</th>
+              <th>TSS</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {weeks.map((w) => (
+              <Fragment key={w.week_start}>
+                <tr className="clickable" onClick={() => setOpen(open === w.week_start ? null : w.week_start)}>
+                  <td>
+                    {fmtDay(w.week_start)}
+                    {w.is_current && <span className="muted"> (this week)</span>}
+                  </td>
+                  <td>
+                    {w.done}
+                    {w.partial ? ` + ${w.partial} partly` : ""} of {w.scheduled}
+                    {w.upcoming ? <span className="muted"> · {w.upcoming} to come</span> : null}
+                  </td>
+                  <td>
+                    {duration(w.actual_min * 60)} / {duration(w.planned_min * 60)}
+                  </td>
+                  <td>
+                    {w.compliance_pct == null ? (
+                      "–"
+                    ) : (
+                      <span className={w.compliance_pct >= 80 ? "ok-text" : w.compliance_pct >= 50 ? "warn-text" : "error-text"}>
+                        {w.compliance_pct}%
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {w.actual_tss ?? "–"} / {w.planned_tss ?? "–"}
+                  </td>
+                  <td className="small">
+                    {[
+                      w.missed && `${w.missed} missed`,
+                      w.skipped && `${w.skipped} skipped`,
+                      w.short && `${w.short} short`,
+                      w.under_target && `${w.under_target} under target`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "–"}
+                  </td>
+                </tr>
+                {open === w.week_start &&
+                  w.workouts.map((r) => (
+                    <tr key={r.id} className="sub-row small">
+                      <td>{fmtDay(r.date)}</td>
+                      <td colSpan={2}>
+                        {r.name} <span className="muted">· {STATUS[r.status]?.label || r.status}</span>
+                      </td>
+                      <td>{r.completion_pct != null ? `${r.completion_pct}% of time` : "–"}</td>
+                      <td>
+                        {r.power_pct != null ? `NP ${r.actual_np} W = ${r.power_pct}% of plan` : r.actual_tss ?? ""}
+                      </td>
+                      <td>{r.flags.map((f) => FLAG[f]).join(", ")}</td>
+                    </tr>
+                  ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted small">Click a week to see each workout.</p>
+    </section>
   );
 }

@@ -14,6 +14,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
+from . import workouts
 from .activity_types import category
 from .localtime import local_date
 
@@ -40,7 +41,19 @@ def _blank_day(d: date) -> dict:
         "route": None,
         "locked": False,
         "missed_reason": None,
+        "workout": None,  # {"name", "steps"} for indoor sessions; see plan_workouts.py
     }
+
+
+def _workout(raw) -> dict | None:
+    """Claude's structured workout for a day, checked like any other workout; dropped if invalid."""
+    if not isinstance(raw, dict) or not raw.get("steps"):
+        return None
+    try:
+        steps = workouts.validate_steps(raw["steps"])
+    except ValueError:
+        return None
+    return {"name": (str(raw.get("name") or "Workout").strip() or "Workout")[:120], "steps": steps}
 
 
 def build_weeks(ai_weeks: list[dict], first_day: date, n_weeks: int) -> list[dict]:
@@ -63,6 +76,7 @@ def build_weeks(ai_weeks: list[dict], first_day: date, n_weeks: int) -> list[dic
                     description=(src_day.get("description") or "").strip(),
                     duration_min=max(0, int(src_day.get("duration_min") or 0)),
                     intensity=[str(x) for x in src_day.get("intensity") or []][:6],
+                    workout=_workout(src_day.get("workout")),
                 )
             days.append(d)
         weeks.append(
@@ -208,8 +222,8 @@ def merge_replan(old: list[dict], new: list[dict], today: date) -> int:
             if kept(d, today):
                 continue
             n = fresh["days"][i]
-            fields = ("type", "description", "duration_min", "intensity")
-            if any(d[k] != n[k] for k in fields):
+            fields = ("type", "description", "duration_min", "intensity", "workout")
+            if any(d.get(k) != n[k] for k in fields):  # older plans have no "workout"
                 changed += 1
             d.update({k: n[k] for k in fields}, gear=None, route=None, missed_reason=None)
         if any(not kept(d, today) for d in week["days"]):

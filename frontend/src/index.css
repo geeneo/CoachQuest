@@ -1359,3 +1359,22 @@ table.platforms td:first-child {
 .sync-job.blocked .muted {
   color: var(--muted);
 }
+
+/* ---- Planned vs actual ---- */
+tr.clickable {
+  cursor: pointer;
+}
+tr.clickable:hover td {
+  background: var(--panel-2);
+}
+tr.sub-row td {
+  background: var(--panel-2);
+  border-top: none;
+}
+.ride-match select {
+  max-width: 28rem;
+}
+.badge.workout {
+  border-color: var(--c1);
+  color: var(--c1);
+}

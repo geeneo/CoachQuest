@@ -50,6 +50,11 @@ weeks where they belong.
 `request.start_date` only. Days listed in `request.replan.keep` are fixed (already done or locked by the \
 athlete); repeat them as they are and plan the other days around them. Use `request.replan.so_far` \
 (planned vs logged per earlier week) and `request.replan.reason` to decide what to change.
+- Days of type "Zwift / indoor" get a structured `workout` the athlete can ride in Zwift or MyWhoosh \
+(unless `request.structured_workouts` is false): a short name and steps. Power is a fraction of FTP \
+(0.75 = 75% FTP); steps are warmup/cooldown/ramp (power_start to power_end), steady/recovery (power), \
+intervals (repeat x on_s at on_power, off_s at off_power) and free (no target). Step durations are in \
+seconds and add up to the day's duration_min. Optional cadence in rpm. Every other day: `workout` null.
 - Each day: a session type from the allowed list, a short concrete description (structure, terrain, \
 targets), duration in minutes, and intensity chips such as "Z2", "95-105% FTP" or "LTHR 160-165".
 - Each week: a phase and a one-line focus.
@@ -217,6 +222,46 @@ WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition"]
 
 
+def _obj(props: dict, required: list[str]) -> dict:
+    return {"type": "object", "properties": props, "required": required, "additionalProperties": False}
+
+
+_N, _I = {"type": "number"}, {"type": "integer"}
+# Mirrors workouts.py; ranges are checked there (structured outputs don't enforce min/max).
+STEP_SCHEMA = {
+    "anyOf": [
+        _obj(
+            {
+                "kind": {"type": "string", "enum": ["warmup", "cooldown", "ramp"]},
+                "duration_s": _I,
+                "power_start": _N,
+                "power_end": _N,
+                "cadence": _I,
+            },
+            ["kind", "duration_s", "power_start", "power_end"],
+        ),
+        _obj(
+            {"kind": {"type": "string", "enum": ["steady", "recovery"]}, "duration_s": _I, "power": _N, "cadence": _I},
+            ["kind", "duration_s", "power"],
+        ),
+        _obj(
+            {
+                "kind": {"type": "string", "enum": ["intervals"]},
+                "repeat": _I,
+                "on_s": _I,
+                "on_power": _N,
+                "off_s": _I,
+                "off_power": _N,
+                "cadence": _I,
+            },
+            ["kind", "repeat", "on_s", "on_power", "off_s", "off_power"],
+        ),
+        _obj({"kind": {"type": "string", "enum": ["free"]}, "duration_s": _I}, ["kind", "duration_s"]),
+    ]
+}
+WORKOUT_SCHEMA = _obj({"name": {"type": "string"}, "steps": {"type": "array", "items": STEP_SCHEMA}}, ["name", "steps"])
+
+
 def plan_schema() -> dict:
     """JSON schema Claude's answer must follow (structured outputs)."""
     return {
@@ -242,8 +287,16 @@ def plan_schema() -> dict:
                                         "description": {"type": "string"},
                                         "duration_min": {"type": "integer"},
                                         "intensity": {"type": "array", "items": {"type": "string"}},
+                                        "workout": {"anyOf": [{"type": "null"}, WORKOUT_SCHEMA]},
                                     },
-                                    "required": ["weekday", "type", "description", "duration_min", "intensity"],
+                                    "required": [
+                                        "weekday",
+                                        "type",
+                                        "description",
+                                        "duration_min",
+                                        "intensity",
+                                        "workout",
+                                    ],
                                     "additionalProperties": False,
                                 },
                             },
