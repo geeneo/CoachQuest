@@ -40,17 +40,23 @@ class StravaApp:
 class StravaLinkError(Exception):
     """Linking failed. `reason` is a short code the Connections page explains."""
 
-    def __init__(self, reason: str, detail: str = ""):
+    def __init__(self, reason: str, detail: str = "", public: str = ""):
         super().__init__(f"{reason}: {detail}" if detail else reason)
         self.reason = reason
+        self.public = public  # Strava's own error text, safe to show the user
 
 
 def _token_error(resp: httpx.Response) -> StravaLinkError:
     """Turn Strava's token endpoint error into a reason the user can act on."""
     try:
-        fields = {e.get("field") for e in resp.json().get("errors", [])}
+        body = resp.json()
+        errors = body.get("errors", []) if isinstance(body, dict) else []
+        fields = {e.get("field") for e in errors}
+        public = f"Strava said: {body.get('message', '')} " + ", ".join(
+            f"{e.get('field')} {e.get('code')}" for e in errors
+        )
     except ValueError:
-        fields = set()
+        fields, public = set(), f"Strava answered HTTP {resp.status_code}"
     detail = f"HTTP {resp.status_code}: {resp.text[:300]}"
     if "client_secret" in fields:
         return StravaLinkError("secret", detail)
@@ -58,7 +64,7 @@ def _token_error(resp: httpx.Response) -> StravaLinkError:
         return StravaLinkError("client_id", detail)
     if "code" in fields:
         return StravaLinkError("code", detail)
-    return StravaLinkError("strava", detail)
+    return StravaLinkError("strava", detail, public.strip())
 
 
 class StravaAppChanged(Exception):

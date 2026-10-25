@@ -3,6 +3,7 @@
 import logging
 import secrets
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import RedirectResponse
@@ -122,10 +123,12 @@ async def strava_callback(
         conn = await strava.exchange_code(db, user, code, scope)
     except strava.StravaLinkError as exc:
         log.warning("Strava link failed for user %s: %s", user.id, exc)
-        return RedirectResponse(f"/connections?error={exc.reason}", status_code=303)
-    except Exception:
+        query = {"error": exc.reason, **({"detail": exc.public[:200]} if exc.public else {})}
+        return RedirectResponse(f"/connections?{urlencode(query)}", status_code=303)
+    except Exception as exc:
         log.exception("Strava link failed for user %s", user.id)
-        return RedirectResponse("/connections?error=strava", status_code=303)
+        query = {"error": "strava", "detail": f"Server error: {type(exc).__name__}: {str(exc)[:150]}"}
+        return RedirectResponse(f"/connections?{urlencode(query)}", status_code=303)
     background.add_task(run_sync, conn.id)
     return RedirectResponse("/connections?connected=strava", status_code=303)
 

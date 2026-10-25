@@ -37,7 +37,12 @@ export default function Connections() {
         <Link to="/sharing">Sharing</Link> page.
       </p>
       {params.get("connected") && <div className="ok">Strava connected. Your first sync is running.</div>}
-      {params.get("error") && <div className="error">{ERRORS[params.get("error")] || "Linking failed."}</div>}
+      {params.get("error") && (
+        <div className="error">
+          {ERRORS[params.get("error")] || "Linking failed."}
+          {params.get("detail") && <div className="small">{params.get("detail")}</div>}
+        </div>
+      )}
       {conns.error && <div className="error">{conns.error.message}</div>}
       {byProvider.strava?.options.activities && byProvider.garmin?.options.activities && (
         <div className="card flags small">
