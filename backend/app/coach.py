@@ -161,7 +161,7 @@ class CoachError(Exception):
 
 
 # What each AI call is for (AiCall.kind). "Short" kinds use the cheaper settings (anthropic_*_short).
-KINDS = ("plan", "replan", "readiness", "weekly", "chat")
+KINDS = ("plan", "replan", "day", "readiness", "weekly", "chat")
 SHORT_KINDS = ("readiness", "weekly", "chat")
 # The instructions are the same for everyone, so they're cached (cache reads cost ~0.1x the input price).
 CACHED = {"type": "ephemeral"}
@@ -408,3 +408,40 @@ async def generate_plan(db: DbSession, viewer: User, athlete: User, facts: dict)
         return json.loads(text), model
     except ValueError as exc:
         raise CoachError("The AI coach returned a plan CoachQuest could not read. Try again.") from exc
+
+
+DAY_RULES = """Re-planning ONE day: `request.replan_day` holds the day to rewrite (`date`, `weekday`, the
+`current` session), the rest of its week (`week`, which stays as it is), what the athlete and coach said
+about this day (`comments`), and why it's being re-planned (`note`, `coach_notes`). Return only that day in
+`day` (its `weekday` must be `request.replan_day.weekday`), fitting the week around it, the races and the
+flags. Follow the coach's comments and notes unless the flags make that unsafe. In `why`, one or two
+sentences on what changed and why, mentioning the comment or note you followed."""
+
+
+def day_schema() -> dict:
+    """Structured output for a one-day re-plan: the same day shape as in a plan, plus a short reason."""
+    weeks = plan_schema()["schema"]["properties"]["weeks"]
+    day = weeks["items"]["properties"]["days"]["items"]
+    return {
+        "type": "json_schema",
+        "schema": {
+            "type": "object",
+            "properties": {"day": day, "why": {"type": "string"}},
+            "required": ["day", "why"],
+            "additionalProperties": False,
+        },
+    }
+
+
+async def generate_day(db: DbSession, viewer: User, athlete: User, facts: dict) -> tuple[dict, str]:
+    """Returns ({"day": {...}, "why": ...}, model that served it)."""
+    text, model = await ask_claude(
+        db, viewer, athlete, SYSTEM_PROMPT + "\n\n" + DAY_RULES, facts_json(facts), day_schema(), "day"
+    )
+    try:
+        answer = json.loads(text)
+    except ValueError as exc:
+        raise CoachError("The AI coach returned a day CoachQuest could not read. Try again.") from exc
+    if not isinstance(answer, dict) or not isinstance(answer.get("day"), dict):
+        raise CoachError("The AI coach returned a day CoachQuest could not read. Try again.")
+    return answer, model

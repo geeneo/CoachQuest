@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Lock, MessageSquare, Unlock } from "lucide-react";
+import { ArrowLeftRight, Lock, MessageSquare, Sparkles, Unlock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
@@ -80,7 +80,25 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
   };
 
   const get = (path) => download(base + path).catch((err) => setError(err.message));
-  const ctx = { prefs: prefs.data, editDay, swap, swapFrom, countByDay, openComments, get };
+  const replanDay = async (date, body) => {
+    const r = await call(`/days/${date}/replan`, "POST", body);
+    if (r) {
+      setNotice(`Proposed a new ${fmtDate(date)}: see the box at the top, then approve it to use it.`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return r;
+  };
+  const ctx = {
+    prefs: prefs.data,
+    editDay,
+    swap,
+    swapFrom,
+    countByDay,
+    openComments,
+    get,
+    replanDay,
+    isCoach: plan.viewer_role === "coach",
+  };
   return (
     <>
       <div className="row between tracker-bar">
@@ -225,7 +243,9 @@ function Day({ day, ctx }) {
   const types = ctx.prefs?.session_types || [day.type];
   const tags = ctx.prefs?.note_tags || [];
   const [editing, setEditing] = useState(false);
+  const [replanning, setReplanning] = useState(null); // null = closed, else {note, coach_notes, busy}
   const save = (body) => ctx.editDay(day.date, body);
+  const canReplan = !day.locked && day.date >= new Date().toISOString().slice(0, 10);
   return (
     <div className={`day status-${day.status} ${day.is_today ? "today" : ""} ${day.type === "Rest" ? "rest" : ""}`}>
       <div className="day-label">
@@ -266,6 +286,16 @@ function Day({ day, ctx }) {
             <MessageSquare size={14} />
             {ctx.countByDay[day.date] ? <span className="count">{ctx.countByDay[day.date]}</span> : null}
           </button>
+          {canReplan && (
+            <button
+              className={`icon-btn ${replanning ? "active" : ""}`}
+              title="Re-plan this day with the AI coach (uses this day's comments)"
+              aria-label="Re-plan this day"
+              onClick={() => setReplanning(replanning ? null : { note: "", coach_notes: "" })}
+            >
+              <Sparkles size={14} />
+            </button>
+          )}
         </div>
       </div>
       <div className="day-body">
@@ -299,6 +329,49 @@ function Day({ day, ctx }) {
           </div>
         )}
         <Actual day={day} tags={tags} save={save} />
+        {replanning && (
+          <form
+            className="card replan day-replan"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setReplanning({ ...replanning, busy: true });
+              const ok = await ctx.replanDay(day.date, { note: replanning.note, coach_notes: replanning.coach_notes });
+              setReplanning(ok ? null : { ...replanning, busy: false });
+            }}
+          >
+            <p className="small">
+              The AI coach rewrites only {DAY_LABEL[day.weekday]} {fmtDate(day.date)}, fitting it into the rest of the
+              week and using this day's comments. You see the new day before it's used.
+            </p>
+            <label>
+              What should change? (optional)
+              <input
+                value={replanning.note}
+                maxLength={1000}
+                placeholder="e.g. rest before the race, only 45 min, outdoors instead"
+                onChange={(e) => setReplanning({ ...replanning, note: e.target.value })}
+              />
+            </label>
+            {ctx.isCoach && (
+              <label>
+                Coach's notes (the AI coach must follow these)
+                <input
+                  value={replanning.coach_notes}
+                  maxLength={2000}
+                  onChange={(e) => setReplanning({ ...replanning, coach_notes: e.target.value })}
+                />
+              </label>
+            )}
+            <div className="row">
+              <button className="btn primary" disabled={replanning.busy}>
+                {replanning.busy ? "Re-planning…" : "Re-plan this day"}
+              </button>
+              <button type="button" className="btn" onClick={() => setReplanning(null)} disabled={replanning.busy}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

@@ -10,7 +10,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import comments, localtime, plan_approval, plan_tracker, plan_workouts, sync_engine, zwo
-from ..coach import PHASES, CoachError, build_facts, generate_plan, has_data
+from ..coach import PHASES, CoachError, build_facts, generate_day, generate_plan, has_data
 from ..db import Comment, Plan, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..queries import activities_since
@@ -431,6 +431,85 @@ def _apply_replan(p: Plan, weeks: list[dict], fresh: list[dict], summary: str, m
     return changed
 
 
+class DayReplan(BaseModel):
+    note: str = Field(default="", max_length=1000)
+    coach_notes: str = Field(default="", max_length=2000)
+
+
+@router.post("/{plan_id}/days/{day}/replan")
+async def replan_day(
+    athlete: str,
+    plan_id: int,
+    day: date,
+    body: DayReplan,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Claude rewrites one future day. It comes back as a proposal next to the current day; it's used once
+    approved (the person asking approves it themselves when they may, e.g. a coach)."""
+    p = _plan(db, user, athlete, plan_id)
+    if not p.weeks:
+        raise HTTPException(status_code=400, detail="This older plan has no day-by-day schedule")
+    _check_coach_notes(user, p.athlete_id, body.coach_notes)
+    if p.pending and "day_patch" not in p.pending:
+        raise HTTPException(status_code=409, detail="A re-plan of the plan is waiting: approve or send it back first")
+    target = db.get(User, p.athlete_id)
+    today = localtime.today(target)
+    try:
+        wi, di = plan_tracker.find_day(p.weeks, day.isoformat())
+    except KeyError:
+        raise HTTPException(status_code=404, detail="That day is not in this plan") from None
+    current = p.weeks[wi]["days"][di]
+    if day < today:
+        raise HTTPException(status_code=409, detail="That day is over; re-plan today or a day to come")
+    if current.get("locked"):
+        raise HTTPException(status_code=409, detail="That day is locked 🔒: unlock it first")
+    if not has_data(db, p.athlete_id):
+        raise HTTPException(status_code=409, detail="No activities or wellness synced yet: connect Strava or Garmin")
+    keys = ("weekday", "type", "description", "duration_min", "intensity")
+    day_comments = [
+        c for c in comments.for_plan(db, p, limit=40) if c["day"] == day.isoformat() or day.isoformat() in c["about"]
+    ]
+    request = {
+        **(p.request or {}),
+        "available_days": training_days(target, (p.request or {}).get("available_days") or []),
+        "replan_day": {
+            "date": day.isoformat(),
+            "weekday": current["weekday"],
+            "current": {k: current.get(k) for k in keys},
+            "week": [
+                {"date": d["date"], **{k: d.get(k) for k in keys}}
+                for d in p.weeks[wi]["days"]
+                if d["date"] != day.isoformat()
+            ],
+            "comments": day_comments[-15:],
+            **({"note": body.note.strip()} if body.note.strip() else {}),
+            **({"coach_notes": body.coach_notes.strip()} if body.coach_notes.strip() else {}),
+        },
+    }
+    facts = build_facts(db, target, allowed_scopes(db, user, p.athlete_id), request, today)
+    try:
+        answer, model = await generate_day(db, user, target, facts)
+    except CoachError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    new = plan_tracker.ai_day(answer["day"])
+    plan_approval.propose_day(
+        p,
+        user,
+        day.isoformat(),
+        new,
+        (answer.get("why") or "").strip(),
+        model,
+        reason=body.note.strip(),
+        coach_notes=body.coach_notes.strip(),
+    )
+    db.commit()
+    if plan_approval.needs_approval(db, p.athlete_id, user):
+        plan_approval.ask_coaches(db, background, p, "re-planned day")
+    return plan_out(p, db, full=True, viewer=user)
+
+
 class SendBack(BaseModel):
     note: str = Field(min_length=3, max_length=4000)
 
@@ -447,7 +526,14 @@ def approve(
     p = _plan(db, user, athlete, plan_id)
     plan_approval.require_approver(db, user, p)
     changed = None
-    if p.pending:
+    if p.pending and "day_patch" in p.pending:
+        weeks = _editable(p)
+        patch = dict(p.pending["day_patch"])
+        wi, di = plan_tracker.find_day(weeks, patch.pop("date"))
+        weeks[wi]["days"][di].update(patch, gear=None, route=None, missed_reason=None)
+        p.weeks, p.pending, changed = weeks, None, 1
+        what = "approved the re-planned day in"
+    elif p.pending:
         weeks = _editable(p)
         today = localtime.today(db.get(User, p.athlete_id))
         changed = _apply_replan(p, weeks, p.pending["fresh"], p.pending["summary"], p.pending["model"], today)

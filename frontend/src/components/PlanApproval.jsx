@@ -35,14 +35,20 @@ export function PlanApproval({ plan, athleteId, setPlan }) {
   if (!waiting && plan.approval !== "sent_back") return null;
 
   return (
-    <section className={`card approval ${plan.approval === "sent_back" && !p ? "sent-back" : ""}`}>
+    <section
+      className={`card approval ${plan.approval === "sent_back" && !p ? "sent-back" : ""}`}
+    >
       {plan.approval === "awaiting" && (
         <>
           <h2>Waiting for coach approval</h2>
           <p className="small">
-            The AI coach wrote this plan for {plan.viewer_role === "athlete" ? "you" : "the athlete"}. Its workouts go to
-            the calendar, Zwift and MyWhoosh only once a coach approves it.{" "}
-            {plan.can_approve ? "Edit days below first if you like." : "Your coach has been emailed."}
+            The AI coach wrote this plan for{" "}
+            {plan.viewer_role === "athlete" ? "you" : "the athlete"}. Its
+            workouts go to the calendar, Zwift and MyWhoosh only once a coach
+            approves it.{" "}
+            {plan.can_approve
+              ? "Edit days below first if you like."
+              : "Your coach has been emailed."}
           </p>
         </>
       )}
@@ -50,51 +56,49 @@ export function PlanApproval({ plan, athleteId, setPlan }) {
         <>
           <h2>Sent back by the coach</h2>
           <p className="small">
-            The coach's note is in the comments below. Re-plan to get a new version (the AI reads the note); it comes back
-            for approval.
+            The coach's note is in the comments below. Re-plan to get a new
+            version (the AI reads the note); it comes back for approval.
           </p>
         </>
       )}
-      {p && (
+      {p && p.day_patch && (
+        <>
+          <h2>
+            {plan.can_approve
+              ? "Re-planned day: check it, then approve"
+              : "Re-planned day waiting for coach approval"}
+          </h2>
+          <p className="small">
+            {p.by} asked the AI coach to re-plan{" "}
+            {formatDate(p.day_patch.date, { weekday: "short", year: false })} on{" "}
+            {dateTime(p.at)}
+            {p.reason && <> — "{p.reason}"</>}. The plan keeps the current day
+            until {plan.can_approve ? "you approve" : "a coach approves"}.
+          </p>
+          <ChangesTable changes={p.changes} />
+          {p.summary && (
+            <p className="small">
+              <strong>Why:</strong> {p.summary}
+            </p>
+          )}
+        </>
+      )}
+      {p && !p.day_patch && (
         <>
           <h2>Re-plan waiting for coach approval</h2>
           <p className="small">
             {p.by} asked for a re-plan on {dateTime(p.at)}
-            {p.reason && <> — "{p.reason}"</>}. The plan below stays as it is until a coach approves.{" "}
-            {p.changed} day{p.changed === 1 ? "" : "s"} would change:
+            {p.reason && <> — "{p.reason}"</>}. The plan below stays as it is
+            until a coach approves. {p.changed} day{p.changed === 1 ? "" : "s"}{" "}
+            would change:
           </p>
           {p.coach_notes && (
             <p className="small">
               <strong>Coach's notes:</strong> {p.coach_notes}
             </p>
           )}
-          <div className="table-wrap">
-            <table className="small">
-              <thead>
-                <tr>
-                  <th>Day</th>
-                  <th>Now</th>
-                  <th>Proposed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {p.changes.map((c) => (
-                  <tr key={c.date}>
-                    <td>{formatDate(c.date, { weekday: "short", year: false })}</td>
-                    <td className="muted">
-                      {c.before.type}
-                      {c.before.duration_min ? ` · ${c.before.duration_min}′` : ""} — {c.before.description}
-                    </td>
-                    <td>
-                      <strong>{c.after.type}</strong>
-                      {c.after.duration_min ? ` · ${c.after.duration_min}′` : ""} — {c.after.description}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {p.summary && (
+          <ChangesTable changes={p.changes} />
+          {p.summary && !p.day_patch && (
             <details>
               <summary className="small">The AI coach's summary</summary>
               <Markdown>{p.summary}</Markdown>
@@ -104,10 +108,19 @@ export function PlanApproval({ plan, athleteId, setPlan }) {
       )}
       {plan.can_approve && waiting && (
         <div className="row wrap">
-          <button className="btn primary" disabled={busy} onClick={() => act("/approve")}>
-            <Check size={16} /> Approve{p ? " re-plan" : " plan"}
+          <button
+            className="btn primary"
+            disabled={busy}
+            onClick={() => act("/approve")}
+          >
+            <Check size={16} /> Approve
+            {p?.day_patch ? " this day" : p ? " re-plan" : " plan"}
           </button>
-          <button className="btn" disabled={busy} onClick={() => setNote(note === null ? "" : null)}>
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={() => setNote(note === null ? "" : null)}
+          >
             <Undo2 size={16} /> Send back
           </button>
         </div>
@@ -139,6 +152,41 @@ export function PlanApproval({ plan, athleteId, setPlan }) {
   );
 }
 
+function ChangesTable({ changes }) {
+  return (
+    <div className="table-wrap">
+      <table className="small">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Now</th>
+            <th>Proposed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {changes.map((c) => (
+            <tr key={c.date}>
+              <td>{formatDate(c.date, { weekday: "short", year: false })}</td>
+              <td className="muted">
+                {c.before.type}
+                {c.before.duration_min
+                  ? ` · ${c.before.duration_min}′`
+                  : ""} — {c.before.description}
+              </td>
+              <td>
+                <strong>{c.after.type}</strong>
+                {c.after.duration_min
+                  ? ` · ${c.after.duration_min}′`
+                  : ""} — {c.after.description}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // What shaped the plan: the requests, coach's notes and approvals, newest last.
 export function PlanHistory({ plan }) {
   const notes = plan.request?.notes;
@@ -161,9 +209,11 @@ export function PlanHistory({ plan }) {
         <ul className="plain small">
           {plan.history.map((h, i) => (
             <li key={i}>
-              {dateTime(h.at)} · <strong>{EVENTS[h.event] || h.event}</strong> by {h.by} ({h.role})
-              {h.reason && <> · "{h.reason}"</>}
-              {h.coach_notes && h.event !== "created" && <> · coach's notes: "{h.coach_notes}"</>}
+              {dateTime(h.at)} · <strong>{EVENTS[h.event] || h.event}</strong>{" "}
+              by {h.by} ({h.role}){h.reason && <> · "{h.reason}"</>}
+              {h.coach_notes && h.event !== "created" && (
+                <> · coach's notes: "{h.coach_notes}"</>
+              )}
               {h.note && <> · "{h.note}"</>}
             </li>
           ))}

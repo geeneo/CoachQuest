@@ -56,6 +56,17 @@ def _workout(raw) -> dict | None:
     return {"name": (str(raw.get("name") or "Workout").strip() or "Workout")[:120], "steps": steps}
 
 
+def ai_day(src_day: dict) -> dict:
+    """The session fields of a day as Claude wrote it, checked the same way as in build_weeks."""
+    return {
+        "type": src_day.get("type") or "Rest",
+        "description": (src_day.get("description") or "").strip(),
+        "duration_min": max(0, int(src_day.get("duration_min") or 0)),
+        "intensity": [str(x) for x in src_day.get("intensity") or []][:6],
+        "workout": _workout(src_day.get("workout")),
+    }
+
+
 def build_weeks(ai_weeks: list[dict], first_day: date, n_weeks: int) -> list[dict]:
     """Give Claude's weeks real dates. Missing days become Rest; duplicate weekdays keep the first."""
     weeks = []
@@ -70,14 +81,7 @@ def build_weeks(ai_weeks: list[dict], first_day: date, n_weeks: int) -> list[dic
             d = _blank_day(start + timedelta(days=j))
             key = d["weekday"]
             if key in by_day:
-                src_day = by_day[key]
-                d.update(
-                    type=src_day.get("type") or "Rest",
-                    description=(src_day.get("description") or "").strip(),
-                    duration_min=max(0, int(src_day.get("duration_min") or 0)),
-                    intensity=[str(x) for x in src_day.get("intensity") or []][:6],
-                    workout=_workout(src_day.get("workout")),
-                )
+                d.update(ai_day(by_day[key]))
             days.append(d)
         weeks.append(
             {

@@ -96,6 +96,26 @@ def propose(p: Plan, user: User, fresh: list[dict], summary: str, model: str, to
     return p.pending
 
 
+def propose_day(p: Plan, user: User, date_iso: str, new: dict, why: str, model: str, **reasons) -> dict:
+    """A one-day re-plan, shown next to the current day; applied when approved (see plans.approve)."""
+    fields = ("type", "description", "duration_min")
+    current = next(d for w in p.weeks for d in w["days"] if d["date"] == date_iso)
+    p.pending = {
+        "day_patch": {"date": date_iso, **new},
+        "summary": why,
+        "model": model,
+        "by": user.display_name,
+        "at": utcnow().isoformat(timespec="seconds"),
+        "changed": 1,
+        "changes": [
+            {"date": date_iso, "before": {k: current.get(k) for k in fields}, "after": {k: new.get(k) for k in fields}}
+        ],
+        **{k: v for k, v in reasons.items() if v},
+    }
+    log(p, user, "day_proposed", day=date_iso, **reasons)
+    return p.pending
+
+
 def require_approver(db: DbSession, user: User, p: Plan) -> None:
     if not can_approve(db, user, p.athlete_id):
         raise HTTPException(status_code=403, detail="Only the athlete's coach can approve or send back this plan")

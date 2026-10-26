@@ -501,7 +501,7 @@
         (`POST /api/connections/intervals_icu/sync`); the page has no button
         and the forced re-send doesn't exist yet.
 
-- [ ] **Re-plan one day** (26 Oct). On a plan day, a "Re-plan this day" button
+- [x] **Re-plan one day** (Done.) (26 Oct). On a plan day, a "Re-plan this day" button
       next to the comments, so the AI rewrites just that day (and its indoor
       workout) instead of the whole plan from this week.
       - Goes to the AI with the day's comments (e.g. Thu 19 Nov: the athlete
