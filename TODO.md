@@ -420,6 +420,43 @@
       - Optional: a monthly token budget (not only a call count), and an email
         to the admin when someone reaches 80% of their limit.
 
+- [ ] **Use fewer AI tokens** (26 Oct; from a read of coach.py, assessments.py,
+      coach_chat.py). Each AI call has a type: plan, re-plan, readiness note,
+      weekly review or chat. Roughly in order of savings:
+      - **Prompt caching (biggest win).** No call uses it today. The long
+        instructions (and the chat's tool list) are the same on every call.
+        In a chat, every tool round and every follow-up question resends the
+        whole conversation. Cache the instructions and the conversation so
+        far: cached input costs about a tenth.
+      - **Skip calls that can't help.** The 06:40 readiness note and the
+        weekly review run for everyone who switched them on, even with no
+        data synced or nothing new since the last note (e.g. a coach-only
+        account like Mike Nel). Skip when there's no data or nothing changed.
+        Don't write a second readiness note on the same day unless something
+        changed (new sleep/HRV data, a new comment).
+      - **A smaller model and lower effort for the short jobs.** Everything
+        uses the plan model (default Opus, effort "high", up to 32,000 output
+        tokens), including a 120-word readiness note. Admin settings for the
+        model and effort per type: plans as now; readiness, weekly review and
+        chat on a cheaper model or lower effort, with a lower output cap.
+      - **Trim long chats.** Each new question resends every earlier answer,
+        tool result and thinking block in that chat. Drop or shorten old tool
+        results after a few turns, cap the chat's length ("start a new chat
+        to keep answers quick"), and use the API's context management to
+        clear old tool results.
+      - **Smaller tool results.** `get_activities` returns up to 150 full
+        activity records, and `get_fitness` up to 365 daily rows. Send only
+        the fields the AI needs, and weekly totals beyond ~8 weeks.
+      - **Compact JSON.** Facts are sent with `indent=1`. Compact separators
+        save roughly 10–20% of the input on plans and reviews.
+      - **Re-plans send less.** Cap the comments and the "kept days" list to
+        what's still relevant (e.g. the last 4 weeks), and summarise earlier
+        weeks instead of listing them.
+      - **Measure it.** Log each call's type and its cache read/write tokens
+        (the `AiCall` table has neither), and show tokens per type on the
+        admin page, so each change above can be checked against real numbers.
+        Goes with "Admin: AI use per user".
+
 ## Later
 
 - [ ] Account export and delete (POPIA/GDPR), privacy notice and consent text
