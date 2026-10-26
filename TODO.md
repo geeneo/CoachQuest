@@ -369,7 +369,7 @@
         browser's language and can't be restyled; show the chosen format
         next to it, or swap it for our own picker if that looks wrong.
 
-- [ ] **Admin: each user's data at a glance.** Admin → Users today shows only
+- [x] **Admin: each user's data at a glance.** (Done, except a "reconnect needed" email.) Admin → Users today shows only
       name, email, role, active/approved and when they joined. Add per user:
       - Activities: total, by source (Strava / Garmin / Intervals.icu), first
         and latest activity date; wellness days.

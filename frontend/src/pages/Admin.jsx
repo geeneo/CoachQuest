@@ -209,34 +209,78 @@ function SettingRow({ item, draft, onChange, onClear }) {
   );
 }
 
+const PROVIDERS = [
+  ["strava", "Strava"],
+  ["garmin", "Garmin"],
+  ["intervals_icu", "Intervals.icu"],
+];
+const USER_SORTS = {
+  attention: ["Needs attention", (a, b) => b.attention - a.attention || a.display_name.localeCompare(b.display_name)],
+  name: ["Name", (a, b) => a.display_name.localeCompare(b.display_name)],
+  seen: ["Last seen", (a, b) => (b.last_seen_at || "").localeCompare(a.last_seen_at || "")],
+  activities: ["Activities", (a, b) => b.activities.total - a.activities.total],
+  storage: ["Storage", (a, b) => b.storage_bytes - a.storage_bytes],
+  joined: ["Joined (newest first)", (a, b) => b.created_at.localeCompare(a.created_at)],
+};
+
 function Users({ onChange }) {
   const { user: me } = useAuth();
   const users = useApi("/api/admin/users");
   const [open, setOpen] = useState(null);
   const [error, setError] = useState(null);
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState("attention");
+  const [onlyFlagged, setOnlyFlagged] = useState(false);
   const update = (u, body) => {
     setError(null);
     api(`/api/admin/users/${u.id}`, { method: "PATCH", body }).then(users.reload, (e) => setError(e.message));
   };
+  const needle = q.trim().toLowerCase();
+  const rows = (users.data || [])
+    .filter((u) => !needle || `${u.display_name} ${u.email}`.toLowerCase().includes(needle))
+    .filter((u) => !onlyFlagged || u.flags.length)
+    // People waiting for approval always come first.
+    .sort((a, b) => a.approved - b.approved || USER_SORTS[sort][1](a, b));
   return (
     <section className="card">
       <h2>Users</h2>
+      <div className="row wrap dash-controls">
+        <input type="search" placeholder="Search name or email" value={q} onChange={(e) => setQ(e.target.value)} />
+        <label className="inline">
+          Sort by
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            {Object.entries(USER_SORTS).map(([k, [label]]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={onlyFlagged} onChange={(e) => setOnlyFlagged(e.target.checked)} /> Only those
+          with flags
+        </label>
+        <button className="btn small" onClick={users.reload}>
+          Refresh
+        </button>
+      </div>
       {error && <div className="error">{error}</div>}
+      {users.error && <div className="error">{users.error.message}</div>}
       {users.data && (
         <div className="table-wrap">
-          <table>
+          <table className="admin-users">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Joined</th>
-                <th>Admin</th>
-                <th>Active</th>
-                <th />
+                <th>User</th>
+                <th>Last seen</th>
+                <th>Activities</th>
+                <th>Connections</th>
+                <th>Plans &amp; sharing</th>
+                <th>AI · storage</th>
               </tr>
             </thead>
             <tbody>
-              {users.data.map((u) => (
+              {rows.map((u) => (
                 <UserRow
                   key={u.id}
                   u={u}
@@ -252,10 +296,30 @@ function Users({ onChange }) {
               ))}
             </tbody>
           </table>
+          {!rows.length && <p className="muted small">No users match.</p>}
         </div>
       )}
+      <p className="muted small">
+        Storage is an estimate (each table's size split by the user's share of its rows). Opening a user's details is
+        shown in their "Who looked at my data" log.
+      </p>
     </section>
   );
+}
+
+function day(value) {
+  return value ? new Date(value.endsWith("Z") ? value : value + "Z").toLocaleDateString() : "–";
+}
+
+function ConnState({ c }) {
+  if (!c) return <span className="muted">–</span>;
+  if (c.status === "error")
+    return (
+      <span className="error-text" title={c.last_error || ""}>
+        error
+      </span>
+    );
+  return <span className="ok-text">{c.last_sync_at ? day(c.last_sync_at) : "connected"}</span>;
 }
 
 function UserRow({ u, isMe, open, toggle, update, reload }) {
@@ -267,29 +331,26 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
       },
       (e) => alert(e.message),
     );
+  const a = u.activities;
+  const d = u.delivery;
   return (
     <>
-      <tr>
+      <tr className={u.attention >= 3 ? "attention" : ""}>
         <td>
-          {u.display_name} {!u.approved && <span className="badge bad">waiting for approval</span>}
-        </td>
-        <td>{u.email}</td>
-        <td>{dateTime(u.created_at)}</td>
-        <td>
-          <input type="checkbox" checked={u.is_admin} disabled={isMe} onChange={(e) => update(u, { is_admin: e.target.checked })} />
-        </td>
-        <td>
-          <input
-            type="checkbox"
-            checked={u.is_active}
-            disabled={isMe}
-            onChange={(e) =>
-              (e.target.checked || confirm(`Disable ${u.display_name}? They are signed out at once.`)) &&
-              update(u, { is_active: e.target.checked })
-            }
-          />
-        </td>
-        <td>
+          <strong>{u.display_name}</strong>
+          {isMe && <span className="muted"> (you)</span>} {u.is_admin && <span className="badge">admin</span>}{" "}
+          {!u.is_active && <span className="badge bad">disabled</span>}
+          <div className="small muted">{u.email}</div>
+          <div className="small muted">joined {day(u.created_at)}</div>
+          {u.flags.length > 0 && (
+            <div className="chips tight">
+              {u.flags.map((f) => (
+                <span key={f} className={`badge ${f === "disabled" || f.startsWith("no sign-in") ? "" : "bad"}`}>
+                  {f}
+                </span>
+              ))}
+            </div>
+          )}
           {!u.approved ? (
             <span className="row tight">
               <button className="btn primary" onClick={() => decide(u, "approve")}>
@@ -300,22 +361,197 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
               </button>
             </span>
           ) : (
-            !isMe && (
-              <button className="link-btn small" onClick={toggle}>
-                {open ? "Close" : "Manage"}
-              </button>
-            )
+            <button className="link-btn small" onClick={toggle}>
+              {open ? "Close details" : "Details"}
+            </button>
           )}
+        </td>
+        <td className="small">
+          {u.last_seen_at ? dateTime(u.last_seen_at) : <span className="muted">never</span>}
+          {u.failed_sign_ins_7d > 0 && (
+            <div className="error-text">{u.failed_sign_ins_7d} failed sign-ins (7 days)</div>
+          )}
+        </td>
+        <td className="small">
+          <strong>{a.total}</strong>
+          {a.total > 0 && (
+            <>
+              <div className="muted">
+                {Object.entries(a.by_source)
+                  .map(([k, n]) => `${PROVIDERS.find((p) => p[0] === k)?.[1] || k} ${n}`)
+                  .join(" · ")}
+              </div>
+              <div className="muted">latest {day(a.last)}</div>
+            </>
+          )}
+          <div className="muted">{u.wellness_days} wellness days</div>
+        </td>
+        <td className="small">
+          <table className="mini">
+            <tbody>
+              {PROVIDERS.map(([k, label]) => (
+                <tr key={k}>
+                  <td className="muted">{label}</td>
+                  <td>
+                    <ConnState c={u.connections[k]} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {(d.failed > 0 || d.blocked > 0 || d.queued > 0) && (
+            <div className={d.failed || d.blocked ? "error-text" : "muted"}>
+              Workouts: {[d.queued && `${d.queued} queued`, d.failed && `${d.failed} failed`, d.blocked && `${d.blocked} blocked`]
+                .filter(Boolean)
+                .join(", ")}
+            </div>
+          )}
+        </td>
+        <td className="small">
+          <div>
+            {u.plans} plans · {u.races} races · {u.scheduled_workouts} workouts
+          </div>
+          <div className="muted">
+            {u.coaches} {u.coaches === 1 ? "coach" : "coaches"} · {u.athletes} {u.athletes === 1 ? "athlete" : "athletes"}
+          </div>
+        </td>
+        <td className="small">
+          <div>
+            {u.ai_month.calls} AI calls{u.ai_month.tokens ? ` · ${Math.round(u.ai_month.tokens / 1000)}k tokens` : ""}
+          </div>
+          <div className="muted">≈ {bytes(u.storage_bytes)}</div>
         </td>
       </tr>
       {open && (
         <tr>
           <td colSpan={6} className="manage-cell">
-            <ManageUser u={u} reload={reload} />
+            <UserDetail u={u} isMe={isMe} update={update} reload={reload} />
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+function UserDetail({ u, isMe, update, reload }) {
+  const d = useApi(`/api/admin/users/${u.id}/detail`);
+  const [msg, setMsg] = useState(null);
+  const syncNow = (provider) => {
+    setMsg(null);
+    api(`/api/admin/users/${u.id}/sync/${provider}`, { method: "POST" }).then(
+      (r) => {
+        setMsg({ ok: `Synced: ${r.fetched} new item${r.fetched === 1 ? "" : "s"}.` });
+        reload();
+      },
+      (e) => setMsg({ error: e.message }),
+    );
+  };
+  return (
+    <div className="manage">
+      <div className="user-detail">
+        <div>
+          <h3>Connections</h3>
+          <table className="mini">
+            <tbody>
+              {PROVIDERS.map(([k, label]) => {
+                const c = u.connections[k];
+                return (
+                  <tr key={k}>
+                    <td>{label}</td>
+                    <td>
+                      {c ? (
+                        <>
+                          <span className={c.status === "error" ? "error-text" : "ok-text"}>{c.status}</span>
+                          <span className="muted"> · last sync {c.last_sync_at ? dateTime(c.last_sync_at) : "never"}</span>
+                          {c.last_error && <div className="error-text">{c.last_error}</div>}
+                        </>
+                      ) : (
+                        <span className="muted">not connected</span>
+                      )}
+                    </td>
+                    <td>
+                      {c && (
+                        <button className="btn small" onClick={() => syncNow(k)}>
+                          Sync now
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {msg?.ok && <div className="ok small">{msg.ok}</div>}
+          {msg?.error && <div className="error small">{msg.error}</div>}
+          {d.data && (
+            <>
+              <h3>Activities by sport</h3>
+              <p className="small">
+                {d.data.sports.length ? d.data.sports.map((s) => `${s.sport} ${s.count}`).join(" · ") : "None yet."}
+                {u.activities.first && (
+                  <span className="muted">
+                    {" "}
+                    ({day(u.activities.first)} to {day(u.activities.last)})
+                  </span>
+                )}
+              </p>
+              <h3>Sharing</h3>
+              <p className="small">
+                Coaches: {d.data.coaches.map((g) => g.name).join(", ") || "none"}
+                <br />
+                Athletes: {d.data.athletes.map((g) => g.name).join(", ") || "none"}
+              </p>
+            </>
+          )}
+        </div>
+        {d.error && <div className="error small">{d.error.message}</div>}
+        {d.data && (
+          <div>
+            <h3>Recent sign-ins</h3>
+            <ul className="plain small">
+              {d.data.sign_ins.map((e) => (
+                <li key={e.id} className={e.failed ? "error-text" : ""}>
+                  {dateTime(e.at)} · {e.label}
+                  {e.ip && <span className="muted"> · {e.ip}</span>}
+                </li>
+              ))}
+              {!d.data.sign_ins.length && <li className="muted">None logged.</li>}
+            </ul>
+            <h3>Recent workout deliveries</h3>
+            <ul className="plain small">
+              {d.data.deliveries.map((r, i) => (
+                <li key={i} className={["failed", "blocked"].includes(r.outcome) ? "error-text" : ""}>
+                  {dateTime(r.at)} · {r.workout || "workout"} → {r.provider}: {r.outcome}
+                  {r.message && <span className="muted"> · {r.message}</span>}
+                </li>
+              ))}
+              {!d.data.deliveries.length && <li className="muted">None.</li>}
+            </ul>
+          </div>
+        )}
+      </div>
+      {!isMe && (
+        <>
+          <div className="row wrap">
+            <label className="check">
+              <input type="checkbox" checked={u.is_admin} onChange={(e) => update(u, { is_admin: e.target.checked })} /> Admin
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={u.is_active}
+                onChange={(e) =>
+                  (e.target.checked || confirm(`Disable ${u.display_name}? They are signed out at once.`)) &&
+                  update(u, { is_active: e.target.checked })
+                }
+              />{" "}
+              Active (can sign in)
+            </label>
+          </div>
+          <ManageUser u={u} reload={reload} />
+        </>
+      )}
+    </div>
   );
 }
 

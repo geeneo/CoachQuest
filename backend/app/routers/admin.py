@@ -12,7 +12,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
-from .. import accounts, auth_log, mailer, runtime
+from .. import accounts, admin_users, auth_log, mailer, runtime
 from ..config import settings
 from ..db import (
     AccessLog,
@@ -29,6 +29,7 @@ from ..db import (
     utcnow,
 )
 from ..deps import admin_user
+from . import connections
 
 log = logging.getLogger("coachquest.admin")
 
@@ -151,20 +152,29 @@ async def test_email(body: TestEmail, admin: User = Depends(admin_user)):
 
 @router.get("/users")
 def list_users(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
-    # People waiting for approval first.
-    users = db.scalars(select(User).order_by(User.approved, User.created_at)).all()
-    return [
-        {
-            "id": u.id,
-            "email": u.email,
-            "display_name": u.display_name,
-            "is_admin": u.is_admin,
-            "is_active": u.is_active,
-            "approved": u.approved,
-            "created_at": u.created_at,
-        }
-        for u in users
-    ]
+    """Every user with their data at a glance (people waiting for approval first)."""
+    return admin_users.overview(db)
+
+
+@router.get("/users/{user_id}/detail")
+def user_detail(user_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """One user's recent history. Logged in their access log, like a coach looking."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id != admin.id:
+        db.add(AccessLog(athlete_id=user.id, viewer_id=admin.id, resource="admin overview"))
+        db.commit()
+    return admin_users.detail(db, user)
+
+
+@router.post("/users/{user_id}/sync/{provider}")
+async def user_sync_now(user_id: int, provider: str, _: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Run a user's Strava / Garmin / Intervals.icu import now (same 5-minute limit as theirs)."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return await connections.sync_now(provider, user, db)
 
 
 class UserUpdate(BaseModel):

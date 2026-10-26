@@ -1502,3 +1502,30 @@ table.dashboard tr.attention td:first-child {
 .period-bar {
   margin: 0 0 0.75rem;
 }
+
+/* ---- admin: users ---- */
+.admin-users td {
+  vertical-align: top;
+}
+.admin-users tr.attention > td:first-child {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+table.mini td {
+  padding: 0 0.6rem 0 0;
+  border: none;
+  white-space: nowrap;
+}
+ul.plain {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+}
+.user-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem 2rem;
+}
+.user-detail h3 {
+  font-size: 0.95rem;
+  margin: 0.5rem 0 0.35rem;
+}
