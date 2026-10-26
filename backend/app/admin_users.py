@@ -14,7 +14,7 @@ from datetime import timedelta
 from sqlalchemy import case, func, select, text
 from sqlalchemy.orm import Session as DbSession
 
-from . import auth_log
+from . import auth_log, runtime
 from .coach import monthly_limit
 from .db import (
     Activity,
@@ -33,10 +33,12 @@ from .db import (
     SyncJob,
     SyncLog,
     User,
+    UserStravaApp,
     WellnessDay,
     Workout,
     utcnow,
 )
+from .providers import strava
 
 PROVIDERS = ("strava", "garmin", "intervals_icu")
 STALE_SYNC = timedelta(days=2)  # a connected source with no sync for this long is flagged
@@ -59,6 +61,18 @@ OWNED = (
 
 def _counts(db: DbSession, col, *where) -> dict:
     return dict(db.execute(select(col, func.count()).where(*where).group_by(col)).all())
+
+
+def strava_apps(db: DbSession) -> dict[int, str | None]:
+    """Per user with Strava linked: which app holds the link ("own", "shared", "old").
+
+    Strava caps how many athletes one app may have, so the admin needs to see
+    who is using a slot on the shared app.
+    """
+    own = dict(db.execute(select(UserStravaApp.user_id, UserStravaApp.client_id)).all())
+    shared = runtime.get("strava_client_id")
+    conns = db.scalars(select(Connection).where(Connection.provider == "strava"))
+    return {c.user_id: strava.issuing_app(c, own.get(c.user_id), shared) for c in conns}
 
 
 def _table_bytes(db: DbSession) -> dict[str, int]:
@@ -111,6 +125,8 @@ def overview(db: DbSession) -> list[dict]:
             "last_sync_at": c.last_sync_at,
             "last_error": c.last_error,
         }
+    for uid, app in strava_apps(db).items():
+        conns[uid]["strava"]["app"] = app
 
     jobs: dict[int, dict] = {}
     for uid, status, n in db.execute(
@@ -183,8 +199,13 @@ def overview(db: DbSession) -> list[dict]:
         if failed.get(u.id, 0) >= 5:
             flags.append(f"{failed[u.id]} failed sign-ins")
             attention += 1
-        if u.is_active and u.approved and (seen is None or seen < now - QUIET):
+        quiet = seen is None or seen < now - QUIET
+        if u.is_active and u.approved and quiet:
             flags.append("no sign-in for 30 days")
+        if quiet and uc.get("strava", {}).get("app") == "shared":
+            # Holds one of the shared Strava app's few athlete slots without using it.
+            flags.append("idle on shared Strava app")
+            attention += 1
         rows.append(
             {
                 "id": u.id,

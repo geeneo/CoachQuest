@@ -1,6 +1,7 @@
 from datetime import timedelta
 
-from app.db import AccessLog, Activity, Connection, SessionLocal, SyncJob, utcnow
+from app.db import AccessLog, Activity, AuthEvent, Connection, Session, SessionLocal, SyncJob, utcnow
+from app.security import encrypt_json
 
 
 def _uid(p):
@@ -74,3 +75,37 @@ def test_sync_now_for_a_user(make_user):
         db.add(Connection(user_id=rid, provider="garmin", token_enc="x", last_sync_at=utcnow()))
         db.commit()
     assert admin.post(f"/api/admin/users/{rid}/sync/garmin").status_code == 429  # synced just now
+
+
+def _strava(uid, client_id):
+    tokens = {"access_token": "a", "refresh_token": "r"} | ({"client_id": client_id} if client_id else {})
+    with SessionLocal() as db:
+        db.add(Connection(user_id=uid, provider="strava", token_enc=encrypt_json(tokens), last_sync_at=utcnow()))
+        db.commit()
+
+
+def test_shows_which_strava_app_holds_each_link(make_user):
+    admin = make_user("admin@example.com", "Admin")
+    admin.request(
+        "PUT", "/api/admin/settings", json={"values": {"strava_client_id": "999", "strava_client_secret": "ab" * 20}}
+    )
+    people = {n: make_user(f"{n}@example.com", n) for n in ("own", "shared", "legacy", "old", "idle")}
+    people["own"].request("PUT", "/api/connections/strava/app", json={"client_id": "777", "client_secret": "ab" * 20})
+    ids = {n: _uid(p) for n, p in people.items()}
+    _strava(ids["own"], "777")
+    _strava(ids["shared"], "999")
+    _strava(ids["legacy"], None)  # saved before client_id was recorded: the shared app
+    _strava(ids["old"], "555")
+    _strava(ids["idle"], "999")
+    long_ago = utcnow() - timedelta(days=60)
+    with SessionLocal() as db:
+        db.query(Session).filter_by(user_id=ids["idle"]).update({"last_seen_at": long_ago})
+        db.query(AuthEvent).filter_by(user_id=ids["idle"]).update({"at": long_ago})
+        db.commit()
+
+    rows = {r["id"]: r for r in admin.get("/api/admin/users").json()}
+    apps = {n: rows[i]["connections"]["strava"]["app"] for n, i in ids.items()}
+    assert apps == {"own": "own", "shared": "shared", "legacy": "shared", "old": "old", "idle": "shared"}
+    assert "idle on shared Strava app" in rows[ids["idle"]]["flags"]
+    assert "idle on shared Strava app" not in rows[ids["shared"]]["flags"]
+    assert admin.get("/api/admin/stats").json()["strava_shared"] == 3

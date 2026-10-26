@@ -90,6 +90,11 @@ A user's own app wins over the shared one. Secrets are stored encrypted and
 never shown again. Tokens only refresh with the app that issued them, so after
 switching apps a user disconnects and connects Strava again (the page says so).
 
+Admin → Users shows which app holds each Strava link (shared, own, or an old
+app that is no longer set up). Usage shows how many users are on the shared app.
+A user on the shared app with no sign-in for 30 days is flagged "idle on shared
+Strava app": ask them to disconnect or move to their own app to free the slot.
+
 ### AI coach tab
 
 All AI features follow one rule: CoachQuest computes the facts and decisions,

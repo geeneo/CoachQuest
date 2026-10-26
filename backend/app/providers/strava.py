@@ -96,6 +96,20 @@ def _app_by_client_id(db: DbSession, user_id: int, client_id: str | None) -> Str
     )
 
 
+def issuing_app(conn: Connection, own_client_id: str | None, shared_client_id: str | None) -> str | None:
+    """Which app holds this connection: "own", "shared", "old" (no longer configured), or None if unreadable."""
+    try:
+        client_id = decrypt_json(conn.token_enc).get("client_id")
+    except Exception:
+        return None
+    if own_client_id and client_id == own_client_id:
+        return "own"
+    # Same rule as _app_by_client_id: tokens without a client_id came from the server app.
+    if client_id is None or client_id == shared_client_id:
+        return "shared"
+    return "old"
+
+
 def redirect_uri() -> str:
     return f"{settings.public_base_url}/api/connections/strava/callback"
 

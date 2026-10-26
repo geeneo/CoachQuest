@@ -47,6 +47,7 @@ def stats(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
     return {
         "users": db.scalar(select(func.count(User.id))),
         "connections": dict(db.execute(select(Connection.provider, func.count()).group_by(Connection.provider)).all()),
+        "strava_shared": sum(app == "shared" for app in admin_users.strava_apps(db).values()),
         "connection_errors": db.scalar(select(func.count()).where(Connection.status == "error")),
         "ai_calls": dict(db.execute(select(AiCall.status, func.count()).group_by(AiCall.status)).all()),
         "ai_tokens": {

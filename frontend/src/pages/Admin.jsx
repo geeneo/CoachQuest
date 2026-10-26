@@ -33,6 +33,7 @@ export default function Admin() {
           <div className="stats">
             <Stat label="Users" value={s.users} />
             <Stat label="Strava links" value={s.connections.strava || 0} />
+            <Stat label="On shared Strava app" value={s.strava_shared} />
             <Stat label="Garmin links" value={s.connections.garmin || 0} />
             <Stat label="Sync errors" value={s.connection_errors} />
             <Stat label="AI plans ok" value={s.ai_calls.ok || 0} />
@@ -330,15 +331,35 @@ function Users({ onChange }) {
   );
 }
 
+// Which Strava API app holds the link; the shared one has a capped number of athlete slots.
+const STRAVA_APP = {
+  shared: ["shared app", "Uses one of the shared Strava app's athlete slots"],
+  own: ["own app", "Linked through the user's own Strava app"],
+  old: ["old app", "Linked through an app that is no longer set up; the user must reconnect"],
+};
+
 function ConnState({ c }) {
   if (!c) return <span className="muted">–</span>;
-  if (c.status === "error")
-    return (
+  const app = STRAVA_APP[c.app];
+  const state =
+    c.status === "error" ? (
       <span className="error-text" title={c.last_error || ""}>
         error
       </span>
+    ) : (
+      <span className="ok-text">{c.last_sync_at ? formatDate(c.last_sync_at) : "connected"}</span>
     );
-  return <span className="ok-text">{c.last_sync_at ? formatDate(c.last_sync_at) : "connected"}</span>;
+  return (
+    <>
+      {state}
+      {app && (
+        <span className="muted" title={app[1]}>
+          {" "}
+          · {app[0]}
+        </span>
+      )}
+    </>
+  );
 }
 
 function UserRow({ u, isMe, open, toggle, update, reload }) {
