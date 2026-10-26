@@ -38,7 +38,8 @@ How to write the plan:
 - The `flags` list is computed in code and is authoritative. Respect each flag (for example, plan \
 recovery first when fatigue is flagged). Don't invent flags of your own from missing data.
 - If a data category is missing because it was not shared, say once what that limits and move on.
-- Fit the plan inside the requested weekly hours and available days.
+- Fit the plan inside the requested weekly hours and available days. Where `request.available_days` and \
+`weekday_preferences` disagree, the weekday preferences win.
 - When `weekday_preferences` is given (one session type per day), plan that type on that day, and keep
   "Rest" days as rest unless the request says otherwise.
 - An activity with a `note` (e.g. illness, travel, mechanical) explains itself: treat a light or missed

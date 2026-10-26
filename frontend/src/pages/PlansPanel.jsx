@@ -1,5 +1,5 @@
 import { Sparkles, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
@@ -23,6 +23,14 @@ export default function PlansPanel({ id, athlete }) {
     coach_notes: "",
     structured_workouts: true,
   });
+  // Training days start from the weekday preferences (any day not set to Rest), when there are any.
+  const prefs = useApi(`/api/athletes/${id}/preferences`);
+  useEffect(() => {
+    const wp = prefs.data?.weekday_prefs;
+    if (!wp || !Object.values(wp).some((t) => t.length)) return;
+    const days = DAYS.filter((d) => (wp[d.toLowerCase()] || [])[0] && wp[d.toLowerCase()][0] !== "Rest");
+    setForm((f) => ({ ...f, available_days: days }));
+  }, [prefs.data]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -121,6 +129,9 @@ export default function PlansPanel({ id, athlete }) {
           </label>
           <fieldset>
             <legend>Training days</legend>
+            <span className="hint">
+              From {athlete.is_me ? "your" : "the athlete's"} weekday preferences (Profile); re-plans follow them too.
+            </span>
             <div className="chips">
               {DAYS.map((d) => (
                 <button

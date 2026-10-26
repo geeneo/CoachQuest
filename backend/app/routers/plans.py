@@ -295,6 +295,20 @@ def apply_preferences(
     return {**plan_out(p, db, full=True, viewer=user), "changed": changed, "to_plan": empty}
 
 
+def training_days(athlete: User, asked: list[str]) -> list[str]:
+    """The days to train on: the athlete's weekday preferences where set (Rest = no), else what was asked.
+
+    A plan keeps the days chosen when it was made; preferences set later win on re-plans."""
+    prefs = preferences_out(athlete)["weekday_prefs"]
+    days = []
+    for key in plan_tracker.WEEKDAYS:
+        name = key.capitalize()
+        chosen = prefs.get(key) or []
+        if (chosen and chosen[0] != "Rest") or (not chosen and name in asked):
+            days.append(name)
+    return days
+
+
 class Replan(BaseModel):
     reason: str = Field(default="", max_length=1000)
     coach_notes: str = Field(default="", max_length=2000)
@@ -329,6 +343,7 @@ async def replan(
     ]
     request = {
         **(p.request or {}),
+        "available_days": training_days(target, (p.request or {}).get("available_days") or []),
         "start_date": weeks[first]["start"],
         "weeks": len(weeks) - first,
         "replan": {

@@ -227,3 +227,18 @@ def test_replan_merge_in_code():
     assert days[1]["type"] == "Zwift / indoor"  # Tuesday is past
     assert days[5]["type"] == "Road"  # Saturday is locked
     assert changed == 0 and weeks[0]["phase"] == "Taper"  # the free days were already Rest
+
+
+def test_replan_trains_on_the_preferred_days(plan_id, monkeypatch):
+    p, plan = plan_id
+    seen = {}
+
+    async def fake(db, viewer, athlete, facts):
+        seen.update(facts["request"])
+        return {"summary_md": "ok", "weeks": []}, "claude-test"
+
+    monkeypatch.setattr("app.routers.plans.generate_plan", fake)
+    # The plan was made for Tue, Thu, Sat, Sun; preferences now say Wednesday is indoor and Sunday rest.
+    p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"wed": ["Zwift / indoor"], "sun": ["Rest"]}})
+    p.post(f"/api/athletes/me/plans/{plan['id']}/replan", json={"reason": "Wednesday is a ride day"})
+    assert seen["available_days"] == ["Tue", "Wed", "Thu", "Sat"]
