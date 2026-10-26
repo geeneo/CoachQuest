@@ -20,6 +20,7 @@ export default function PlansPanel({ id, athlete }) {
     hours_per_week: 8,
     available_days: ["Tue", "Thu", "Sat", "Sun"],
     notes: "",
+    coach_notes: "",
     structured_workouts: true,
   });
   const [busy, setBusy] = useState(false);
@@ -90,6 +91,7 @@ export default function PlansPanel({ id, athlete }) {
         <p className="muted small">
           Claude gets only the data {athlete.is_me ? "you have" : `${athlete.display_name} has`} shared, plus load and
           readiness facts computed by CoachQuest. Generating can take a minute or two.
+          {athlete.is_me && " If you have a coach, plans you generate wait for their approval before workouts go to your calendar."}
         </p>
         <form className="grid-form" onSubmit={generate}>
           <label>
@@ -142,6 +144,19 @@ export default function PlansPanel({ id, athlete }) {
               placeholder="Indoor trainer on weekdays, knee niggle, travelling week 3…"
             />
           </label>
+          {!athlete.is_me && (
+            <label className="wide">
+              Coach's notes (the AI coach must follow these)
+              <textarea
+                rows={3}
+                value={form.coach_notes}
+                onChange={set("coach_notes")}
+                maxLength={2000}
+                placeholder="e.g. No intervals before the race recce; keep week 3 easy; long ride on Saturday"
+              />
+              <span className="hint">Shown on the plan, so {athlete.display_name} sees what shaped it.</span>
+            </label>
+          )}
           <label className="check wide">
             <input
               type="checkbox"
@@ -164,6 +179,9 @@ export default function PlansPanel({ id, athlete }) {
             {plans.data.map((p) => (
               <li key={p.id}>
                 <Link to={`/athletes/${athlete.id}/plans/${p.id}`}>{p.title}</Link>
+                {p.approval === "awaiting" && <span className="badge warn">waiting for coach</span>}
+                {p.approval === "sent_back" && <span className="badge bad">sent back</span>}
+                {p.has_pending && <span className="badge warn">re-plan waiting for coach</span>}
                 <span className="muted small">
                   {p.request?.weeks} weeks · by {p.author} · {dateTime(p.created_at)}
                 </span>

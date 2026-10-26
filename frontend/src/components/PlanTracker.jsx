@@ -40,15 +40,25 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
   };
 
   const [replan, setReplan] = useState(null); // null = closed, else the reason being typed
+  const [coachNotes, setCoachNotes] = useState("");
   const [replanning, setReplanning] = useState(false);
+  const isCoach = plan.viewer_role === "coach";
   const runReplan = async (e) => {
     e.preventDefault();
     setReplanning(true);
-    const r = await call("/replan", "POST", { reason: replan });
+    const r = await call("/replan", "POST", { reason: replan, ...(isCoach ? { coach_notes: coachNotes } : {}) });
     setReplanning(false);
     if (r) {
       setReplan(null);
-      setNotice(`Re-planned: ${r.changed} day${r.changed === 1 ? "" : "s"} changed. Past and locked days were kept.`);
+      setCoachNotes("");
+      const days = `${r.changed} day${r.changed === 1 ? "" : "s"}`;
+      setNotice(
+        r.pending
+          ? `Re-plan proposed (${days} would change) and sent to your coach. Your plan stays as it is until they approve.`
+          : r.approval === "awaiting"
+            ? `Re-planned: ${days} changed. It waits for your coach's approval.`
+            : `Re-planned: ${days} changed. Past and locked days were kept.`,
+      );
     }
   };
 
@@ -107,6 +117,18 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
               onChange={(e) => setReplan(e.target.value)}
             />
           </label>
+          {isCoach && (
+            <label>
+              Coach's notes (the AI coach must follow these)
+              <textarea
+                rows={2}
+                value={coachNotes}
+                maxLength={2000}
+                placeholder="e.g. Keep next week easy; move the long ride to Sunday"
+                onChange={(e) => setCoachNotes(e.target.value)}
+              />
+            </label>
+          )}
           <div className="row">
             <button className="btn primary" disabled={replanning}>
               {replanning ? "Re-planning… (up to a minute)" : "Re-plan"}

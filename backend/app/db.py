@@ -248,6 +248,11 @@ class Plan(Base):
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     weeks: Mapped[list | None] = mapped_column(JSON, nullable=True)
     model: Mapped[str] = mapped_column(String(64))
+    # Coach approval (plan_approval.py): approved | awaiting | sent_back. Only approved plans
+    # put workouts on the calendar. `pending` is a re-plan waiting for a coach; `history` what happened.
+    approval: Mapped[str] = mapped_column(String(12), default="approved")
+    pending: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    history: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -502,7 +507,13 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 # tables, so add missing columns to existing ones here.
 _ADDED_COLUMNS = {
     "connections": {"options": "JSON", "backfill": "JSON"},
-    "plans": {"start_date": "DATE", "weeks": "JSON"},
+    "plans": {
+        "start_date": "DATE",
+        "weeks": "JSON",
+        "approval": "VARCHAR(12) NOT NULL DEFAULT 'approved'",
+        "pending": "JSON",
+        "history": "JSON",
+    },
     "wellness_days": {"source": "VARCHAR(20) NOT NULL DEFAULT 'garmin'"},
     "scheduled_workouts": {
         "plan_id": "INTEGER",

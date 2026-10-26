@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import comments, localtime, plan_tracker, plan_workouts, sync_engine, zwo
+from .. import comments, localtime, plan_approval, plan_tracker, plan_workouts, sync_engine, zwo
 from ..coach import PHASES, CoachError, build_facts, generate_plan
 from ..db import Comment, Plan, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -28,11 +28,13 @@ class PlanRequest(BaseModel):
     hours_per_week: float = Field(default=8, ge=1, le=30)
     available_days: list[str] = Field(default_factory=lambda: ["Tue", "Thu", "Sat", "Sun"])
     notes: str = Field(default="", max_length=2000)
+    # From the athlete's human coach: the AI must follow them (only a coach can send these).
+    coach_notes: str = Field(default="", max_length=2000)
     # Indoor days become structured workouts on the calendar (and go to the athlete's platforms).
     structured_workouts: bool = True
 
 
-def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = None) -> dict:
+def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = None, viewer: User | None = None) -> dict:
     author = db.get(User, p.author_id) if p.author_id else None
     out = {
         "id": p.id,
@@ -43,11 +45,19 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
         "request": p.request,
         "start_date": p.start_date,
         "structured": bool(p.weeks),
+        "approval": p.approval or plan_approval.APPROVED,
+        "has_pending": bool(p.pending),
     }
     if full:
         athlete = db.get(User, p.athlete_id)
         today = today or localtime.today(athlete)
-        out.update(content_md=p.content_md, facts=p.facts)
+        out.update(content_md=p.content_md, facts=p.facts, history=p.history or [])
+        if p.pending:
+            out["pending"] = {k: v for k, v in p.pending.items() if k != "fresh"}
+        if viewer is not None:
+            out["viewer_role"] = plan_approval.role(viewer, p.athlete_id)
+            waiting = p.approval != plan_approval.APPROVED or bool(p.pending)
+            out["can_approve"] = waiting and plan_approval.can_approve(db, viewer, p.athlete_id)
         if p.weeks:
             # A day early: a ride late on the first local day can be stored as the day before in UTC.
             start = datetime.combine(date.fromisoformat(p.weeks[0]["start"]), datetime.min.time()) - timedelta(1)
@@ -78,6 +88,9 @@ def _save_weeks(db: DbSession, p: Plan, weeks: list[dict], background: Backgroun
 
 
 def _workouts(db: DbSession, p: Plan, background: BackgroundTasks | None) -> None:
+    # Nothing goes to the calendar (or on to Zwift) before a coach approves the plan.
+    if (p.approval or plan_approval.APPROVED) != plan_approval.APPROVED:
+        return
     if plan_workouts.reconcile(db, p, localtime.today(db.get(User, p.athlete_id))) and background:
         background.add_task(sync_engine.run_due)
 
@@ -97,18 +110,20 @@ def current_plan(athlete: str, user: User = Depends(current_user), db: DbSession
     require_scope(db, user, athlete_id, "plans")
     today = localtime.today(db.get(User, athlete_id))
     rows = db.scalars(
-        select(Plan).where(Plan.athlete_id == athlete_id, Plan.start_date.is_not(None)).order_by(Plan.created_at.desc())
+        select(Plan)
+        .where(Plan.athlete_id == athlete_id, Plan.start_date.is_not(None), Plan.approval == plan_approval.APPROVED)
+        .order_by(Plan.created_at.desc())
     ).all()
     for p in rows:
         end = p.start_date + timedelta(weeks=len(p.weeks or []))
         if p.start_date - timedelta(days=7) <= today < end:
-            return plan_out(p, db, full=True, today=today)
+            return plan_out(p, db, full=True, today=today, viewer=user)
     return None
 
 
 @router.get("/{plan_id}")
 def get_plan(athlete: str, plan_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    return plan_out(_plan(db, user, athlete, plan_id), db, full=True)
+    return plan_out(_plan(db, user, athlete, plan_id), db, full=True, viewer=user)
 
 
 @router.post("")
@@ -122,8 +137,11 @@ async def create_plan(
     athlete_id = resolve_athlete_id(athlete, user)
     require_scope(db, user, athlete_id, "plans")
     target = db.get(User, athlete_id)
+    _check_coach_notes(user, athlete_id, body.coach_notes)
     monday = plan_tracker.first_week_start(body.start_date, localtime.today(target), target.week_start or 0)
     request = body.model_dump(mode="json", exclude={"title"})
+    if not request["coach_notes"]:
+        del request["coach_notes"]
     request["start_date"] = monday.isoformat()
     facts = build_facts(db, target, allowed_scopes(db, user, athlete_id), request)
     try:
@@ -141,11 +159,22 @@ async def create_plan(
         start_date=monday,
         weeks=weeks,
         model=model,
+        approval=plan_approval.AWAITING
+        if plan_approval.needs_approval(db, athlete_id, user)
+        else plan_approval.APPROVED,
     )
+    plan_approval.log(plan, user, "created", coach_notes=body.coach_notes, notes=body.notes)
     db.add(plan)
     db.commit()
+    if plan.approval == plan_approval.AWAITING:
+        plan_approval.ask_coaches(db, background, plan, "new training plan")
     _workouts(db, plan, background)
-    return plan_out(plan, db, full=True)
+    return plan_out(plan, db, full=True, viewer=user)
+
+
+def _check_coach_notes(user: User, athlete_id: int, notes: str) -> None:
+    if notes.strip() and user.id == athlete_id:
+        raise HTTPException(status_code=422, detail="Coach's notes come from a coach; use the notes box instead")
 
 
 class DayEdit(BaseModel):
@@ -185,7 +214,7 @@ def edit_day(
         changes["intensity"] = [c.strip()[:30] for c in changes["intensity"] if c.strip()]
     weeks[wi]["days"][di].update(changes)
     _save_weeks(db, p, weeks, background)
-    return plan_out(p, db, full=True)
+    return plan_out(p, db, full=True, viewer=user)
 
 
 class WeekEdit(BaseModel):
@@ -212,7 +241,7 @@ def edit_week(
     weeks = _editable(p)
     weeks[index].update(changes)
     _save_weeks(db, p, weeks)
-    return plan_out(p, db, full=True)
+    return plan_out(p, db, full=True, viewer=user)
 
 
 class Swap(BaseModel):
@@ -245,7 +274,7 @@ def swap_days(
     day_a.update(moved_b)
     day_b.update(moved_a)
     _save_weeks(db, p, weeks, background)
-    return plan_out(p, db, full=True)
+    return plan_out(p, db, full=True, viewer=user)
 
 
 @router.post("/{plan_id}/apply-preferences")
@@ -263,11 +292,12 @@ def apply_preferences(
     prefs = preferences_out(athlete_user)["weekday_prefs"]
     changed = plan_tracker.apply_preferences(weeks, prefs, localtime.today(athlete_user))
     _save_weeks(db, p, weeks, background)
-    return {**plan_out(p, db, full=True), "changed": changed}
+    return {**plan_out(p, db, full=True, viewer=user), "changed": changed}
 
 
 class Replan(BaseModel):
     reason: str = Field(default="", max_length=1000)
+    coach_notes: str = Field(default="", max_length=2000)
 
 
 @router.post("/{plan_id}/replan")
@@ -283,6 +313,7 @@ async def replan(
     p = _plan(db, user, athlete, plan_id)
     if not p.weeks:
         raise HTTPException(status_code=400, detail="This older plan has no day-by-day schedule")
+    _check_coach_notes(user, p.athlete_id, body.coach_notes)
     target = db.get(User, p.athlete_id)
     today = localtime.today(target)
     weeks = _editable(p)
@@ -306,6 +337,7 @@ async def replan(
             "so_far": [{"start": w["start"], "phase": w["phase"], **w["summary"]} for w in tracked[:first]],
             # What the athlete and their coaches said about the plan and its workouts (newest 30).
             "comments": comments.for_plan(db, p),
+            **({"coach_notes": body.coach_notes.strip()} if body.coach_notes.strip() else {}),
         },
     }
     facts = build_facts(db, target, allowed_scopes(db, user, p.athlete_id), request, today)
@@ -315,12 +347,84 @@ async def replan(
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     start = date.fromisoformat(weeks[first]["start"])
     fresh = plan_tracker.build_weeks(answer.get("weeks", []), start, len(weeks) - first)
-    changed = plan_tracker.merge_replan(weeks, fresh, today)
     summary = (answer.get("summary_md") or "").strip()
+    why = {"reason": body.reason.strip(), "coach_notes": body.coach_notes.strip()}
+    needs = plan_approval.needs_approval(db, p.athlete_id, user)
+    if needs and p.approval == plan_approval.APPROVED:
+        # The athlete keeps following the approved plan until a coach approves the new weeks.
+        pending = plan_approval.propose(p, user, fresh, summary, model, today, **why)
+        db.commit()
+        plan_approval.ask_coaches(db, background, p, "re-planned training plan")
+        return {**plan_out(p, db, full=True, viewer=user), "changed": pending["changed"], "pending": True}
+    changed = _apply_replan(p, weeks, fresh, summary, model, today)
+    p.pending = None
+    p.approval = plan_approval.AWAITING if needs else plan_approval.APPROVED
+    plan_approval.log(p, user, "replanned", **why)
+    _save_weeks(db, p, weeks, background)
+    if needs:
+        plan_approval.ask_coaches(db, background, p, "re-planned training plan")
+    return {**plan_out(p, db, full=True, viewer=user), "changed": changed}
+
+
+def _apply_replan(p: Plan, weeks: list[dict], fresh: list[dict], summary: str, model: str, today: date) -> int:
+    changed = plan_tracker.merge_replan(weeks, fresh, today)
     p.content_md = f"**Re-planned {today.isoformat()}.** {summary}\n\n" + plan_tracker.markdown(weeks)
     p.model = model
-    _save_weeks(db, p, weeks, background)
-    return {**plan_out(p, db, full=True), "changed": changed}
+    return changed
+
+
+class SendBack(BaseModel):
+    note: str = Field(min_length=3, max_length=4000)
+
+
+@router.post("/{plan_id}/approve")
+def approve(
+    athlete: str,
+    plan_id: int,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """A coach approves the waiting plan or re-plan; its workouts then go to the calendar."""
+    p = _plan(db, user, athlete, plan_id)
+    plan_approval.require_approver(db, user, p)
+    changed = None
+    if p.pending:
+        weeks = _editable(p)
+        today = localtime.today(db.get(User, p.athlete_id))
+        changed = _apply_replan(p, weeks, p.pending["fresh"], p.pending["summary"], p.pending["model"], today)
+        p.weeks, p.pending = weeks, None
+        what = "approved the re-plan of"
+    else:
+        what = "approved"
+    p.approval = plan_approval.APPROVED
+    plan_approval.log(p, user, "approved")
+    _save_weeks(db, p, p.weeks, background)
+    plan_approval.tell_athlete(db, background, p, user, what)
+    return {**plan_out(p, db, full=True, viewer=user), "changed": changed}
+
+
+@router.post("/{plan_id}/send-back")
+def send_back(
+    athlete: str,
+    plan_id: int,
+    body: SendBack,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """A coach turns down the waiting plan or re-plan with a note (kept as a plan comment)."""
+    p = _plan(db, user, athlete, plan_id)
+    plan_approval.require_approver(db, user, p)
+    if p.pending:
+        p.pending = None
+    else:
+        p.approval = plan_approval.SENT_BACK
+    plan_approval.log(p, user, "sent_back", note=body.note.strip())
+    db.commit()
+    # The comment emails the athlete and the other coaches, and the next re-plan reads it.
+    comments.add(db, background, user, p.athlete_id, "plan", p.id, body.note)
+    return plan_out(p, db, full=True, viewer=user)
 
 
 # ---- Downloads: indoor workouts straight from the plan ----

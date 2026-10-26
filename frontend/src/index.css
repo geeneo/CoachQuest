@@ -1575,3 +1575,18 @@ ul.instructions > li > form {
   width: auto;
   min-width: 10.5rem;
 }
+
+/* ---- plan approval ---- */
+.card.approval {
+  border-left: 4px solid var(--warn);
+}
+.card.approval.sent-back {
+  border-left-color: var(--danger);
+}
+.card.approval h2 {
+  margin-bottom: 0.4rem;
+}
+.plan-history summary {
+  cursor: pointer;
+  font-weight: 600;
+}

@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Markdown from "../components/Markdown.jsx";
+import { PlanApproval, PlanHistory } from "../components/PlanApproval.jsx";
 import PlanTracker from "../components/PlanTracker.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../lib/auth.jsx";
@@ -31,6 +32,8 @@ export default function PlanView() {
         {p.start_date ? ` from ${formatDate(p.start_date)}` : ""} · {p.request.hours_per_week} h/week · by {p.author} ·{" "}
         {dateTime(p.created_at)} · {p.model}
       </p>
+      <PlanApproval plan={p} athleteId={athleteId} setPlan={setP} />
+      <PlanHistory plan={p} />
       {p.facts?.flags?.length > 0 && (
         <div className="card flags">
           <strong>Readiness flags (computed from data)</strong>

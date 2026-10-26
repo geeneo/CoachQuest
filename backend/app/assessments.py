@@ -147,7 +147,9 @@ def progress(db: DbSession, athlete_id: int, today: date | None = None) -> dict:
 
 
 def _current_plan_day(db: DbSession, athlete_id: int, day: date) -> dict | None:
-    newest_first = select(Plan).where(Plan.athlete_id == athlete_id, Plan.start_date.is_not(None))
+    newest_first = select(Plan).where(
+        Plan.athlete_id == athlete_id, Plan.start_date.is_not(None), Plan.approval == "approved"
+    )
     for p in db.scalars(newest_first.order_by(Plan.created_at.desc())).all():
         try:
             wi, di = plan_tracker.find_day(p.weeks or [], day.isoformat())

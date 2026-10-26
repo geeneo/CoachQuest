@@ -229,7 +229,7 @@
         Coach Mike · 2 days ago").
       - The coach is emailed when edit access is given or removed (with the
         existing sharing emails).
-- [ ] **The real coach has a say in the AI coach.** A human coach (with the
+- [x] **The real coach has a say in the AI coach.** (Done.) A human coach (with the
       Training plans permission) can give the AI coach input that it must
       follow, so the coach stays in charge of the training:
       - [x] Standing coach instructions per athlete, e.g. "no intervals on
@@ -237,13 +237,13 @@
         "build towards 300 W FTP by March". The athlete can see them. Done:
         AI coach and Plans tabs; optional end date, pause, emails; every AI
         plan, re-plan, readiness note, weekly review and chat follows them.
-      - Input per plan and per re-plan: a "Coach's notes" box that goes to
+      - [x] (Done.) Input per plan and per re-plan: a "Coach's notes" box that goes to
         Claude with the request. Shown on the plan so everyone sees what
         shaped it.
       - [x] Comments on the AI's readiness notes, weekly reviews and calendar
         workouts (and on plans), by the athlete and coaches; the next note,
         review or re-plan takes them into account. Done.
-      - Coach approval for AI plans: a plan or re-plan the AI writes for a
+      - [x] (Done; plans and re-plans a coach asks for count as approved.) Coach approval for AI plans: a plan or re-plan the AI writes for a
         coached athlete stays "draft, waiting for coach" until the coach
         approves it, edits it, or sends it back. Only approved workouts go
         to Zwift.

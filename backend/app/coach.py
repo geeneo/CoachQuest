@@ -54,6 +54,9 @@ athlete); repeat them as they are and plan the other days around them. Use `requ
 `request.replan.comments` are notes on the plan from the athlete ("athlete") and their human coach \
 ("coach"). Follow the coach's comments unless the flags make that unsafe, then say why; take the \
 athlete's into account. In summary_md, say briefly how the comments changed the plan.
+- `request.coach_notes` and `request.replan.coach_notes` come from the athlete's human coach for this \
+plan: follow them like `coach_instructions`, and say in summary_md how they shaped the plan. \
+`request.notes` are from whoever asked for the plan: take them into account.
 - Days of type "Zwift / indoor" get a structured `workout` the athlete can ride in Zwift or MyWhoosh \
 (unless `request.structured_workouts` is false): a short name and steps. Power is a fraction of FTP \
 (0.75 = 75% FTP); steps are warmup/cooldown/ramp (power_start to power_end), steady/recovery (power), \

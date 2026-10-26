@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import compliance, localtime
 from .assessments import _current_plan_day
-from .db import AccessLog, Assessment, Comment, Connection, Grant, SyncJob, User, utcnow
+from .db import AccessLog, Assessment, Comment, Connection, Grant, Plan, SyncJob, User, utcnow
 from .deps import SCOPES
 from .fitness import week_start_of
 from .queries import activities_since, load_curve
@@ -88,6 +88,15 @@ def athlete_row(db: DbSession, coach: User, athlete: User, scopes: set[str]) -> 
                 )
             ).all()
         )
+        waiting = db.scalars(
+            select(Plan.id).where(
+                Plan.athlete_id == athlete.id, (Plan.approval == "awaiting") | Plan.pending.is_not(None)
+            )
+        ).all()
+        row["plans_waiting"] = len(waiting)
+        if waiting:
+            flags.append(f"{len(waiting)} plan{'s' if len(waiting) > 1 else ''} to approve")
+            attention += 2
         failed = db.scalars(
             select(SyncJob.id).where(SyncJob.athlete_id == athlete.id, SyncJob.status.in_(("failed", "blocked")))
         ).all()
