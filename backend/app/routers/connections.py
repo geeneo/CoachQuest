@@ -275,11 +275,16 @@ async def garmin_mfa(
 
 @router.post("/{provider}/sync")
 async def sync_now(provider: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    return await sync_for(provider, user, db)
+
+
+async def sync_for(provider: str, user: User, db: DbSession, force: bool = False) -> dict:
+    """Import from a provider now. `force` (admins only) skips the 5-minute limit."""
     conn = _conn(db, user, provider, SOURCES)
     if provider == "intervals_icu":
-        return await _intervals_sync_now(db, user, conn)
+        return await _intervals_sync_now(db, user, conn, force)
     last = conn.last_sync_at
-    if last and last > utcnow() - timedelta(minutes=5):
+    if not force and last and last > utcnow() - timedelta(minutes=5):
         raise HTTPException(
             status_code=429,
             detail="Already synced in the last 5 minutes. New activities will come in on the next sync.",
@@ -288,10 +293,10 @@ async def sync_now(provider: str, user: User = Depends(current_user), db: DbSess
     return {"fetched": count, "connection": conn_out(conn)}
 
 
-async def _intervals_sync_now(db: DbSession, user: User, conn: Connection) -> dict:
+async def _intervals_sync_now(db: DbSession, user: User, conn: Connection, force: bool = False) -> dict:
     """Send every workout from today on again (so Intervals.icu tells MyWhoosh / Zwift), then import."""
     pressed = (conn.options or {}).get("sync_now_at")
-    if pressed and datetime.fromisoformat(pressed) > utcnow() - timedelta(minutes=5):
+    if not force and pressed and datetime.fromisoformat(pressed) > utcnow() - timedelta(minutes=5):
         raise HTTPException(status_code=429, detail="Synced in the last 5 minutes. Try again in a few minutes.")
     conn.options = {**(conn.options or {}), "sync_now_at": utcnow().isoformat()}
     db.commit()

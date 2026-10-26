@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from app.db import AccessLog, Activity, AuthEvent, Connection, Session, SessionLocal, SyncJob, utcnow
+from app.routers import connections
 from app.security import encrypt_json
 
 
@@ -66,7 +67,14 @@ def test_detail_is_logged_for_the_user(make_user):
     assert rider.get(f"/api/admin/users/{rid}/detail").status_code == 403
 
 
-def test_sync_now_for_a_user(make_user):
+def test_sync_now_for_a_user(make_user, monkeypatch):
+    calls = []
+
+    async def fake_sync(db, conn):
+        calls.append(conn.user_id)
+        return 2
+
+    monkeypatch.setitem(connections.SYNC, "garmin", fake_sync)
     admin = make_user("admin@example.com", "Admin")
     rider = make_user("rider@example.com", "Rider")
     rid = _uid(rider)
@@ -75,6 +83,10 @@ def test_sync_now_for_a_user(make_user):
         db.add(Connection(user_id=rid, provider="garmin", token_enc="x", last_sync_at=utcnow()))
         db.commit()
     assert admin.post(f"/api/admin/users/{rid}/sync/garmin").status_code == 429  # synced just now
+    r = admin.post(f"/api/admin/users/{rid}/sync/garmin?force=true")  # "Sync anyway"
+    assert r.status_code == 200 and r.json()["fetched"] == 2 and calls == [rid]
+    assert rider.post(f"/api/admin/users/{rid}/sync/garmin?force=true").status_code == 403
+    assert rider.post("/api/connections/garmin/sync?force=true").status_code == 429  # users can't skip the limit
 
 
 def _strava(uid, client_id):

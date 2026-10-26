@@ -177,12 +177,21 @@ def user_detail(user_id: int, admin: User = Depends(admin_user), db: DbSession =
 
 
 @router.post("/users/{user_id}/sync/{provider}")
-async def user_sync_now(user_id: int, provider: str, _: User = Depends(admin_user), db: DbSession = Depends(get_db)):
-    """Run a user's Strava / Garmin / Intervals.icu import now (same 5-minute limit as theirs)."""
+async def user_sync_now(
+    user_id: int,
+    provider: str,
+    force: bool = False,
+    _: User = Depends(admin_user),
+    db: DbSession = Depends(get_db),
+):
+    """Run a user's Strava / Garmin / Intervals.icu import now.
+
+    Same 5-minute limit as theirs, unless `force` is set ("Sync anyway" on the page).
+    """
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return await connections.sync_now(provider, user, db)
+    return await connections.sync_for(provider, user, db, force)
 
 
 class UserUpdate(BaseModel):

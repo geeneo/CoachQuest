@@ -493,21 +493,47 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
 function UserDetail({ u, isMe, update, reload }) {
   const d = useApi(`/api/admin/users/${u.id}/detail`);
   const [msg, setMsg] = useState(null);
-  const syncNow = (provider) => {
+  const syncNow = (provider, force = false) => {
     setMsg(null);
-    api(`/api/admin/users/${u.id}/sync/${provider}`, { method: "POST" }).then(
+    api(`/api/admin/users/${u.id}/sync/${provider}${force ? "?force=true" : ""}`, { method: "POST" }).then(
       (r) => {
         setMsg({ ok: `Synced: ${r.fetched} new item${r.fetched === 1 ? "" : "s"}.` });
         reload();
       },
-      (e) => setMsg({ error: e.message }),
+      // Blocked by the 5-minute limit: offer the admin override.
+      (e) => setMsg({ error: e.message, retry: e.status === 429 ? provider : null }),
     );
+  };
+  const linked = PROVIDERS.filter(([k]) => u.connections[k]);
+  // Admin override: every connected source, one after another, ignoring the 5-minute limit.
+  const syncAll = async () => {
+    setMsg({ ok: "Syncing…" });
+    const done = [];
+    const failed = [];
+    for (const [k, label] of linked) {
+      try {
+        const r = await api(`/api/admin/users/${u.id}/sync/${k}?force=true`, { method: "POST" });
+        done.push(`${label} ${r.fetched}`);
+      } catch (e) {
+        failed.push(`${label}: ${e.message}`);
+      }
+    }
+    setMsg({
+      ok: done.length ? `Synced (new items): ${done.join(" · ")}.` : null,
+      error: failed.length ? failed.join(" ") : null,
+    });
+    reload();
   };
   return (
     <div className="manage">
       <div className="user-detail">
         <div>
           <h3>Connections</h3>
+          {linked.length > 0 && (
+            <button className="btn small" onClick={syncAll} title="Ignores the 5-minute limit">
+              Sync all connections
+            </button>
+          )}
           <table className="mini">
             <tbody>
               {PROVIDERS.map(([k, label]) => {
@@ -539,7 +565,19 @@ function UserDetail({ u, isMe, update, reload }) {
             </tbody>
           </table>
           {msg?.ok && <div className="ok small">{msg.ok}</div>}
-          {msg?.error && <div className="error small">{msg.error}</div>}
+          {msg?.error && (
+            <div className="error small">
+              {msg.error}
+              {msg.retry && (
+                <>
+                  {" "}
+                  <button className="btn small" onClick={() => syncNow(msg.retry, true)}>
+                    Sync anyway
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           {d.data && (
             <>
               <h3>Activities by sport</h3>
