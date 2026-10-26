@@ -1,13 +1,22 @@
 :root {
-  --bg: #0f1216;
-  --panel: #171b21;
-  --panel-2: #1e232b;
-  --border: #2a313b;
-  --grid: #232a33;
-  --text: #e6e9ee;
-  --muted: #8b95a3;
-  --accent: #3fb68b;
-  --accent-ink: #06140e;
+  /* Colours from the logo: navy #032440, sky blue (QUEST) and orange (the arrow). */
+  --navy: #032440;
+  --brand-orange: #f7841e;
+  --bg: #021a30;
+  --panel: #052a4a;
+  --panel-2: #0a3558;
+  --border: #174467;
+  --grid: #113a5b;
+  --text: #e8eef5;
+  --muted: #8fa5bb;
+  --accent: #22a8f2;
+  --accent-ink: #03203a;
+  --ok: #3fb68b;
+  --side-bg: var(--navy);
+  --side-text: #e8eef5;
+  --side-muted: #8fa5bb;
+  --side-hover: #0b3a60;
+  --side-active: #22a8f2;
   --danger: #e5484d;
   --warn: #f0a33a;
   --c1: #4c9ffe;
@@ -20,29 +29,31 @@
 
 /* Light colours: when chosen in Profile, or when the system is light and no choice was made. */
 :root[data-theme="light"] {
-  --bg: #f5f6f8;
+  --bg: #f3f6fa;
   --panel: #ffffff;
-  --panel-2: #f0f2f5;
-  --border: #dde1e7;
-  --grid: #eceff3;
-  --text: #1a1f26;
-  --muted: #5f6b7a;
-  --accent: #1f9d6f;
+  --panel-2: #eef3f8;
+  --border: #d8e0ea;
+  --grid: #e8eef4;
+  --text: #0d1f33;
+  --muted: #56687c;
+  --accent: #0a74b8;
   --accent-ink: #ffffff;
+  --ok: #1a8a60;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
-    --bg: #f5f6f8;
+    --bg: #f3f6fa;
     --panel: #ffffff;
-    --panel-2: #f0f2f5;
-    --border: #dde1e7;
-    --grid: #eceff3;
-    --text: #1a1f26;
-    --muted: #5f6b7a;
-    --accent: #1f9d6f;
+    --panel-2: #eef3f8;
+    --border: #d8e0ea;
+    --grid: #e8eef4;
+    --text: #0d1f33;
+    --muted: #56687c;
+    --accent: #0a74b8;
     --accent-ink: #ffffff;
+    --ok: #1a8a60;
     color-scheme: light;
   }
 }
@@ -98,7 +109,8 @@ h2 {
   display: none;
 }
 .sidebar {
-  background: var(--panel);
+  background: var(--side-bg);
+  color: var(--side-text);
   border-right: 1px solid var(--border);
   padding: 1rem;
   display: flex;
@@ -111,9 +123,24 @@ h2 {
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  color: var(--accent);
+}
+.logo {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}
+.sidebar-brand .logo {
+  width: 100%;
+}
+.topbar .logo {
+  width: 170px;
+}
+.sidebar .muted {
+  color: var(--side-muted);
+}
+.sidebar .link-btn,
+.topbar .icon-btn {
+  color: var(--side-text);
 }
 .sidebar nav {
   display: flex;
@@ -126,14 +153,15 @@ h2 {
   gap: 0.6rem;
   padding: 0.55rem 0.7rem;
   border-radius: 8px;
-  color: var(--text);
+  color: var(--side-text);
 }
 .sidebar nav a:hover {
-  background: var(--panel-2);
+  background: var(--side-hover);
 }
 .sidebar nav a.active {
-  background: var(--panel-2);
-  color: var(--accent);
+  background: var(--side-hover);
+  color: var(--side-active);
+  box-shadow: inset 3px 0 0 var(--brand-orange);
 }
 .sidebar-foot {
   margin-top: auto;
@@ -157,7 +185,8 @@ h2 {
     align-items: center;
     gap: 0.75rem;
     padding: 0.6rem 1rem;
-    background: var(--panel);
+    background: var(--side-bg);
+    color: var(--side-text);
     border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
@@ -378,8 +407,8 @@ textarea:focus {
   vertical-align: middle;
 }
 .badge.ok {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--ok);
+  border-color: var(--ok);
 }
 .badge.bad {
   color: var(--danger);
@@ -403,8 +432,8 @@ textarea:focus {
   color: var(--danger);
 }
 .ok {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  color: var(--ok);
 }
 .flags {
   border-color: var(--warn);
@@ -523,8 +552,14 @@ th {
   flex-direction: column;
   gap: 0.9rem;
 }
-.auth-card h1 {
-  color: var(--accent);
+.auth-logo {
+  margin: -1rem -1.25rem 0;
+  background: var(--navy);
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
+}
+.auth-logo .logo {
+  width: 100%;
 }
 
 .markdown {
@@ -895,7 +930,7 @@ select.phase {
   font-size: 0.8rem;
 }
 .ok-text {
-  color: var(--accent);
+  color: var(--ok);
 }
 .warn-text {
   color: var(--warn);

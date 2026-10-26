@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import Logo from "../components/Logo.jsx";
 import { api } from "../lib/api.js";
 
 export function ForgotPassword() {
@@ -21,7 +22,9 @@ export function ForgotPassword() {
   return (
     <div className="auth-page">
       <form className="card auth-card" onSubmit={submit}>
-        <h1>CoachQuest</h1>
+        <h1 className="auth-logo">
+          <Logo variant="full" />
+        </h1>
         <p className="muted">Forgot your password? Enter your email and we'll send you a reset link.</p>
         <label>
           Email
@@ -69,7 +72,9 @@ export function ResetPassword() {
   return (
     <div className="auth-page">
       <form className="card auth-card" onSubmit={submit}>
-        <h1>CoachQuest</h1>
+        <h1 className="auth-logo">
+          <Logo variant="full" />
+        </h1>
         <p className="muted">Choose a new password.</p>
         {!token && <div className="error">This link is missing its token. Use the full link from the email.</div>}
         <label>

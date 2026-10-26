@@ -1,7 +1,8 @@
-import { Activity, BookOpen, Dumbbell, Flag, LayoutDashboard, Link2, LogOut, Menu, Settings, Share2, Shield, Users } from "lucide-react";
+import { BookOpen, Dumbbell, Flag, LayoutDashboard, Link2, LogOut, Menu, Settings, Share2, Shield, Users } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth.jsx";
+import Logo from "./Logo.jsx";
 
 const NAV = [
   { to: "/", label: "My training", icon: LayoutDashboard, end: true },
@@ -25,14 +26,14 @@ export default function Layout() {
         <button className="icon-btn" aria-label="Menu" onClick={() => setOpen(!open)}>
           <Menu size={20} />
         </button>
-        <span className="brand">
-          <Activity size={18} /> CoachQuest
-        </span>
+        <NavLink to="/" className="brand" aria-label="CoachQuest home">
+          <Logo variant="word" />
+        </NavLink>
       </header>
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="brand sidebar-brand">
-          <Activity size={20} /> CoachQuest
-        </div>
+        <NavLink to="/" end className="brand sidebar-brand" aria-label="CoachQuest home" onClick={() => setOpen(false)}>
+          <Logo />
+        </NavLink>
         <nav>
           {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} onClick={() => setOpen(false)}>

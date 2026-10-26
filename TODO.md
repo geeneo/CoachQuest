@@ -333,7 +333,7 @@
         period, keeping enough history before it that the curves are right.
       - One switch at the top of My training (and the coach's athlete view),
         remembered per browser; the chart titles say the period.
-- [ ] **Skin the site with the CoachQuest logo pack** (Coachquest_Web_Logo_Pack.zip,
+- [x] **Skin the site with the CoachQuest logo pack** (Done; a vector/transparent logo would still sharpen the small browser icon.) (Coachquest_Web_Logo_Pack.zip,
       26 Oct). The pack has: the primary logo (white "COACH", blue "QUEST",
       cyclist and runner on mountains, orange arrow, "DREAM IT. TRAIN IT. OWN
       IT."), two hero layouts, a square symbol, favicons (16–512 px, .ico,
@@ -368,6 +368,20 @@
       - The browser's date picker (birth date, races, workouts) follows the
         browser's language and can't be restyled; show the chosen format
         next to it, or swap it for our own picker if that looks wrong.
+
+- [ ] **Admin: each user's data at a glance.** Admin → Users today shows only
+      name, email, role, active/approved and when they joined. Add per user:
+      - Activities: total, by source (Strava / Garmin / Intervals.icu), first
+        and latest activity date; wellness days.
+      - Connections: Strava, Garmin and Intervals.icu each with status
+        (connected / error / not connected), last sync time and the last error.
+      - Workout delivery: queued / failed / blocked sync jobs.
+      - Last sign-in, failed sign-ins lately; coaches and athletes shared with;
+        plans, races and workouts counts; AI coach use (calls, tokens).
+      - Database space per user (roughly), to see who uses the most.
+      - Sort and filter (e.g. sync problems first), click a user for a detail
+        panel; actions there such as "sync now" or "reconnect needed" email.
+      - Admin only, and each view logged like a coach's access.
 
 ## Later
 

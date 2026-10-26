@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import Logo from "../components/Logo.jsx";
 import { useAuth } from "../lib/auth.jsx";
 
 export default function AuthPage({ mode }) {
@@ -30,7 +31,9 @@ export default function AuthPage({ mode }) {
   return (
     <div className="auth-page">
       <form className="card auth-card" onSubmit={submit}>
-        <h1>CoachQuest</h1>
+        <h1 className="auth-logo">
+          <Logo variant="full" />
+        </h1>
         <p className="muted">{isRegister ? "Create your account" : "Sign in to your training portal"}</p>
         {isRegister && (
           <label>
