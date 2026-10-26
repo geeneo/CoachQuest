@@ -1377,6 +1377,13 @@ tr.sub-row td {
 .badge.workout {
   border-color: var(--c1);
   color: var(--c1);
+  background: transparent;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.badge.workout:hover {
+  background: color-mix(in srgb, var(--c1) 15%, transparent);
 }
 
 /* ---- Plan comments ---- */

@@ -4,11 +4,12 @@ import copy
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import comments, localtime, plan_tracker, plan_workouts, sync_engine
+from .. import comments, localtime, plan_tracker, plan_workouts, sync_engine, zwo
 from ..coach import PHASES, CoachError, build_facts, generate_plan
 from ..db import Comment, Plan, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -320,6 +321,53 @@ async def replan(
     p.model = model
     _save_weeks(db, p, weeks, background)
     return {**plan_out(p, db, full=True), "changed": changed}
+
+
+# ---- Downloads: indoor workouts straight from the plan ----
+
+
+def _day_workout(day: dict) -> dict | None:
+    w = day.get("workout")
+    if not w or not w.get("steps"):
+        return None
+    return {"name": w["name"], "description": day.get("description") or "", "instructions": "", "steps": w["steps"]}
+
+
+@router.get("/{plan_id}/days/{day}/zwo")
+def day_zwo(athlete: str, plan_id: int, day: date, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """The indoor workout of one plan day as a Zwift file (.zwo), also used by MyWhoosh."""
+    p = _plan(db, user, athlete, plan_id)
+    try:
+        wi, di = plan_tracker.find_day(p.weeks or [], day.isoformat())
+    except KeyError:
+        raise HTTPException(status_code=404, detail="That day is not in this plan") from None
+    workout = _day_workout(p.weeks[wi]["days"][di])
+    if workout is None:
+        raise HTTPException(status_code=404, detail="This day has no structured workout")
+    return Response(
+        zwo.zwo(workout, user.display_name),
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="{zwo.filename(workout["name"], day)}"'},
+    )
+
+
+@router.get("/{plan_id}/weeks/{index}/workouts.zip")
+def week_zip(
+    athlete: str, plan_id: int, index: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """All indoor workouts of one plan week in a ZIP, with the install steps."""
+    p = _plan(db, user, athlete, plan_id)
+    if not p.weeks or not 0 <= index < len(p.weeks):
+        raise HTTPException(status_code=404, detail="Week not found")
+    items = [(date.fromisoformat(d["date"]), w) for d in p.weeks[index]["days"] if (w := _day_workout(d)) is not None]
+    if not items:
+        raise HTTPException(status_code=404, detail="This week has no structured workouts")
+    name = zwo.filename(f"{p.title} week {index + 1} workouts").removesuffix(".zwo") + ".zip"
+    return Response(
+        zwo.plan_zip(items, user.display_name),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 # ---- Comments (see comments.py; the same rules as on AI notes and workouts) ----

@@ -63,7 +63,8 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
     document.getElementById("plan-comments")?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const ctx = { prefs: prefs.data, editDay, swap, swapFrom, countByDay, openComments };
+  const get = (path) => download(base + path).catch((err) => setError(err.message));
+  const ctx = { prefs: prefs.data, editDay, swap, swapFrom, countByDay, openComments, get };
   return (
     <>
       <div className="row between tracker-bar">
@@ -156,6 +157,15 @@ function Week({ week, index, editWeek, ctx }) {
           </span>
         </div>
         <div className="row small">
+          {week.days.some((d) => d.workout) && (
+            <button
+              className="btn small"
+              title="This week's indoor workouts as Zwift files, with install steps"
+              onClick={() => ctx.get(`/weeks/${index}/workouts.zip`)}
+            >
+              ⬇ Indoor workouts
+            </button>
+          )}
           <span className="muted">
             {s.sessions_done}/{s.sessions_due} sessions · {duration(s.logged_minutes * 60)} of{" "}
             {duration(s.planned_minutes * 60)} planned
@@ -247,9 +257,14 @@ function Day({ day, ctx }) {
               </span>
             ))}
             {day.workout && (
-              <span className="badge workout" title="Structured workout on the calendar">
-                ▤ {day.workout.name}
-              </span>
+              <button
+                type="button"
+                className="badge workout"
+                title="Download for Zwift / MyWhoosh (.zwo)"
+                onClick={() => ctx.get(`/days/${day.date}/zwo`)}
+              >
+                ⬇ {day.workout.name}
+              </button>
             )}
             {day.gear && <span className="badge">🚲 {day.gear}</span>}
             {day.route && <span className="badge">🗺 {day.route}</span>}

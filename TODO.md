@@ -285,7 +285,7 @@
       - Removes the activity from load (CTL/ATL/TSB), volume stats, plan vs
         actual and workout completion, and recalculates them.
       - Never deletes anything on Strava, Garmin or Intervals.icu itself.
-- [ ] **Download the indoor workout from the plan.** On the training plan,
+- [x] **Download the indoor workout from the plan.** (Done.) On the training plan,
       the workout badge of an indoor day (e.g. "▤ SS 3x10" on Thursday) gets
       a download: the .zwo file for Zwift / MyWhoosh, straight from the plan
       day, also for days before the workout reached the calendar. Plus
@@ -300,6 +300,28 @@
       - Sort and filter (needs attention first); click through to the
         athlete's calendar, plan or AI coach tab.
       - Shows only what each athlete shares with the coach.
+- [ ] **Decide: an athlete "memory" for the AI coach** (a memory.md per athlete,
+      or per coach and athlete). Today the AI coach starts every note, plan and
+      chat from facts computed fresh from the data, plus plan comments; it
+      remembers nothing else between requests. Check whether that's enough or
+      whether it needs standing context:
+      - Things the data can't show: injuries and niggles, bike setups, work
+        and travel patterns, what motivates the athlete, what worked before.
+      - The coach's standing instructions (overlaps "The real coach has a say
+        in the AI coach").
+      - If yes: store it in the database (not files on the server), one note
+        per athlete that the athlete and their coaches can read and edit, with
+        a history; the AI may suggest additions ("remember: knee sore after
+        long climbs?") that a person accepts. Included in every AI request,
+        within the sharing permissions. Covered by account export/delete.
+- [ ] **Age / birth date from Garmin and/or Strava.** Fill the athlete's birth
+      date (and so age) into Profile, like weight and thresholds, with "from
+      Garmin · date" shown and a manual override.
+      - Garmin's user profile has the birth date (user settings). Strava's API
+        doesn't seem to include it; check, otherwise Garmin or manual only.
+      - Used for age-based estimates (max HR when unknown) and by the AI coach
+        (recovery and training load advice). Only shared with coaches under
+        "Profile"; never shown on the dashboard.
 
 ## Later
 

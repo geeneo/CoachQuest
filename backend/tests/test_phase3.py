@@ -329,3 +329,36 @@ def test_weekly_review_gets_compliance(make_user):
     with SessionLocal() as db:
         empty = compliance.week(db, db.get(User, uid), {"plans"}, monday - timedelta(days=7))
     assert empty["scheduled"] == 0 and empty["compliance_pct"] is None
+
+
+# ---- Downloads from the plan ----
+
+
+def test_download_workouts_from_the_plan(make_user, planner):
+    import io
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    p = make_user("a@example.com")
+    plan = _create(p)
+    base = f"/api/athletes/me/plans/{plan['id']}"
+    tue = (_next_monday() + timedelta(1)).isoformat()
+    r = p.get(f"{base}/days/{tue}/zwo")
+    assert r.status_code == 200 and f"{tue} Tempo hour.zwo" in r.headers["content-disposition"]
+    root = ET.fromstring(r.text)
+    assert root.findtext("name") == "Tempo hour" and root.findtext("description") == "Tempo"
+    sat = (_next_monday() + timedelta(5)).isoformat()
+    assert p.get(f"{base}/days/{sat}/zwo").status_code == 404  # a road ride, no structured workout
+    assert p.get(f"{base}/days/2020-01-01/zwo").status_code == 404
+    r = p.get(f"{base}/weeks/0/workouts.zip")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    assert 'filename="Block week 1 workouts.zip"' in r.headers["content-disposition"]
+    names = zipfile.ZipFile(io.BytesIO(r.content)).namelist()
+    assert names == [
+        "HOW TO ADD TO ZWIFT.txt",
+        f"{tue} Tempo hour.zwo",
+        f"{(_next_monday() + timedelta(3)).isoformat()} 4x5 threshold.zwo",
+    ]
+    assert p.get(f"{base}/weeks/9/workouts.zip").status_code == 404
+    other = make_user("b@example.com")
+    assert other.get(f"/api/athletes/{_uid(p)}/plans/{plan['id']}/days/{tue}/zwo").status_code == 404
