@@ -103,6 +103,14 @@ EDITABLE: dict[str, Editable] = {
         pattern=r"[0-9]{1,4}",
         help="What coaches looked at. Empty: same as the sign-in log. 0 keeps it.",
     ),
+    "admin_view_data": Editable(
+        "Admins can view athletes' data",
+        "Accounts",
+        choices=("off", "on"),
+        help="On: admins can open any athlete's dashboard, activities and plans (read only) from Admin → Users → "
+        'View data. Each look is shown in the athlete\'s "Who looked at my data" log. Check the Strava API '
+        "Agreement before showing one user's Strava data to others.",
+    ),
     "anthropic_model_short": Editable(
         "Model for notes, reviews and chat",
         "AI coach",

@@ -169,6 +169,7 @@ def overview(db: DbSession) -> list[dict]:
             row["for_others"] += n
     storage = _storage(db)
 
+    view_data = runtime.get("admin_view_data") == "on"
     rows = []
     for u in users:
         uc = conns.get(u.id, {})
@@ -241,6 +242,8 @@ def overview(db: DbSession) -> list[dict]:
                 "storage_bytes": storage.get(u.id, 0),
                 "flags": flags,
                 "attention": attention,
+                # Admin → Settings → "Admins can view athletes' data".
+                "can_view_data": view_data,
             }
         )
     return rows

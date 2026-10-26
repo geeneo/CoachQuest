@@ -10,10 +10,13 @@ Authorization (who may see which athlete's data) is decided here, per request,
 from the grants table.
 """
 
+from contextvars import ContextVar
+
 from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from . import runtime
 from .db import AccessLog, Grant, User, get_db
 from .security import proxy_secret_ok
 
@@ -55,9 +58,26 @@ def active_grant(db: DbSession, athlete_id: int, coach_id: int) -> Grant | None:
     )
 
 
+# Set per request by the middleware in main.py: True for GET / HEAD.
+READ_REQUEST: ContextVar[bool] = ContextVar("read_request", default=False)
+
+
 def allowed_scopes(db: DbSession, viewer: User, athlete_id: int) -> set[str]:
-    """Scopes `viewer` holds on `athlete_id`. An athlete holds every scope on themself."""
+    """Scopes `viewer` holds on `athlete_id`. An athlete holds every scope on themself.
+
+    With the admin_view_data setting on, admins can look at any athlete's data,
+    read only: on a GET they hold every
+    scope, on anything that changes data only what a grant gives them. Their
+    looks are written to the athlete's access log like a coach's.
+    """
     if viewer.id == athlete_id:
+        return set(SCOPES)
+    if (
+        viewer.is_admin
+        and READ_REQUEST.get()
+        and runtime.get("admin_view_data") == "on"
+        and db.get(User, athlete_id) is not None
+    ):
         return set(SCOPES)
     grant = active_grant(db, athlete_id, viewer.id)
     athlete = db.get(User, athlete_id) if grant else None

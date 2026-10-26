@@ -141,3 +141,31 @@ def test_athlete_sees_own_weight(make_user):
     p = make_user("solo@example.com")
     p.patch("/api/me", json={"weight_kg": 70})
     assert p.get("/api/athletes/me").json()["weight_kg"] == 70
+
+
+def test_admin_reads_any_athlete_but_cannot_change(make_user):
+    admin = make_user("admin@example.com", "Admin")
+    athlete = make_user("athlete@example.com", "Athlete")
+    other = make_user("other@example.com", "Other")
+    athlete_id = athlete.get("/api/auth/me").json()["id"]
+    _seed(athlete_id)
+    # Off by default: an admin is like any other user.
+    assert admin.get(f"/api/athletes/{athlete_id}/activities").status_code == 404
+    assert admin.get("/api/admin/users").json()[0]["can_view_data"] is False
+    admin.request("PUT", "/api/admin/settings", json={"values": {"admin_view_data": "on"}})
+    assert admin.get("/api/admin/users").json()[0]["can_view_data"] is True
+    s = admin.get(f"/api/athletes/{athlete_id}").json()
+    assert s["admin_view"] is True and set(s["scopes"]) >= {"activities", "wellness", "plans"}
+    assert len(admin.get(f"/api/athletes/{athlete_id}/activities").json()) == 1
+    assert admin.get(f"/api/athletes/{athlete_id}/wellness?days=7").status_code == 200
+    log = athlete.get("/api/grants/access-log").json()
+    assert {e["resource"] for e in log} >= {"activities", "wellness"} and log[0]["viewer"] == "Admin"
+    # Read only: changing anything for the athlete still needs a grant.
+    r = admin.post(f"/api/athletes/{athlete_id}/coach/chats", json={"question": "How is my training?"})
+    assert r.status_code == 404
+    assert admin.get("/api/athletes/9999").status_code == 404
+    # Not for other users.
+    assert other.get(f"/api/athletes/{athlete_id}/activities").status_code == 404
+    assert athlete.get("/api/athletes/me").json()["admin_view"] is False
+    admin.request("PUT", "/api/admin/settings", json={"values": {"admin_view_data": "off"}})
+    assert admin.get(f"/api/athletes/{athlete_id}/activities").status_code == 404

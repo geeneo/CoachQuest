@@ -46,7 +46,13 @@ export default function AthleteView({ self }) {
               : "No data sources connected."}{" "}
             {self && !s.sources.length && <Link to="/connections">Connect Strava or Garmin</Link>}
           </p>
-          {!self && <p className="small muted">Shared with you: {s.scopes.join(", ")}</p>}
+          {s.admin_view ? (
+            <p className="small muted">
+              Admin view, read only. Your looks are shown in this athlete's "Who looked at my data" log.
+            </p>
+          ) : (
+            !self && <p className="small muted">Shared with you: {s.scopes.join(", ")}</p>
+          )}
         </div>
       </div>
       <div className="tabs">

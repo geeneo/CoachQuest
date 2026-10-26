@@ -11,6 +11,7 @@ from sqlalchemy import select
 from . import assessments, auth_log, backfill, plan_approval, runtime, sync_engine
 from .config import check_required, settings
 from .db import Connection, SessionLocal, User, init_db
+from .deps import READ_REQUEST
 from .routers import (
     admin,
     athlete_notes,
@@ -91,6 +92,8 @@ async def csrf_guard(request: Request, call_next):
     if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/"):
         if request.headers.get("x-requested-with") != "CoachQuest":
             return JSONResponse({"detail": "Missing X-Requested-With header"}, status_code=403)
+    # Admins may read any athlete's data but not change it (deps.allowed_scopes).
+    READ_REQUEST.set(request.method in ("GET", "HEAD"))
     return await call_next(request)
 
 

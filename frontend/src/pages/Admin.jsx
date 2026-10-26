@@ -1,5 +1,6 @@
 import { CheckCircle2, KeyRound, XCircle } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
@@ -408,9 +409,16 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
               </button>
             </span>
           ) : (
-            <button className="link-btn small" onClick={toggle}>
-              {open ? "Close details" : "Details"}
-            </button>
+            <span className="row tight">
+              <button className="link-btn small" onClick={toggle}>
+                {open ? "Close details" : "Details"}
+              </button>
+              {!isMe && u.can_view_data && (
+                <Link className="small" to={`/athletes/${u.id}`}>
+                  View data
+                </Link>
+              )}
+            </span>
           )}
         </td>
         <td className="small">

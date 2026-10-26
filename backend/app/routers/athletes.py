@@ -11,11 +11,11 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import activity_delete, dashboard, localtime, profile_sync
+from .. import activity_delete, dashboard, localtime, profile_sync, runtime
 from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
-from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
+from ..deps import active_grant, allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..providers import garmin
 from ..queries import (
     activities_since,
@@ -123,6 +123,13 @@ def athlete_summary(athlete: str, user: User = Depends(current_user), db: DbSess
         require_scope(db, user, athlete_id, "activities")  # raises 404
     a = db.get(User, athlete_id)
     out = {"id": a.id, "display_name": a.display_name, "scopes": sorted(scopes), "is_me": a.id == user.id}
+    # An admin looking without a grant: the page says it is read only.
+    out["admin_view"] = (
+        user.is_admin
+        and a.id != user.id
+        and runtime.get("admin_view_data") == "on"
+        and active_grant(db, a.id, user.id) is None
+    )
     out.update(profile_out(a, scopes))
     conns = db.scalars(
         select(Connection).where(Connection.user_id == a.id, Connection.provider.in_(("strava", "garmin")))

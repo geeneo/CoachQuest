@@ -95,6 +95,14 @@ app that is no longer set up). Usage shows how many users are on the shared app.
 A user on the shared app with no sign-in for 30 days is flagged "idle on shared
 Strava app": ask them to disconnect or move to their own app to free the slot.
 
+### Admin access to athletes' data
+
+Off by default. Admin → Settings → Accounts → "Admins can view athletes' data"
+turns it on: Admin → Users then has a "View data" link that opens the athlete's
+pages read only. Every look is written to the athlete's "Who looked at my data"
+log, like a coach's. Changing anything for an athlete still needs a sharing
+grant. Check the Strava API Agreement before turning this on (see below).
+
 ### AI coach tab
 
 All AI features follow one rule: CoachQuest computes the facts and decisions,
