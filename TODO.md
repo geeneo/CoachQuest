@@ -514,6 +514,20 @@
         switched off).
       - Much cheaper than a full re-plan: one day in, one day out.
 
+- [ ] **Athlete may approve when the coach doesn't answer** (26 Oct). A plan,
+      re-plan or re-planned day waiting for a coach shouldn't block training
+      when no coach reacts.
+      - After a waiting time (e.g. 48 hours; the coach can choose 24 h,
+        48 h, 72 h or "never" on the athlete's Plans tab, next to the
+        approval switch), the athlete gets **Approve** / **Send back** too.
+      - Before that: a reminder email to the coaches halfway (if their
+        emails are on), and the box says when the athlete may decide
+        ("you can approve it yourself from Thu 09:00 if your coach hasn't").
+      - Race-week safety: if the waiting day is before the waiting time
+        ends (e.g. tomorrow's session), the athlete may decide at once.
+      - Logged and shown on the plan as "approved by the athlete (no coach
+        answer in 48 h)", and the coach is told.
+
 ## Later
 
 - [ ] Account export and delete (POPIA/GDPR), privacy notice and consent text
