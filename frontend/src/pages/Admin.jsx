@@ -590,6 +590,15 @@ function UserDetail({ u, isMe, update, reload }) {
               Emails to this user
               <span className="hint">Off: no sharing, comment, plan or AI note emails. Password resets and approval still sent.</span>
             </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={!u.plan_approval_off}
+                onChange={(e) => update(u, { plan_approval_off: !e.target.checked })}
+              />{" "}
+              Their AI plans need a coach's approval
+              <span className="hint">Only matters when they have a coach. Off: their plans and re-plans apply at once.</span>
+            </label>
           </div>
           <ManageUser u={u} reload={reload} />
         </>

@@ -121,6 +121,38 @@ def current_plan(athlete: str, user: User = Depends(current_user), db: DbSession
     return None
 
 
+class ApprovalSetting(BaseModel):
+    required: bool
+
+
+@router.put("/approval-setting")
+def set_approval_setting(
+    athlete: str, body: ApprovalSetting, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """A coach with the plans scope chooses whether the athlete's own AI plans wait for approval."""
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "plans")
+    if user.id == athlete_id:
+        raise HTTPException(status_code=403, detail="Your coach (or an admin) decides this")
+    target = db.get(User, athlete_id)
+    target.plan_approval_off = not body.required
+    db.commit()
+    return {"required": plan_approval.required(db, target), "off": target.plan_approval_off}
+
+
+@router.get("/approval-setting")
+def get_approval_setting(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "plans")
+    target = db.get(User, athlete_id)
+    return {
+        "required": plan_approval.required(db, target),
+        "off": target.plan_approval_off,
+        "has_coach": bool(plan_approval.coaches(db, athlete_id)),
+        "can_change": user.id != athlete_id,
+    }
+
+
 @router.get("/{plan_id}")
 def get_plan(athlete: str, plan_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     return plan_out(_plan(db, user, athlete, plan_id), db, full=True, viewer=user)

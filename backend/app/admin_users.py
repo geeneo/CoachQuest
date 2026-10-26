@@ -208,6 +208,7 @@ def overview(db: DbSession) -> list[dict]:
                 "ai_month": ai.get(u.id, {"calls": 0, "tokens": 0, "for_others": 0}),
                 "ai_disabled": u.ai_disabled,
                 "emails_disabled": u.emails_disabled,
+                "plan_approval_off": u.plan_approval_off,
                 "ai_monthly_limit": u.ai_monthly_limit,
                 "ai_limit": monthly_limit(u),
                 "storage_bytes": storage.get(u.id, 0),

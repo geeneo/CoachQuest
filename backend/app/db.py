@@ -79,6 +79,8 @@ class User(Base):
     ai_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Admin switch: no emails at all to this user, except password resets and the sign-up approval.
     emails_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Set by a coach or an admin: plans the athlete asks the AI for apply without a coach's approval.
+    plan_approval_off: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_monthly_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
@@ -611,6 +613,7 @@ _ADDED_COLUMNS = {
         "date_format": "VARCHAR(10)",
         "ai_disabled": "BOOLEAN NOT NULL DEFAULT 0",
         "emails_disabled": "BOOLEAN NOT NULL DEFAULT 0",
+        "plan_approval_off": "BOOLEAN NOT NULL DEFAULT 0",
         "ai_monthly_limit": "INTEGER",
         "time_format": "VARCHAR(4)",
     },

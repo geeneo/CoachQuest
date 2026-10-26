@@ -31,6 +31,15 @@ export default function PlansPanel({ id, athlete }) {
     const days = DAYS.filter((d) => (wp[d.toLowerCase()] || [])[0] && wp[d.toLowerCase()][0] !== "Rest");
     setForm((f) => ({ ...f, available_days: days }));
   }, [prefs.data]);
+  const approval = useApi(`/api/athletes/${id}/plans/approval-setting`);
+  const setApproval = async (required) => {
+    try {
+      await api(`/api/athletes/${id}/plans/approval-setting`, { method: "PUT", body: { required } });
+      approval.reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -101,6 +110,23 @@ export default function PlansPanel({ id, athlete }) {
           readiness facts computed by CoachQuest. Generating can take a minute or two.
           {athlete.is_me && " If you have a coach, plans you generate wait for their approval before workouts go to your calendar."}
         </p>
+        {approval.data?.has_coach &&
+          (approval.data.can_change ? (
+            <label className="check small">
+              <input
+                type="checkbox"
+                checked={!approval.data.off}
+                onChange={(e) => setApproval(e.target.checked)}
+              />{" "}
+              Plans and re-plans {athlete.display_name} asks the AI for wait for a coach's approval
+            </label>
+          ) : (
+            <p className="small muted">
+              {approval.data.required
+                ? "Plans and re-plans you ask for wait for your coach's approval before workouts go to your calendar."
+                : "Your coach lets your plans and re-plans apply straight away (no approval needed)."}
+            </p>
+          ))}
         <form className="grid-form" onSubmit={generate}>
           <label>
             Title

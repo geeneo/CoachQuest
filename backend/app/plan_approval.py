@@ -9,7 +9,9 @@ with a note (saved as a plan comment, so the next re-plan reads it).
 
 Plans and re-plans a coach asks for are approved at once: the coach is the one
 deciding. An athlete without a coach is never asked to wait. If the last coach
-stops sharing, the athlete can approve their own waiting plans.
+stops sharing, or a coach (or an admin) switches approval off for the athlete
+(`User.plan_approval_off`), the athlete's plans apply at once and they can
+approve their own waiting ones.
 """
 
 from datetime import date
@@ -35,14 +37,19 @@ def coaches(db: DbSession, athlete_id: int) -> list[User]:
     return list(db.scalars(select(User).where(User.id.in_(ids), User.is_active.is_(True)))) if ids else []
 
 
+def required(db: DbSession, athlete: User) -> bool:
+    """Do plans this athlete asks for wait for a coach? Yes when they have one, unless switched off."""
+    return not athlete.plan_approval_off and bool(coaches(db, athlete.id))
+
+
 def needs_approval(db: DbSession, athlete_id: int, requester: User) -> bool:
-    return requester.id == athlete_id and bool(coaches(db, athlete_id))
+    return requester.id == athlete_id and required(db, requester)
 
 
 def can_approve(db: DbSession, user: User, athlete_id: int) -> bool:
     team = coaches(db, athlete_id)
     if user.id == athlete_id:
-        return not team
+        return not team or user.plan_approval_off
     return any(c.id == user.id for c in team)
 
 
