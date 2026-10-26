@@ -487,7 +487,7 @@
       - The user sees in Profile that the admin has turned their emails off
         (their own switches greyed out).
 
-- [ ] **Intervals.icu: "Sync now" button** (26 Oct). On Connections → Intervals.icu
+- [x] **Intervals.icu: "Sync now" button** (Done.) (26 Oct). On Connections → Intervals.icu
       (screenshot: only "active", last sync and the three switches today):
       - "Sync now" sends every scheduled workout from today on to
         Intervals.icu again, even unchanged ones (normally skipped), so

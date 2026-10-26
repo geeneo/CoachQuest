@@ -276,10 +276,9 @@ async def garmin_mfa(
 @router.post("/{provider}/sync")
 async def sync_now(provider: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     conn = _conn(db, user, provider, SOURCES)
+    if provider == "intervals_icu":
+        return await _intervals_sync_now(db, user, conn)
     last = conn.last_sync_at
-    if provider == "intervals_icu":  # last_sync_at also moves when workouts are sent; use the last import
-        imported = (conn.options or {}).get("imported_at")
-        last = datetime.fromisoformat(imported) if imported else None
     if last and last > utcnow() - timedelta(minutes=5):
         raise HTTPException(
             status_code=429,
@@ -287,6 +286,21 @@ async def sync_now(provider: str, user: User = Depends(current_user), db: DbSess
         )
     count = await SYNC[provider](db, conn)
     return {"fetched": count, "connection": conn_out(conn)}
+
+
+async def _intervals_sync_now(db: DbSession, user: User, conn: Connection) -> dict:
+    """Send every workout from today on again (so Intervals.icu tells MyWhoosh / Zwift), then import."""
+    pressed = (conn.options or {}).get("sync_now_at")
+    if pressed and datetime.fromisoformat(pressed) > utcnow() - timedelta(minutes=5):
+        raise HTTPException(status_code=429, detail="Synced in the last 5 minutes. Try again in a few minutes.")
+    conn.options = {**(conn.options or {}), "sync_now_at": utcnow().isoformat()}
+    db.commit()
+    workouts = None
+    if "intervals_icu" in sync_engine.auto_providers(db, user):
+        workouts = await sync_engine.resend_now(db, user, "intervals_icu")
+    count = await SYNC["intervals_icu"](db, conn)
+    db.refresh(conn)
+    return {"fetched": count, "workouts": workouts, "connection": conn_out(conn)}
 
 
 class SyncOptions(BaseModel):

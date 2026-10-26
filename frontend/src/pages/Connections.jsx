@@ -696,7 +696,21 @@ function IntervalsCard({ conn, platform, platforms, reload }) {
         await api(`/api/connections/intervals_icu/data/${kind}`, { method: "DELETE" });
       }
     });
-  const sync = () => run(() => api("/api/connections/intervals_icu/sync", { method: "POST" }));
+  const [done, setDone] = useState(null);
+  const sync = () =>
+    run(async () => {
+      setDone(null);
+      const r = await api("/api/connections/intervals_icu/sync", { method: "POST" });
+      const parts = [];
+      if (r.workouts) {
+        const w = r.workouts;
+        parts.push(`${w.sent} workout${w.sent === 1 ? "" : "s"} sent`);
+        if (w.deleted) parts.push(`${w.deleted} removed`);
+        if (w.failed) parts.push(`${w.failed} failed: ${w.errors.join("; ")}`);
+      }
+      if (conn.options.activities || conn.options.wellness) parts.push(`${r.fetched} imported`);
+      setDone(parts.length ? `${parts.join(", ")}.` : "Nothing to sync: sending workouts and imports are off.");
+    });
   const scopes = new Set(conn?.scopes || []);
 
   return (
@@ -753,10 +767,16 @@ function IntervalsCard({ conn, platform, platforms, reload }) {
             ))}
           </fieldset>
           {msg && <p className="error small">{msg}</p>}
+          {done && <p className="ok small">{done}</p>}
           <div className="row">
-            {(conn.options.activities || conn.options.wellness) && (
-              <button className="btn" disabled={busy} onClick={sync}>
-                <RefreshCw size={16} /> Import now
+            {(platform?.auto_sync || conn.options.activities || conn.options.wellness) && (
+              <button
+                className="btn"
+                disabled={busy}
+                onClick={sync}
+                title="Sends every workout from today on again (so Intervals.icu passes it to MyWhoosh / Zwift), and imports if switched on"
+              >
+                <RefreshCw size={16} /> {busy ? "Syncing…" : "Sync now"}
               </button>
             )}
             {(conn.status === "error" || scopes.size < 3) && (

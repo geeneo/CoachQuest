@@ -178,6 +178,42 @@ def send_upcoming(db: DbSession, athlete: User, provider: str, reason: str) -> i
     return len(rows)
 
 
+async def resend_now(db: DbSession, athlete: User, provider: str) -> dict[str, int | list[str]]:
+    """ "Sync now": send every planned workout from today on again, unchanged ones too, right away.
+
+    A platform only tells its own partners (e.g. Intervals.icu → MyWhoosh) about workouts that changed,
+    so a re-send is what nudges them. Returns counts by outcome, and the error messages."""
+    today = localtime.today(athlete)
+    upcoming = db.scalars(
+        select(ScheduledWorkout.id).where(ScheduledWorkout.athlete_id == athlete.id, ScheduledWorkout.day >= today)
+    ).all()
+    for m in db.scalars(
+        select(ExternalWorkout).where(
+            ExternalWorkout.athlete_id == athlete.id,
+            ExternalWorkout.provider == provider,
+            ExternalWorkout.scheduled_workout_id.in_(upcoming),
+        )
+    ):
+        m.content_hash = ""  # counts as changed, so it goes again
+    send_upcoming(db, athlete, provider, "sync_now")
+    out: dict[str, int | list[str]] = {"sent": 0, "deleted": 0, "failed": 0, "errors": []}
+    async with _lock:
+        jobs = db.scalars(
+            select(SyncJob).where(
+                SyncJob.athlete_id == athlete.id, SyncJob.provider == provider, SyncJob.status == "queued"
+            )
+        ).all()
+        for job in jobs:
+            outcome = await process(db, job)
+            if outcome in ("sent", "deleted"):
+                out[outcome] += 1
+            elif outcome not in ("unchanged", "skipped"):
+                out["failed"] += 1
+                if job.last_error and job.last_error not in out["errors"]:
+                    out["errors"].append(job.last_error)
+    return out
+
+
 def forget_sent(db: DbSession, athlete_id: int, provider: str) -> None:
     """Forget what was sent, e.g. when the athlete links a different account: everything goes again."""
     for m in db.scalars(
