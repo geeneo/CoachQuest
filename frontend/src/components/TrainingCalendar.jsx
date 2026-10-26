@@ -32,6 +32,13 @@ export default function TrainingCalendar({ id, isMe }) {
   const [selected, setSelected] = useState(null); // scheduled workout id shown below
   const [error, setError] = useState(null);
   const cal = useApi(`/api/athletes/${id}/calendar?start=${addDays(anchor, -7)}&end=${addDays(anchor, 7)}`);
+  // Race days (a race can last several days) shown on the calendar.
+  const races = useApi(`/api/athletes/${id}/races`);
+  const raceOn = {};
+  for (const r of races.data || []) {
+    if (!r.active || !r.target_date) continue;
+    for (let i = 0; i < (r.days || 1); i++) (raceOn[addDays(r.target_date, i)] ||= []).push({ ...r, day: i + 1 });
+  }
   const library = useApi("/api/workouts");
   const platforms = useApi(`/api/athletes/${id}/platforms`);
 
@@ -167,6 +174,27 @@ export default function TrainingCalendar({ id, isMe }) {
             <div className="cal-date">
               <span>{WEEKDAY[weekdayOf(d.date)]}</span> {fmtDay(d.date)}
             </div>
+            {(raceOn[d.date] || []).map((r) => (
+              <Link
+                key={r.id}
+                to="/races"
+                className="cal-race"
+                title={`${r.name}${r.distance_km ? ` · ${r.distance_km} km` : ""}${r.elevation_m ? ` · ${r.elevation_m} m` : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                🏁 <strong>{r.short_name || r.code || r.name}</strong>
+                {r.days > 1 ? ` · day ${r.day}/${r.days}` : ""}
+                {r.day === 1 && r.start_time ? ` · ${r.start_time}` : ""}
+                {view === "day" && (
+                  <span className="small muted">
+                    {" "}
+                    · {r.name}
+                    {r.distance_km ? ` · ${r.distance_km} km` : ""}
+                    {r.elevation_m ? ` · ${r.elevation_m} m` : ""}
+                  </span>
+                )}
+              </Link>
+            ))}
             {d.plan && (
               <div className={`cal-plan ${d.plan.type === "Rest" ? "rest" : ""}`} title={d.plan.description}>
                 <span className="badge">{d.plan.type}</span>

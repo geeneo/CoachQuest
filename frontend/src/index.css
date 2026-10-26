@@ -1641,3 +1641,18 @@ ul.instructions > li.note.suggestion {
   gap: 0.3rem;
   color: var(--brand-orange);
 }
+
+/* ---- race days on the calendar ---- */
+.cal-race {
+  display: block;
+  margin: 0.25rem 0;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand-orange) 18%, transparent);
+  border-left: 3px solid var(--brand-orange);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.cal-race:hover {
+  background: color-mix(in srgb, var(--brand-orange) 28%, transparent);
+}
