@@ -333,6 +333,27 @@
         period, keeping enough history before it that the curves are right.
       - One switch at the top of My training (and the coach's athlete view),
         remembered per browser; the chart titles say the period.
+- [ ] **Skin the site with the CoachQuest logo pack** (Coachquest_Web_Logo_Pack.zip,
+      26 Oct). The pack has: the primary logo (white "COACH", blue "QUEST",
+      cyclist and runner on mountains, orange arrow, "DREAM IT. TRAIN IT. OWN
+      IT."), two hero layouts, a square symbol, favicons (16–512 px, .ico,
+      Apple touch icon), Open Graph and Twitter cards, and a web manifest.
+      - Favicon, Apple icon and manifest in the page head; theme colour
+        `#032440` (navy). Fix the manifest's icon paths (they miss the
+        `favicons/` folder) and the name ("CoachQuest").
+      - Logo in the sidebar / top bar and on the sign-in, register and
+        password-reset pages; the slogan on the sign-in page.
+      - Colours from the logo as the site palette: navy background, sky blue
+        (`QUEST`, the figures) as the main accent, orange (the arrow) for
+        highlights. Dark theme close to the logo; light theme keeps a white
+        page with navy and blue accents. Check text contrast and the chart
+        colours still read.
+      - Social preview (Open Graph / Twitter) for links to
+        coachquest.mmc24.com.
+      - The artwork is raster only with a navy background (no transparent or
+        SVG version): on a light background show it in a navy badge, or get a
+        transparent / SVG version made later. Use resized copies, not the
+        0.5–0.9 MB originals, so pages stay quick.
 
 ## Later
 
