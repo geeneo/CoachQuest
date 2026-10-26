@@ -352,7 +352,9 @@ async def run_due(limit: int = 25) -> int:
         try:
             jobs = db.scalars(
                 select(SyncJob)
-                .where(SyncJob.status == "queued", SyncJob.next_attempt_at <= utcnow())
+                .join(User, User.id == SyncJob.athlete_id)
+                # Jobs of a paused or disabled account wait until it's turned back on.
+                .where(SyncJob.status == "queued", SyncJob.next_attempt_at <= utcnow(), User.is_active)
                 .order_by(SyncJob.next_attempt_at)
                 .limit(limit)
             ).all()

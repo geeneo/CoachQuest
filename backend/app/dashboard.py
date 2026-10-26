@@ -139,7 +139,19 @@ def coach_dashboard(db: DbSession, coach: User, include_self: bool = False) -> l
     grants = db.scalars(select(Grant).where(Grant.coach_id == coach.id, Grant.status == "active")).all()
     for g in grants:
         athlete = db.get(User, g.athlete_id)
-        if athlete is None or not athlete.is_active:
+        if athlete is None:
+            continue
+        if not athlete.is_active:
+            rows.append(
+                {
+                    "id": athlete.id,
+                    "name": athlete.display_name,
+                    "disabled": True,
+                    "flags": ["account paused"],
+                    "attention": 0,
+                    "scopes": [],
+                }
+            )
             continue
         scopes = set(g.scopes or []) & set(SCOPES)
         db.add(AccessLog(athlete_id=athlete.id, viewer_id=coach.id, resource="dashboard"))

@@ -99,6 +99,9 @@ def my_athletes(user: User = Depends(current_user), db: DbSession = Depends(get_
     for g in grants:
         athlete = db.get(User, g.athlete_id)
         row = {"id": athlete.id, "display_name": athlete.display_name, "scopes": g.scopes, "grant_id": g.id}
+        if not athlete.is_active:
+            out.append({**row, "disabled": True})
+            continue
         if "fitness" in g.scopes:
             curve, _ = load_curve(db, athlete.id, 1)
             row["today"] = {"ctl": curve[-1].ctl, "atl": curve[-1].atl, "tsb": curve[-1].tsb}

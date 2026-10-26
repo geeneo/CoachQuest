@@ -266,7 +266,7 @@
         to the coach access log too, unless set separately.
       - Keep it to what's needed (POPIA): no passwords, and IP addresses only
         for as long as the retention allows.
-- [ ] **Disable an account** (without deleting it).
+- [x] **Disable an account** (without deleting it). (Done.)
       - Admin → Users → Manage → "Disable": the user is signed out
         everywhere and can't sign in (the sign-in page says the account is
         disabled). "Enable" undoes it. Their data, plans and sharing stay as
@@ -500,6 +500,19 @@
         hammered. The API for the import part exists already
         (`POST /api/connections/intervals_icu/sync`); the page has no button
         and the forced re-send doesn't exist yet.
+
+- [ ] **Re-plan one day** (26 Oct). On a plan day, a "Re-plan this day" button
+      next to the comments, so the AI rewrites just that day (and its indoor
+      workout) instead of the whole plan from this week.
+      - Goes to the AI with the day's comments (e.g. Thu 19 Nov: the athlete
+        wanted rest before the race, the coach said "no not"), the days
+        around it (so the load still fits the week and the race), the coach
+        instructions and athlete notes, and an optional "what should change"
+        box.
+      - Shows the proposed day next to the current one before saving; follows
+        the same approval rule as other re-plans (waits for a coach unless
+        switched off).
+      - Much cheaper than a full re-plan: one day in, one day out.
 
 ## Later
 

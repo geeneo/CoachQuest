@@ -358,7 +358,13 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
         <td>
           <strong>{u.display_name}</strong>
           {isMe && <span className="muted"> (you)</span>} {u.is_admin && <span className="badge">admin</span>}{" "}
-          {!u.is_active && <span className="badge bad">disabled</span>}
+          {!u.is_active && <span className="badge bad">{u.disabled_by_self ? "paused by user" : "disabled"}</span>}
+          {!u.is_active && (u.disabled_reason || u.disabled_at) && (
+            <div className="small muted">
+              {u.disabled_reason}
+              {u.disabled_at ? ` · since ${formatDate(u.disabled_at)}` : ""}
+            </div>
+          )}
           <div className="small muted">{u.email}</div>
           <div className="small muted">joined {formatDate(u.created_at)}</div>
           {u.flags.length > 0 && (
@@ -572,8 +578,14 @@ function UserDetail({ u, isMe, update, reload }) {
                 type="checkbox"
                 checked={u.is_active}
                 onChange={(e) =>
-                  (e.target.checked || confirm(`Disable ${u.display_name}? They are signed out at once.`)) &&
-                  update(u, { is_active: e.target.checked })
+                {
+                  if (e.target.checked) return update(u, { is_active: true });
+                  const reason = prompt(
+                    `Disable ${u.display_name}? They are signed out at once and nothing runs for the account.\n\nReason (optional, only admins see it):`,
+                    "",
+                  );
+                  if (reason !== null) update(u, { is_active: false, disabled_reason: reason });
+                }
                 }
               />{" "}
               Active (can sign in)

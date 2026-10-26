@@ -60,7 +60,10 @@ def allowed_scopes(db: DbSession, viewer: User, athlete_id: int) -> set[str]:
     if viewer.id == athlete_id:
         return set(SCOPES)
     grant = active_grant(db, athlete_id, viewer.id)
-    return set(grant.scopes) & set(SCOPES) if grant else set()
+    athlete = db.get(User, athlete_id) if grant else None
+    if athlete is None or not athlete.is_active:
+        return set()  # a paused or disabled athlete's data isn't shown to coaches
+    return set(grant.scopes) & set(SCOPES)
 
 
 def require_scope(db: DbSession, viewer: User, athlete_id: int, scope: str) -> None:

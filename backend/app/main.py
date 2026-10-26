@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from . import assessments, auth_log, backfill, runtime, sync_engine
 from .config import check_required, settings
-from .db import Connection, SessionLocal, init_db
+from .db import Connection, SessionLocal, User, init_db
 from .routers import (
     admin,
     athlete_notes,
@@ -37,7 +37,11 @@ scheduler = AsyncIOScheduler(timezone="UTC")
 async def sync_all(provider: str) -> None:
     db = SessionLocal()
     try:
-        ids = db.scalars(select(Connection.id).where(Connection.provider == provider)).all()
+        ids = db.scalars(
+            select(Connection.id)
+            .join(User, User.id == Connection.user_id)
+            .where(Connection.provider == provider, User.is_active)  # paused or disabled accounts don't sync
+        ).all()
     finally:
         db.close()
     log.info("Scheduled %s sync for %d connections", provider, len(ids))

@@ -33,6 +33,7 @@ EVENTS = {
     "admin_approved": "Approved by an admin",
     "admin_rejected": "Sign-up rejected by an admin",
     "admin_disabled": "Disabled by an admin",
+    "paused_self": "Paused their own account",
     "admin_enabled": "Enabled by an admin",
     "admin_deleted": "Deleted by an admin",
     "admin_emails_off": "Emails turned off by an admin",

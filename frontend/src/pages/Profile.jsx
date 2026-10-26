@@ -174,7 +174,45 @@ export default function Profile() {
         </button>
         <MySignIns />
       </section>
+      <PauseAccount email={user.email} onPaused={() => setUser(null)} />
     </>
+  );
+}
+
+// Pause your own account: a step before deleting it. An admin turns it back on.
+function PauseAccount({ email, onPaused }) {
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [error, setError] = useState(null);
+  const pause = async (e) => {
+    e.preventDefault();
+    if (!confirm("Pause your account? You'll be signed out, and only an admin can turn it back on.")) return;
+    try {
+      await api("/api/auth/pause", { method: "POST", body: { confirm_email: confirmEmail } });
+      onPaused();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  return (
+    <section className="card">
+      <h2>Pause my account</h2>
+      <p className="muted small">
+        Signs you out everywhere and stops syncing, AI notes, emails and sending workouts. Your data, plans and sharing
+        stay; your coaches see the account as paused. Ask your CoachQuest administrator to turn it back on.
+      </p>
+      <form className="row wrap" onSubmit={pause}>
+        <input
+          placeholder={`Type ${email} to confirm`}
+          value={confirmEmail}
+          onChange={(e) => setConfirmEmail(e.target.value)}
+          autoComplete="off"
+        />
+        <button className="btn danger" disabled={confirmEmail.trim().toLowerCase() !== email}>
+          Pause my account
+        </button>
+      </form>
+      {error && <div className="error small">{error}</div>}
+    </section>
   );
 }
 

@@ -74,7 +74,7 @@ def test_admin_actions_and_view(make_user):
     admin.request("PATCH", f"/api/admin/users/{rid}", json={"is_active": False})
     assert (
         rider.post("/api/auth/login", json={"email": "rider@example.com", "password": "set by the admin 1"}).status_code
-        == 401
+        == 403
     )
     admin.request("PATCH", f"/api/admin/users/{rid}", json={"is_active": True})
     admin.request("DELETE", f"/api/admin/users/{rid}", json={"confirm_email": "rider@example.com"})

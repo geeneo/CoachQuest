@@ -139,7 +139,11 @@ def login(body: Credentials, request: Request, response: Response, db: DbSession
         raise HTTPException(status_code=401, detail="Wrong email or password")
     if not user.is_active:
         auth_log.record(db, request, "login_disabled", user)
-        raise HTTPException(status_code=401, detail="Wrong email or password")
+        # Only after the right password, so this doesn't tell strangers which emails have accounts.
+        raise HTTPException(
+            status_code=403,
+            detail="This account is paused. Ask your CoachQuest administrator to turn it back on.",
+        )
     if not user.approved:
         auth_log.record(db, request, "login_pending", user)
         raise HTTPException(status_code=403, detail="Your account is waiting for an administrator to approve it.")
@@ -168,6 +172,29 @@ def logout_all(
     db.execute(delete(Session).where(Session.user_id == user.id))
     db.commit()
     auth_log.record(db, request, "logout_all", user)
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"ok": True}
+
+
+class PauseAccount(BaseModel):
+    confirm_email: EmailStr
+
+
+@router.post("/pause")
+def pause_account(
+    body: PauseAccount,
+    request: Request,
+    response: Response,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Pause your own account: signed out everywhere, nothing runs for it; an admin turns it back on."""
+    if body.confirm_email.lower() != user.email:
+        raise HTTPException(status_code=422, detail="Type your own email address to confirm")
+    if user.is_admin and accounts.active_admins(db) <= 1:
+        raise HTTPException(status_code=400, detail="You're the only admin: make someone else admin first")
+    accounts.disable(db, user, "Paused by themselves", by_self=True)
+    auth_log.record(db, request, "paused_self", user)
     response.delete_cookie(SESSION_COOKIE, path="/")
     return {"ok": True}
 

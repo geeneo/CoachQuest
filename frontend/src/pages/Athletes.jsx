@@ -75,7 +75,17 @@ export default function Athletes() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r) =>
+                r.disabled ? (
+                  <tr key={r.id} className="muted">
+                    <td>
+                      <strong>{r.name}</strong>
+                    </td>
+                    <td colSpan={8} className="small">
+                      Account paused: nothing is shared while it's off.
+                    </td>
+                  </tr>
+                ) : (
                 <tr
                   key={r.id}
                   className={`clickable ${r.attention >= 3 ? "attention" : ""}`}
@@ -166,7 +176,8 @@ export default function Athletes() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ),
+              )}
             </tbody>
           </table>
         </div>

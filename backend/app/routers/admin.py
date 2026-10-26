@@ -8,7 +8,7 @@ from pathlib import Path
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
@@ -190,6 +190,7 @@ class UserUpdate(BaseModel):
     ai_disabled: bool | None = None
     emails_disabled: bool | None = None
     plan_approval_off: bool | None = None
+    disabled_reason: str | None = Field(default=None, max_length=200)
     # A number overrides the site's monthly limit for this user (0 = no limit); null goes back to the site's.
     ai_monthly_limit: int | None = Field(default=None, ge=0, le=100000)
 
@@ -337,13 +338,14 @@ def update_user(
         raise HTTPException(status_code=400, detail="You can't remove your own admin rights or disable yourself")
     if body.is_admin is not None:
         user.is_admin = body.is_admin
+    if body.is_active is False and user.is_active and user.is_admin and accounts.active_admins(db) <= 1:
+        raise HTTPException(status_code=400, detail="That's the last admin: make someone else admin first")
     if body.is_active is not None and body.is_active != user.is_active:
+        if body.is_active:
+            accounts.enable(db, user)
+        else:
+            accounts.disable(db, user, body.disabled_reason)
         auth_log.admin_action(db, request, "admin_enabled" if body.is_active else "admin_disabled", admin, user)
-    if body.is_active is not None:
-        user.is_active = body.is_active
-        if not body.is_active:
-            # Sign the user out everywhere right away.
-            db.execute(delete(Session).where(Session.user_id == user.id))
     if body.emails_disabled is not None and body.emails_disabled != user.emails_disabled:
         user.emails_disabled = body.emails_disabled
         event = "admin_emails_off" if body.emails_disabled else "admin_emails_on"

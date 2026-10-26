@@ -4,7 +4,7 @@ import logging
 import secrets
 from datetime import timedelta
 
-from sqlalchemy import delete, or_, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session as DbSession
 
 from . import mailer
@@ -89,6 +89,27 @@ def use_reset_token(db: DbSession, token: str, new_password: str) -> User | None
 def set_password(db: DbSession, user: User, new_password: str) -> None:
     user.password_hash = hash_password(new_password)
     db.execute(delete(Session).where(Session.user_id == user.id))
+    db.commit()
+
+
+def active_admins(db: DbSession) -> int:
+    return len(db.scalars(select(User.id).where(User.is_admin, User.is_active)).all())
+
+
+def disable(db: DbSession, user: User, reason: str | None, by_self: bool = False) -> None:
+    """Switch the account off: signed out everywhere; syncs, AI notes, emails and workout sending stop
+    (they all skip inactive accounts); coaches see it as disabled. Data, plans and sharing stay."""
+    user.is_active = False
+    user.disabled_reason = (reason or "").strip()[:200] or None
+    user.disabled_at = utcnow()
+    user.disabled_by_self = by_self
+    db.execute(delete(Session).where(Session.user_id == user.id))
+    db.commit()
+
+
+def enable(db: DbSession, user: User) -> None:
+    user.is_active = True
+    user.disabled_reason, user.disabled_at, user.disabled_by_self = None, None, False
     db.commit()
 
 
