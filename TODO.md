@@ -475,6 +475,18 @@
       - The scheduled morning notes already skip accounts without data
         (since 26 Oct).
 
+- [ ] **Admin: turn off emails to a user** (26 Oct). In Admin → Users → Details,
+      a switch "Emails to this user" that stops every email CoachQuest
+      would send them (sharing, comments, plan approvals, scheduled AI
+      notes), whatever their own Profile switches say.
+      - Keep the emails they need to get into their account: password reset
+        links (self-service and the admin's) and the sign-up approval email.
+        Say so next to the switch.
+      - Show "emails off" in the users table and flags; log the change in the
+        sign-in log like other admin actions.
+      - The user sees in Profile that the admin has turned their emails off
+        (their own switches greyed out).
+
 ## Later
 
 - [ ] Account export and delete (POPIA/GDPR), privacy notice and consent text
