@@ -322,6 +322,17 @@
       - Used for age-based estimates (max HR when unknown) and by the AI coach
         (recovery and training load advice). Only shared with coaches under
         "Profile"; never shown on the dashboard.
+- [ ] **My training: one period switch for the whole page.** Choosing 7 / 30 /
+      90 days (screenshot 26 Oct) changes only the Volume cards and the
+      activity mix today. It should also change:
+      - **Weekly elevation:** now always the last 12 weeks. For 7 days show
+        elevation per day; for 30 and 90 days, per week over that period.
+      - **Wellness:** now always 30 days (sleep, HRV, resting HR, Body Battery,
+        steps) — follow the chosen period, with averages for that period.
+      - **Training load (CTL/ATL/TSB):** now always 120 days — follow the
+        period, keeping enough history before it that the curves are right.
+      - One switch at the top of My training (and the coach's athlete view),
+        remembered per browser; the chart titles say the period.
 
 ## Later
 
