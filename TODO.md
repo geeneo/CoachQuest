@@ -355,6 +355,20 @@
         transparent / SVG version made later. Use resized copies, not the
         0.5–0.9 MB originals, so pages stay quick.
 
+- [ ] **Date format setting** (screenshot 26 Oct). Dates follow the browser's
+      language, so the same page mixes formats: "From Garmin, 10/26/2026,
+      8:28:05 AM" (US month/day, 12-hour, seconds) next to a birth date of
+      "1968/07/01".
+      - A profile setting "Date format", e.g. 26 Oct 2026 (default),
+        2026-10-26, 26/10/2026 or 10/26/2026, plus 24-hour or 12-hour time.
+      - Used everywhere through `lib/format.js` (`dateTime`, `shortDate`,
+        and the places that call `toLocaleString()` / `toLocaleDateString()`
+        directly), in the user's own timezone; no seconds.
+      - Emails and the AI coach's notes use the same format.
+      - The browser's date picker (birth date, races, workouts) follows the
+        browser's language and can't be restyled; show the chosen format
+        next to it, or swap it for our own picker if that looks wrong.
+
 ## Later
 
 - [ ] Account export and delete (POPIA/GDPR), privacy notice and consent text
