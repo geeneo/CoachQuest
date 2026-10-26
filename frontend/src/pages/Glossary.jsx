@@ -12,7 +12,7 @@ const TERMS = [
     ["Ramp", "CTL change per week",
       "How fast fitness is rising. CoachQuest flags a rise of more than 7 CTL in 7 days as an injury and illness risk."],
     ["Target CTL", "Fitness you want on race day",
-      "Set per race on the Races page. Progress projects your CTL at the race date from your current ramp and says whether you're on track (within 3)."],
+      "Set per race on the Races page, or set a target finish time and let the AI coach suggest one. Progress projects your CTL at the race date from your current ramp and says whether you're on track (within 3)."],
   ]],
   ["Effort and power", [
     ["RE", "Relative Effort",

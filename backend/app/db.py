@@ -259,6 +259,9 @@ class Race(Base):
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     start_time: Mapped[str | None] = mapped_column(String(5), nullable=True)  # "06:30"
     target_ctl: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Target finish time, and the AI coach's last target CTL suggestion for it (race_target.py).
+    target_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ctl_advice: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     days: Mapped[int] = mapped_column(Integer, default=1)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -627,6 +630,7 @@ _ADDED_COLUMNS = {
         "ai_monthly_limit": "INTEGER",
         "time_format": "VARCHAR(4)",
     },
+    "races": {"target_seconds": "INTEGER", "ctl_advice": "JSON"},
     "ai_calls": {
         "kind": "VARCHAR(12) NOT NULL DEFAULT ''",
         "cache_read_tokens": "INTEGER NOT NULL DEFAULT 0",

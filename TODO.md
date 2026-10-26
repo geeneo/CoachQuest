@@ -528,6 +528,12 @@
       - Logged and shown on the plan as "approved by the athlete (no coach
         answer in 48 h)", and the coach is told.
 
+- [x] **AI target CTL from a target finish time.** Races get a Target time
+      (h:mm). CoachQuest works out what it takes (power, W/kg, IF and TSS for
+      rides; pace for runs), and ✨ asks the AI coach for a target CTL with a
+      verdict (realistic / a stretch / unlikely, with a realistic time). A
+      suggestion only: "Use" fills in Target CTL.
+
 ## Later
 
 - [ ] Account export and delete (POPIA/GDPR), privacy notice and consent text

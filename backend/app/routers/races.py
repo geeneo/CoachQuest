@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from ..db import Race, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
+from ..race_estimate import estimate, format_time, parse_time
 
 router = APIRouter(prefix="/api", tags=["races"])
 
@@ -40,6 +41,7 @@ class RaceFields(BaseModel):
     target_date: date | None = None
     start_time: time | None = None
     target_ctl: int | None = Field(default=None, ge=0, le=250)
+    target_time: str | None = Field(default=None, max_length=10)  # finish time, h:mm or h:mm:ss
     days: int | None = Field(default=None, ge=1, le=60)
     active: bool | None = None
 
@@ -49,6 +51,12 @@ class RaceFields(BaseModel):
         if v is not None and not re.fullmatch(r"[a-z0-9][a-z0-9-]*", v.strip().lower()):
             raise ValueError("Use lowercase letters, numbers and dashes, e.g. k2c or cape-town")
         return v.strip().lower() if v else v
+
+    @field_validator("target_time")
+    @classmethod
+    def _target_time(cls, v):
+        parse_time(v)  # raises ValueError with a hint
+        return v
 
     @field_validator("discipline")
     @classmethod
@@ -76,6 +84,8 @@ def race_out(r: Race, today: date | None = None) -> dict:
         "target_date": r.target_date,
         "start_time": r.start_time,
         "target_ctl": r.target_ctl,
+        "target_time": format_time(r.target_seconds),
+        "ctl_advice": r.ctl_advice,
         "days": r.days,
         "active": r.active,
         "days_to_go": (r.target_date - today).days if r.target_date else None,
@@ -105,6 +115,8 @@ def _apply(race: Race, fields: dict) -> None:
             value = value.strftime("%H:%M") if value else None
         if key == "short_name" and value is None:
             value = ""
+        if key == "target_time":
+            key, value = "target_seconds", parse_time(value)
         setattr(race, key, value)
 
 
@@ -120,6 +132,9 @@ def list_races(athlete: str, user: User = Depends(current_user), db: DbSession =
     rows = db.scalars(
         select(Race).where(Race.user_id == athlete_id).order_by(Race.target_date.is_(None), Race.target_date)
     ).all()
+    # What the target time asks for (power, pace): the athlete's own view, as it uses their weight and FTP.
+    if athlete_id == user.id:
+        return [{**race_out(r), "estimate": estimate(r, user)} for r in rows]
     return [race_out(r) for r in rows]
 
 
@@ -145,6 +160,14 @@ def update_race(race_id: int, body: RaceFields, user: User = Depends(current_use
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Another race already uses that code") from None
+    return race_out(race)
+
+
+@router.delete("/races/{race_id}/ctl-advice")
+def dismiss_advice(race_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    race = _own(db, race_id, user)
+    race.ctl_advice = None
+    db.commit()
     return race_out(race)
 
 

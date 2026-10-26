@@ -9,9 +9,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import assessments, coach_chat, comments
+from .. import assessments, coach_chat, comments, race_target
 from ..coach import CoachError
-from ..db import Assessment, CoachChat, User, get_db
+from ..db import Assessment, CoachChat, Race, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 
 router = APIRouter(prefix="/api", tags=["ai coach"])
@@ -54,6 +54,18 @@ async def create_assessment(
     except CoachError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     return {**assessments.assessment_out(a), "unchanged": getattr(a, "reused", False)}
+
+
+@router.post("/races/{race_id}/ctl-advice")
+async def target_ctl_advice(race_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """The AI coach's target CTL for the race's target time. The athlete's own races only."""
+    race = db.get(Race, race_id)
+    if race is None or race.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Race not found")
+    try:
+        return await race_target.suggest(db, race, user)
+    except CoachError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
 class AiSettings(BaseModel):

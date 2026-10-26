@@ -136,7 +136,7 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
         prefs = preferences_out(athlete)
         facts["weekday_preferences"] = {d: t[0] for d, t in prefs["weekday_prefs"].items() if t}
         facts["upcoming_races"] = [
-            {k: v for k, v in race_out(r, today).items() if k not in ("id", "active")}
+            {k: v for k, v in race_out(r, today).items() if k not in ("id", "active", "ctl_advice")}
             for r in upcoming(db, athlete.id, today)
         ][:5]
         standing = instructions.for_ai(db, athlete.id, today)
@@ -161,8 +161,8 @@ class CoachError(Exception):
 
 
 # What each AI call is for (AiCall.kind). "Short" kinds use the cheaper settings (anthropic_*_short).
-KINDS = ("plan", "replan", "day", "readiness", "weekly", "chat")
-SHORT_KINDS = ("readiness", "weekly", "chat")
+KINDS = ("plan", "replan", "day", "readiness", "weekly", "chat", "target")
+SHORT_KINDS = ("readiness", "weekly", "chat", "target")
 # The instructions are the same for everyone, so they're cached (cache reads cost ~0.1x the input price).
 CACHED = {"type": "ephemeral"}
 
