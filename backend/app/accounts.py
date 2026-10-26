@@ -19,6 +19,7 @@ from .db import (
     CoachInstruction,
     Comment,
     Connection,
+    DeletedActivity,
     ExternalWorkout,
     Grant,
     OAuthState,
@@ -108,6 +109,7 @@ def delete_account(db: DbSession, user: User) -> None:
     db.execute(update(CoachInstruction).where(CoachInstruction.updated_by == uid).values(updated_by=None))
     for model, column in (
         (Activity, Activity.user_id),
+        (DeletedActivity, DeletedActivity.user_id),
         (WellnessDay, WellnessDay.user_id),
         (Connection, Connection.user_id),
         (UserStravaApp, UserStravaApp.user_id),

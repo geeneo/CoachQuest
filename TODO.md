@@ -278,7 +278,7 @@
       - Users can pause their own account from Profile (same effect, they can
         come back by asking an admin), as a step before deleting it.
       - Admins can't disable themselves or the last admin.
-- [ ] **Athletes delete activities.** In My training → Activities, a
+- [x] **Athletes delete activities.** (Done.) In My training → Activities, a
       delete button per activity (and select several to delete at once),
       with "are you sure?". Only the athlete, never a coach.
       - Deleted activities stay deleted: the next Strava / Garmin /

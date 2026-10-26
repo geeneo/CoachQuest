@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import dashboard, localtime, profile_sync
+from .. import activity_delete, dashboard, localtime, profile_sync
 from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
@@ -182,6 +182,26 @@ def edit_activity(
         setattr(act, key, value or None)
     db.commit()
     return activity_out(act)
+
+
+class ActivityIds(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+
+
+@router.post("/activities/delete")
+def delete_activities(body: ActivityIds, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """The athlete deletes their own activities from CoachQuest (never from Strava, Garmin or Intervals.icu)."""
+    return {"deleted": activity_delete.delete(db, user, body.ids)}
+
+
+@router.get("/activities/deleted")
+def deleted_activities(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    return activity_delete.listing(db, user)
+
+
+@router.post("/activities/deleted/restore")
+def restore_activities(body: ActivityIds, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    return {"restored": activity_delete.restore(db, user, body.ids)}
 
 
 @router.get("/athletes/{athlete}/summary")

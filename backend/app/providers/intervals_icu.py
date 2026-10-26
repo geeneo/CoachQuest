@@ -22,7 +22,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import sync_options
+from .. import activity_delete, sync_options
 from ..db import Activity, Connection, User, WellnessDay, utcnow
 from ..delivery import intervals_icu as api
 from ..delivery.base import AuthFailed, DeliveryError, Forbidden
@@ -58,6 +58,8 @@ def upsert_activity(db: DbSession, user: User, item: dict) -> Activity | None:
     if start is None:
         return None
     ext_id = str(item["id"])
+    if activity_delete.is_deleted(db, user.id, SOURCE, ext_id):
+        return None  # the athlete deleted it in CoachQuest
     act = db.scalar(
         select(Activity).where(Activity.user_id == user.id, Activity.source == SOURCE, Activity.external_id == ext_id)
     )

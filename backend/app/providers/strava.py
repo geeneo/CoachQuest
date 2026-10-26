@@ -15,7 +15,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import runtime, sync_options
+from .. import activity_delete, runtime, sync_options
 from ..config import settings
 from ..db import Activity, Connection, User, UserStravaApp, utcnow
 from ..fitness import estimate_tss
@@ -180,6 +180,8 @@ async def _access_token(db: DbSession, conn: Connection, client: httpx.AsyncClie
 
 def _upsert(db: DbSession, user: User, item: dict) -> None:
     ext_id = str(item["id"])
+    if activity_delete.is_deleted(db, user.id, "strava", ext_id):
+        return  # the athlete deleted it in CoachQuest
     act = db.scalar(
         select(Activity).where(Activity.user_id == user.id, Activity.source == "strava", Activity.external_id == ext_id)
     )

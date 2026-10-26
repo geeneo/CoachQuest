@@ -18,7 +18,7 @@ import garminconnect
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import profile_sync, sync_options
+from .. import activity_delete, profile_sync, sync_options
 from ..db import Activity, Connection, PendingMfa, User, WellnessDay, utcnow
 from ..fitness import estimate_tss
 from ..security import decrypt_json, encrypt_json
@@ -263,6 +263,8 @@ def _fetch(
 
 def _upsert_activity(db: DbSession, user: User, item: dict) -> None:
     ext_id = str(item.get("activityId"))
+    if activity_delete.is_deleted(db, user.id, "garmin", ext_id):
+        return  # the athlete deleted it in CoachQuest
     act = db.scalar(
         select(Activity).where(Activity.user_id == user.id, Activity.source == "garmin", Activity.external_id == ext_id)
     )

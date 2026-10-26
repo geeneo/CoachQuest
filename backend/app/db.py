@@ -177,6 +177,23 @@ class Activity(Base):
     note_tag: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
+class DeletedActivity(Base):
+    """An activity the athlete deleted: syncs skip it (activity_delete.py), and it can be restored."""
+
+    __tablename__ = "deleted_activities"
+    __table_args__ = (UniqueConstraint("user_id", "source", "external_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    source: Mapped[str] = mapped_column(String(20))
+    external_id: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(255), default="")
+    sport: Mapped[str] = mapped_column(String(40), default="Other")
+    start_time: Mapped[datetime] = mapped_column(DateTime)
+    data: Mapped[dict] = mapped_column(JSON)  # the activity as it was, for Undo
+    deleted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class WellnessDay(Base):
     __tablename__ = "wellness_days"
     __table_args__ = (UniqueConstraint("user_id", "day"),)

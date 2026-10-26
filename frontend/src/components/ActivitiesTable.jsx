@@ -1,7 +1,8 @@
+import { Trash2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
-import { duration, shortDate } from "../lib/format.js";
+import { dateTime, duration, formatDate, shortDate } from "../lib/format.js";
 
 const RANGES = [
   [7, "7d"],
@@ -74,6 +75,48 @@ export default function Activities({ id, editable }) {
     }
   };
 
+  // Deleting (the athlete's own activities only; never on Strava, Garmin or Intervals.icu).
+  const [picked, setPicked] = useState(new Set());
+  const [showDeleted, setShowDeleted] = useState(false);
+  const deleted = useApi(editable && showDeleted ? "/api/activities/deleted" : null);
+  const toggle = (rid) =>
+    setPicked((s) => {
+      const n = new Set(s);
+      n.has(rid) ? n.delete(rid) : n.add(rid);
+      return n;
+    });
+  const allPicked = shown.length > 0 && shown.every((r) => picked.has(r.id));
+  const remove = async (ids) => {
+    const one = ids.length === 1 && rows.find((r) => r.id === ids[0]);
+    const what = one ? `"${one.name}" (${shortDate(one.start_time)})` : `${ids.length} activities`;
+    if (
+      !confirm(
+        `Delete ${what} from CoachQuest?\n\nThey stay on Strava / Garmin and won't come back on the next sync. ` +
+          "Training load, volume and plans are recalculated. You can undo this under Deleted activities.",
+      )
+    )
+      return;
+    setError(null);
+    try {
+      await api("/api/activities/delete", { method: "POST", body: { ids } });
+      setPicked(new Set());
+      res.reload();
+      deleted.reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const restore = async (ids) => {
+    setError(null);
+    try {
+      await api("/api/activities/deleted/restore", { method: "POST", body: { ids } });
+      res.reload();
+      deleted.reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const years = [];
   for (let y = now.getFullYear(); y >= 2009; y--) years.push(y);
 
@@ -140,6 +183,43 @@ export default function Activities({ id, editable }) {
         </span>{" "}
         · <strong>{fmt(total((r) => r.duration_s) / 3600, 1)} hrs</strong>
       </p>
+      {editable && (
+        <div className="row wrap delete-bar">
+          <button className="btn small danger" disabled={!picked.size} onClick={() => remove([...picked])}>
+            <Trash2 size={14} /> Delete selected{picked.size ? ` (${picked.size})` : ""}
+          </button>
+          <button className="link-btn small" onClick={() => setShowDeleted(!showDeleted)}>
+            {showDeleted ? "Hide deleted activities" : "Deleted activities…"}
+          </button>
+        </div>
+      )}
+      {editable && showDeleted && (
+        <div className="deleted-list">
+          {deleted.data?.length ? (
+            <table className="small">
+              <tbody>
+                {deleted.data.map((d) => (
+                  <tr key={d.id}>
+                    <td>{formatDate(d.start_time)}</td>
+                    <td>{d.name || d.sport}</td>
+                    <td className="muted">
+                      {d.source} · {d.distance_km} km · {duration(d.duration_s)}
+                    </td>
+                    <td className="muted">deleted {dateTime(d.deleted_at)}</td>
+                    <td>
+                      <button className="link-btn small" onClick={() => restore([d.id])}>
+                        <Undo2 size={14} /> Restore
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="muted small">{deleted.loading ? "Loading…" : "Nothing deleted."}</p>
+          )}
+        </div>
+      )}
       {error && <div className="error">{error}</div>}
       {res.error && <div className="error">{res.error.message}</div>}
       {shown.length === 0 ? (
@@ -149,6 +229,16 @@ export default function Activities({ id, editable }) {
           <table className="activities">
             <thead>
               <tr>
+                {editable && (
+                  <th>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all shown"
+                      checked={allPicked}
+                      onChange={() => setPicked(allPicked ? new Set() : new Set(shown.map((r) => r.id)))}
+                    />
+                  </th>
+                )}
                 <th>Date</th>
                 <th>Type</th>
                 <th>Activity</th>
@@ -164,11 +254,17 @@ export default function Activities({ id, editable }) {
                 <th className="num">RE</th>
                 <th>Race</th>
                 <th>Note</th>
+                {editable && <th />}
               </tr>
             </thead>
             <tbody>
               {shown.map((a) => (
-                <tr key={a.id}>
+                <tr key={a.id} className={picked.has(a.id) ? "picked" : ""}>
+                  {editable && (
+                    <td>
+                      <input type="checkbox" aria-label="Select" checked={picked.has(a.id)} onChange={() => toggle(a.id)} />
+                    </td>
+                  )}
                   <td>{shortDate(a.start_time)}</td>
                   <td>
                     {editable ? (
@@ -232,6 +328,13 @@ export default function Activities({ id, editable }) {
                       a.note_tag || "–"
                     )}
                   </td>
+                  {editable && (
+                    <td>
+                      <button className="icon-btn" title="Delete from CoachQuest" aria-label="Delete" onClick={() => remove([a.id])}>
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

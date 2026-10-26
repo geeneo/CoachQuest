@@ -1590,3 +1590,18 @@ ul.instructions > li > form {
   cursor: pointer;
   font-weight: 600;
 }
+
+/* ---- deleting activities ---- */
+.delete-bar {
+  margin: 0.25rem 0 0.5rem;
+  align-items: center;
+}
+.deleted-list {
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+table.activities tr.picked td {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
