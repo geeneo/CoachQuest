@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import backfill, runtime, sync_engine, sync_options
+from .. import backfill, profile_sync, runtime, sync_engine, sync_options
 from ..db import Activity, Connection, OAuthState, SessionLocal, User, UserStravaApp, WellnessDay, get_db, utcnow
 from ..delivery import intervals_icu
 from ..deps import current_user
@@ -292,6 +292,9 @@ async def sync_now(provider: str, user: User = Depends(current_user), db: DbSess
 class SyncOptions(BaseModel):
     activities: bool | None = None
     wellness: bool | None = None
+    weight: bool | None = None
+    thresholds: bool | None = None
+    birth_date: bool | None = None
 
 
 def _conn(db: DbSession, user: User, provider: str, allowed: tuple = PROVIDERS) -> Connection:
@@ -379,6 +382,12 @@ def delete_data(provider: str, kind: str, user: User = Depends(current_user), db
     """Delete already-imported data of one type from one provider."""
     if kind not in sync_options.KINDS.get(provider, ()):
         raise HTTPException(status_code=404, detail="Unknown data type")
+    if kind == "birth_date":
+        if (user.profile_sources or {}).get("birth_date", {}).get("source") == provider:
+            user.birth_date = None
+            db.commit()
+            return {"deleted": 1}
+        return {"deleted": 0}
     if kind == "weight":
         # Weight lives on the profile; clear it only if it came from this provider.
         if user.weight_source == provider:
@@ -386,6 +395,14 @@ def delete_data(provider: str, kind: str, user: User = Depends(current_user), db
             db.commit()
             return {"deleted": 1}
         return {"deleted": 0}
+    if kind == "thresholds":
+        # FTP, LTHR and max HR this provider filled in; values typed in by hand stay.
+        sources = user.profile_sources or {}
+        cleared = [f for f in profile_sync.THRESHOLDS if sources.get(f, {}).get("source") == provider]
+        for f in cleared:
+            setattr(user, f, None)
+        db.commit()
+        return {"deleted": len(cleared)}
     if kind == "activities":
         result = db.execute(delete(Activity).where(Activity.user_id == user.id, Activity.source == provider))
     else:

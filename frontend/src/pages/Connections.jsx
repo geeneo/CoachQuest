@@ -336,6 +336,7 @@ const KIND_LABELS = {
   wellness: "Wellness (sleep, HRV, resting HR, Body Battery, stress, steps)",
   weight: "Weight → Profile (latest weigh-in from Garmin or a Garmin Index scale)",
   thresholds: "Thresholds → Profile (cycling FTP, lactate threshold HR, max HR from your Garmin zones)",
+  birth_date: "Birth date → Profile (your age, for the AI coach and age-based estimates)",
 };
 
 const BACKFILL_CHOICES = [
@@ -425,7 +426,7 @@ function SyncChoices({ conn, provider, run, busy }) {
   const toggle = (kind, on) =>
     run(async () => {
       await api(`/api/connections/${provider}/options`, { method: "PATCH", body: { [kind]: on } });
-      if (!on && kind !== "weight" && confirm(`Stopped importing ${kind} from ${name}, and hid what was already imported.\n\nAlso delete those ${kind} from CoachQuest? Cancel keeps them hidden; switching back on shows them again.`)) {
+      if (!on && ["activities", "wellness"].includes(kind) && confirm(`Stopped importing ${kind} from ${name}, and hid what was already imported.\n\nAlso delete those ${kind} from CoachQuest? Cancel keeps them hidden; switching back on shows them again.`)) {
         await api(`/api/connections/${provider}/data/${kind}`, { method: "DELETE" });
       }
     });

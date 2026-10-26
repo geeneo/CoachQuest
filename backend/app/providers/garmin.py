@@ -174,12 +174,44 @@ def _thresholds(api) -> dict:
     return parse_thresholds(*replies)
 
 
+def parse_birth_date(*replies) -> date | None:
+    """Garmin's birth date from user settings (userData) or personal information (userInfo)."""
+    for reply in replies:
+        if not isinstance(reply, dict):
+            continue
+        for raw in (
+            (reply.get("userData") or {}).get("birthDate"),
+            (reply.get("userInfo") or {}).get("birthDate"),
+            reply.get("birthDate"),
+        ):
+            try:
+                d = date.fromisoformat(str(raw)[:10]) if raw else None
+            except ValueError:
+                d = None
+            if d and date(1900, 1, 1) <= d <= date.today() - timedelta(days=5 * 365):
+                return d
+    return None
+
+
+def _birth_date(api) -> date | None:
+    for call in (api.get_user_profile, api.get_personal_information):
+        try:
+            found = parse_birth_date(call())
+        except Exception as exc:
+            log.debug("%s failed: %s", call.__name__, exc)
+            continue
+        if found:
+            return found
+    return None
+
+
 def _fetch(
     tokens: str,
     wellness_days: list[date],
     activity_range: tuple[date, date] | None,
     want_weight: bool,
     want_thresholds: bool = False,
+    want_birth_date: bool = False,
 ):
     """Blocking Garmin calls; runs in a thread.
 
@@ -221,6 +253,8 @@ def _fetch(
         except Exception as exc:
             log.debug("latest weight failed: %s", exc)
     thresholds = _thresholds(api) if want_thresholds else None
+    if want_birth_date:
+        thresholds = {**(thresholds or {}), "birth_date": _birth_date(api)}
     activities = []
     if activity_range:
         activities = api.get_activities_by_date(activity_range[0].isoformat(), activity_range[1].isoformat())
@@ -271,6 +305,7 @@ async def sync(db: DbSession, conn: Connection) -> int:
             (days[0], days[-1]) if opts["activities"] else None,
             opts["weight"],
             opts["thresholds"],
+            opts["birth_date"],
         )
 
     except Exception as exc:
@@ -316,11 +351,13 @@ async def pull_profile(db: DbSession, conn: Connection) -> dict:
     """
     user = db.get(User, conn.user_id)
     tokens = decrypt_json(conn.token_enc)["tokens"]
-    new_tokens, _, _, weight, thresholds = await asyncio.to_thread(_fetch, tokens, [], None, True, True)
+    new_tokens, _, _, weight, thresholds = await asyncio.to_thread(_fetch, tokens, [], None, True, True, True)
     conn.token_enc = encrypt_json({"tokens": new_tokens})
     changed = profile_sync.apply_from_provider(db, user, "garmin", thresholds or {}, force=True)
     found = dict(thresholds or {})
     found["weight_kg"] = weight[0] if weight else None
+    if found.get("birth_date"):
+        found["birth_date"] = found["birth_date"].isoformat()
     if weight:
         kg, measured_at = weight
         if user.weight_kg != kg:

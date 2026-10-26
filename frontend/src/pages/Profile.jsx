@@ -31,6 +31,7 @@ export default function Profile() {
     notify_sharing: user.notify_sharing ?? true,
     notify_comments: user.notify_comments ?? true,
     timezone: user.timezone || "",
+    birth_date: user.birth_date || "",
     ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, user[k] ?? ""])),
   }));
   const [msg, setMsg] = useState(null);
@@ -46,6 +47,8 @@ export default function Profile() {
       notify_sharing: form.notify_sharing,
       notify_comments: form.notify_comments,
       ...(form.timezone ? { timezone: form.timezone } : {}),
+      // Only when changed, so saving other fields doesn't mark a Garmin birth date as typed in.
+      ...((form.birth_date || null) !== (user.birth_date || null) ? { birth_date: form.birth_date || null } : {}),
     };
     for (const [k] of NUMBER_FIELDS) body[k] = form[k] === "" ? null : Number(form[k]);
     try {
@@ -88,6 +91,14 @@ export default function Profile() {
             ))}
           </select>
           <span className="hint">Weekly totals, charts, plans and weekly reviews use this.</span>
+        </label>
+        <label>
+          Birth date
+          <input type="date" value={form.birth_date} onChange={set("birth_date")} max={new Date().toISOString().slice(0, 10)} />
+          <span className="hint">
+            {user.age != null ? `Age ${user.age}. ` : ""}Coaches who see your profile, and the AI coach, get your age only.
+          </span>
+          {sourceLine(user, "birth_date") && <span className="hint source">{sourceLine(user, "birth_date")}</span>}
         </label>
         <TimezoneField value={form.timezone} onChange={(timezone) => setForm({ ...form, timezone })} />
         <label className="check wide">
@@ -227,7 +238,13 @@ function PullFromGarmin({ onPulled }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const labels = { ftp_watts: ["FTP", "W"], lthr_bpm: ["Lactate threshold HR", "bpm"], max_hr_bpm: ["Max HR", "bpm"], weight_kg: ["Weight", "kg"] };
+  const labels = {
+    ftp_watts: ["FTP", "W"],
+    lthr_bpm: ["Lactate threshold HR", "bpm"],
+    max_hr_bpm: ["Max HR", "bpm"],
+    weight_kg: ["Weight", "kg"],
+    birth_date: ["Birth date", ""],
+  };
   const pull = async () => {
     setBusy(true);
     setError(null);
@@ -251,10 +268,10 @@ function PullFromGarmin({ onPulled }) {
       </div>
       <p className="muted small">
         <strong>Garmin</strong> fills FTP, lactate threshold HR and max HR (from your Garmin power and heart-rate zones)
-        and your latest weigh-in. This also happens on every Garmin sync while "Thresholds → Profile" and "Weight →
-        Profile" are ticked under Connections; a number you type here is kept until Garmin reports a new one.{" "}
-        <strong>Strava</strong> can't fill these: CoachQuest only has read access to your activities, and Strava keeps
-        FTP and weight behind an extra permission.
+        your latest weigh-in, and your birth date. This also happens on every Garmin sync while "Thresholds → Profile",
+        "Weight → Profile" and "Birth date → Profile" are ticked under Connections; a value you type here is kept until
+        Garmin reports a new one. <strong>Strava</strong> can't fill these: CoachQuest only has read access to your
+        activities, Strava keeps FTP and weight behind an extra permission, and its API has no birth date.
       </p>
       {error && <div className="error">{error}</div>}
       {result && (

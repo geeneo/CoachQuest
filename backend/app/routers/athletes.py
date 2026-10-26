@@ -41,6 +41,14 @@ class ProfileUpdate(BaseModel):
     notify_sharing: bool | None = None
     notify_comments: bool | None = None
     timezone: str | None = Field(default=None, max_length=64)
+    birth_date: date | None = None
+
+    @field_validator("birth_date")
+    @classmethod
+    def _birth_date(cls, v):
+        if v is not None and not (date(1900, 1, 1) <= v <= date.today() - timedelta(days=5 * 365)):
+            raise ValueError("Enter a real birth date")
+        return v
 
     @field_validator("timezone")
     @classmethod

@@ -314,7 +314,7 @@
         a history; the AI may suggest additions ("remember: knee sore after
         long climbs?") that a person accepts. Included in every AI request,
         within the sharing permissions. Covered by account export/delete.
-- [ ] **Age / birth date from Garmin and/or Strava.** Fill the athlete's birth
+- [x] **Age / birth date from Garmin and/or Strava.** (Done: from Garmin or typed in; Strava's API has no birth date.) Fill the athlete's birth
       date (and so age) into Profile, like weight and thresholds, with "from
       Garmin · date" shown and a manual override.
       - Garmin's user profile has the birth date (user settings). Strava's API

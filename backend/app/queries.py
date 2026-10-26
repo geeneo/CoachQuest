@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from . import profile_sync
 from .activity_types import category, is_outdoor, is_ride
 from .db import Activity, WellnessDay
 from .fitness import daily_tss, dedupe, pmc, week_start_of
@@ -99,6 +100,7 @@ def profile_out(athlete, scopes: set[str]) -> dict:
             lthr_bpm=athlete.lthr_bpm,
             max_hr_bpm=athlete.max_hr_bpm,
             goal=athlete.goal,
+            age=profile_sync.age(athlete.birth_date),  # the age, never the birth date itself
         )
     if "weight" in scopes:
         out["weight_kg"] = athlete.weight_kg

@@ -13,7 +13,7 @@ from .db import Connection
 # "weight" copies the latest Garmin weigh-in into the Profile; "thresholds" does the same for FTP, LTHR and max HR.
 KINDS = {
     "strava": ("activities",),
-    "garmin": ("activities", "wellness", "weight", "thresholds"),
+    "garmin": ("activities", "wellness", "weight", "thresholds", "birth_date"),
     # Intervals.icu mostly holds copies of Strava/Garmin data, so its imports start off.
     # Sending workouts there is a separate switch (platform_prefs, see platforms.py).
     "intervals_icu": ("activities", "wellness"),

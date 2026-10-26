@@ -53,6 +53,8 @@ class User(Base):
     lthr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # From Garmin or typed in; coaches (profile scope) and the AI coach only ever see the age.
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     goal: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Where weight_kg came from ("garmin" | "manual") and when it was measured or entered.
     weight_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -508,6 +510,7 @@ _ADDED_COLUMNS = {
         "approved": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_sharing": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_comments": "BOOLEAN NOT NULL DEFAULT 1",
+        "birth_date": "DATE",
         "timezone": "VARCHAR(64)",
         "platform_prefs": "JSON",
     },
