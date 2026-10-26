@@ -302,7 +302,10 @@
       - Sort and filter (needs attention first); click through to the
         athlete's calendar, plan or AI coach tab.
       - Shows only what each athlete shares with the coach.
-- [ ] **Decide: an athlete "memory" for the AI coach** (a memory.md per athlete,
+- [ ] **Decide: an athlete "memory" for the AI coach** — decision proposed in
+      `docs/athlete-memory.md` (26 Oct): yes, as "Athlete notes" (short shared notes per
+      athlete with categories and review dates, in the database; then AI-suggested notes
+      a person accepts). Waiting for the owner's go-ahead. Original item: (a memory.md per athlete,
       or per coach and athlete). Today the AI coach starts every note, plan and
       chat from facts computed fresh from the data, plus plan comments; it
       remembers nothing else between requests. Check whether that's enough or
