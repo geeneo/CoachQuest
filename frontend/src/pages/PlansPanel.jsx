@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
-import { dateTime } from "../lib/format.js";
+import { dateTime, formatDate } from "../lib/format.js";
+import { MAX_WEEKS, weeksToEvent } from "../lib/planWeeks.js";
+import { localToday } from "../lib/workout.js";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -43,6 +45,44 @@ export default function PlansPanel({ id, athlete }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  // Weeks follow the event date: from the plan's first week up to and including the race week.
+  const races = useApi(`/api/athletes/${id}/races`);
+  const upcomingRaces = (races.data || []).filter((r) => r.active && r.target_date && r.days_to_go >= 0);
+  const weekStart = prefs.data?.week_start ?? 0;
+  const fit = form.event_date ? weeksToEvent(form.event_date, form.start_date, localToday(), weekStart) : null;
+  const [weeksByHand, setWeeksByHand] = useState(false);
+  // Weeks away when the start week was moved later to fit the 16 weeks (kept after the start date is set).
+  const [movedAway, setMovedAway] = useState(null);
+  const away = fit?.moved ? fit.away : movedAway;
+  useEffect(() => {
+    if (!fit || fit.error || weeksByHand) return;
+    if (fit.moved) setMovedAway(fit.away);
+    setForm((f) => ({ ...f, weeks: fit.weeks, start_date: fit.moved ? fit.start : f.start_date }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.event_date, form.start_date, weekStart, weeksByHand]);
+  const [raceFill, setRaceFill] = useState({});
+  const pickRace = (raceId) => {
+    const r = upcomingRaces.find((x) => String(x.id) === raceId);
+    if (!r) return;
+    setWeeksByHand(false);
+    setMovedAway(null);
+    const filled = {
+      title: `${r.short_name || r.name} plan`,
+      goal: [r.name, r.distance_km && `${r.distance_km} km`, r.elevation_m && `${r.elevation_m} m climbing`]
+        .filter(Boolean)
+        .join(", "),
+    };
+    // Replace what an earlier race pick filled in, but never what the user typed.
+    const mine = (k, f) => f[k] && f[k] !== raceFill[k];
+    setForm((f) => ({
+      ...f,
+      event_date: r.target_date,
+      title: mine("title", f) ? f.title : filled.title,
+      goal: mine("goal", f) ? f.goal : filled.goal,
+    }));
+    setRaceFill(filled);
+  };
   const toggleDay = (d) =>
     setForm({
       ...form,
@@ -163,18 +203,71 @@ export default function PlansPanel({ id, athlete }) {
             Goal
             <input value={form.goal} onChange={set("goal")} required maxLength={500} placeholder="160 km gran fondo" />
           </label>
+          {upcomingRaces.length > 0 && (
+            <label>
+              Race
+              <select value="" onChange={(e) => pickRace(e.target.value)}>
+                <option value="">Pick a race to fill in the date…</option>
+                {upcomingRaces.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    🏁 {r.short_name || r.code} · {formatDate(r.target_date)} ({r.days_to_go} days)
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Event date
-            <input type="date" value={form.event_date} onChange={set("event_date")} />
+            <input
+              type="date"
+              value={form.event_date}
+              onChange={(e) => {
+                setWeeksByHand(false);
+                setMovedAway(null);
+                setForm({ ...form, event_date: e.target.value });
+              }}
+            />
           </label>
           <label>
             Start week
-            <input type="date" value={form.start_date} onChange={set("start_date")} />
+            <input
+              type="date"
+              value={form.start_date}
+              onChange={(e) => {
+                setMovedAway(null);
+                setForm({ ...form, start_date: e.target.value });
+              }}
+            />
             <span className="hint">Starts on the first day of that week (Profile → My week starts on). Empty: next week.</span>
           </label>
           <label>
             Weeks
-            <input type="number" min={1} max={16} value={form.weeks} onChange={set("weeks")} />
+            <input
+              type="number"
+              min={1}
+              max={MAX_WEEKS}
+              value={form.weeks}
+              onChange={(e) => {
+                setWeeksByHand(true);
+                setForm({ ...form, weeks: e.target.value });
+              }}
+            />
+            {fit?.error && <span className="hint error-text">{fit.error}</span>}
+            {fit && !fit.error && !weeksByHand && (
+              <span className="hint">
+                {away
+                  ? `The event is ${away} weeks away; a plan covers at most ${MAX_WEEKS}, so it starts on ${formatDate(fit.start)}.`
+                  : `${fit.weeks} week${fit.weeks === 1 ? "" : "s"} from ${formatDate(fit.start)} to the event, race week included.`}
+              </span>
+            )}
+            {fit && !fit.error && weeksByHand && Number(form.weeks) !== fit.weeks && (
+              <span className="hint">
+                The event is in week {fit.weeks}.{" "}
+                <button type="button" className="link-btn small" onClick={() => setWeeksByHand(false)}>
+                  Use {fit.weeks}
+                </button>
+              </span>
+            )}
           </label>
           <label>
             Hours per week
