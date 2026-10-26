@@ -302,7 +302,8 @@
       - Sort and filter (needs attention first); click through to the
         athlete's calendar, plan or AI coach tab.
       - Shows only what each athlete shares with the coach.
-- [ ] **Decide: an athlete "memory" for the AI coach** — decision proposed in
+- [x] **Decide: an athlete "memory" for the AI coach** — (Step 1 built: Athlete notes; no hiding
+      from the AI, no emails. Step 2, AI-suggested notes, still to do.) Decision in
       `docs/athlete-memory.md` (26 Oct): yes, as "Athlete notes" (short shared notes per
       athlete with categories and review dates, in the database; then AI-suggested notes
       a person accepts). Waiting for the owner's go-ahead. Original item: (a memory.md per athlete,
@@ -398,6 +399,26 @@
         came in with commit a556ca5; the server probably runs an older
         build. Rebuild (`bash build.sh`), then re-check; if it still fails,
         note the athlete and what they share.
+
+- [ ] **Admin: AI use per user, with a per-user limit and an off switch** (26 Oct).
+      Mike Nel (mike@mmc24.com) shows 6 AI calls / 28k tokens but has no data
+      of his own: he's a coach.
+      - Why: the AI use column counts calls by the person who *asked*, not
+        whose data it was. A coach generating plans, readiness notes or chat
+        answers for an athlete is charged for them. ~4.7k tokens a call is
+        normal (instructions + the athlete's facts). Check his calls: which
+        athlete, which kind (plan, re-plan, readiness, weekly, chat), and
+        whether any were retries or errors.
+      - Show it: Admin → Users → Details lists AI calls this month by kind and
+        by athlete ("for themselves" vs "for Ann"), with tokens and a rough
+        cost; the row says "for others" when most calls are for athletes.
+      - Limit it: a per-user monthly limit that overrides the global
+        "AI requests per user per month" (Settings), and an "AI off" switch
+        that stops all AI calls for that user at once with a clear message
+        ("The admin has paused the AI coach for your account"). Logged like
+        other admin actions.
+      - Optional: a monthly token budget (not only a call count), and an email
+        to the admin when someone reaches 80% of their limit.
 
 ## Later
 

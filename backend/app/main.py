@@ -13,6 +13,7 @@ from .config import check_required, settings
 from .db import Connection, SessionLocal, init_db
 from .routers import (
     admin,
+    athlete_notes,
     athletes,
     auth,
     coach_ai,
@@ -102,6 +103,7 @@ for r in (
     workouts.router,
     comments.router,
     instructions.router,
+    athlete_notes.router,
 ):
     app.include_router(r)
 

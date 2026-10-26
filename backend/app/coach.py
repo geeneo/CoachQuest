@@ -15,7 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import datefmt, instructions, runtime
+from . import athlete_notes, datefmt, instructions, runtime
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import load_curve, profile_out, wellness_since
@@ -70,6 +70,8 @@ targets), duration in minutes, and intensity chips such as "Z2", "95-105% FTP" o
 
 """
     + instructions.PROMPT_RULE
+    + "\n\n"
+    + athlete_notes.PROMPT_RULE
 )
 
 
@@ -139,6 +141,9 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
         standing = instructions.for_ai(db, athlete.id, today)
         if standing:
             facts["coach_instructions"] = standing
+        notes = athlete_notes.for_ai(db, athlete.id, today)
+        if notes:
+            facts["athlete_notes"] = notes
     facts["flags"] = readiness_flags(
         curve if "fitness" in scopes else [],
         wellness,

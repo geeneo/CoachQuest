@@ -14,6 +14,7 @@ from .db import (
     Activity,
     AiCall,
     Assessment,
+    AthleteNote,
     AuthEvent,
     CoachChat,
     CoachInstruction,
@@ -103,6 +104,10 @@ def delete_account(db: DbSession, user: User) -> None:
     # The sign-in log keeps the email until the retention removes it, for the audit trail.
     db.execute(update(AuthEvent).where(AuthEvent.user_id == uid).values(user_id=None))
     db.execute(update(Comment).where(Comment.edited_by == uid).values(edited_by=None))
+    # Notes about them go; notes they wrote about other athletes stay, unsigned.
+    db.execute(delete(AthleteNote).where(AthleteNote.athlete_id == uid))
+    db.execute(update(AthleteNote).where(AthleteNote.author_id == uid).values(author_id=None))
+    db.execute(update(AthleteNote).where(AthleteNote.updated_by == uid).values(updated_by=None))
     # Instructions for their own training go; ones they wrote for other athletes stay, unsigned.
     db.execute(delete(CoachInstruction).where(CoachInstruction.athlete_id == uid))
     db.execute(update(CoachInstruction).where(CoachInstruction.author_id == uid).values(author_id=None))

@@ -312,6 +312,23 @@ class CoachInstruction(Base):
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
 
+class AthleteNote(Base):
+    """Background the AI coach should know about an athlete (athlete_notes.py): one short fact."""
+
+    __tablename__ = "athlete_notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    category: Mapped[str] = mapped_column(String(12))  # see athlete_notes.CATEGORIES
+    body: Mapped[str] = mapped_column(Text)
+    review_by: Mapped[date | None] = mapped_column(Date, nullable=True)  # left out of AI requests after this
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    history: Mapped[list | None] = mapped_column(JSON, nullable=True)  # earlier versions, oldest first
+
+
 class Workout(Base):
     """A reusable workout in someone's library (see workouts.py for the steps format)."""
 

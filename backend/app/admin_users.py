@@ -19,6 +19,7 @@ from .db import (
     Activity,
     AiCall,
     Assessment,
+    AthleteNote,
     AuthEvent,
     CoachChat,
     Comment,
@@ -49,6 +50,7 @@ OWNED = (
     (ScheduledWorkout, ScheduledWorkout.athlete_id),
     (Workout, Workout.owner_id),
     (Comment, Comment.athlete_id),
+    (AthleteNote, AthleteNote.athlete_id),
     (SyncLog, SyncLog.athlete_id),
     (AuthEvent, AuthEvent.user_id),
 )

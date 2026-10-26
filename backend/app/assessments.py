@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import comments, compliance, instructions, mailer, plan_tracker
+from . import athlete_notes, comments, compliance, instructions, mailer, plan_tracker
 from .activity_types import category, is_ride
 from .coach import CoachError, ask_claude
 from .config import settings
@@ -40,6 +40,8 @@ The verdict is fixed even against a coach instruction; if one asks for more than
 
 """
     + PROMPT_RULE
+    + "\n\n"
+    + athlete_notes.PROMPT_RULE
 )
 
 WEEKLY_PROMPT = (
@@ -64,6 +66,8 @@ within the coach instructions; flag any instruction the week's data argues again
 
 """
     + PROMPT_RULE
+    + "\n\n"
+    + athlete_notes.PROMPT_RULE
 )
 
 
@@ -174,6 +178,9 @@ def readiness_facts(db: DbSession, athlete: User, scopes: set[str], today: date)
         standing = instructions.for_ai(db, athlete.id, today)
         if standing:
             facts["coach_instructions"] = standing
+        background = athlete_notes.for_ai(db, athlete.id, today)
+        if background:
+            facts["athlete_notes"] = background
     if "fitness" in scopes:
         facts["load"] = {"ctl": curve[-1].ctl, "atl": curve[-1].atl, "tsb": tsb}
     return facts
@@ -246,6 +253,9 @@ def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: dat
         standing = instructions.for_ai(db, athlete.id, week_end + timedelta(days=1))
         if standing:
             facts["coach_instructions"] = standing
+        background = athlete_notes.for_ai(db, athlete.id, week_end + timedelta(days=1))
+        if background:
+            facts["athlete_notes"] = background
         done = compliance.week(db, athlete, scopes, week_start)
         if done["scheduled"]:
             facts["workout_compliance"] = {

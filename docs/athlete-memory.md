@@ -1,6 +1,6 @@
 # Decision: an athlete "memory" for the AI coach
 
-Status: **proposed, 26 Oct 2026**. Recommendation: **yes, build it: "Athlete notes", in two steps.**
+Status: **decided 26 Oct 2026; step 1 built.** Owner's answers: notes can't be hidden from the AI, and nobody is emailed about note changes.
 
 ## What the AI coach knows today
 

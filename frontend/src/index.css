@@ -1605,3 +1605,21 @@ ul.instructions > li > form {
 table.activities tr.picked td {
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
+
+/* ---- athlete notes ---- */
+.note-group h3 {
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0.35rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+ul.instructions > li.note {
+  border-left-color: var(--accent);
+}
+ul.instructions > li.note.inactive {
+  border-left-color: var(--border);
+}
+ul.instructions > li details {
+  grid-column: 1;
+}
