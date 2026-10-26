@@ -302,8 +302,8 @@
       - Sort and filter (needs attention first); click through to the
         athlete's calendar, plan or AI coach tab.
       - Shows only what each athlete shares with the coach.
-- [x] **Decide: an athlete "memory" for the AI coach** — (Step 1 built: Athlete notes; no hiding
-      from the AI, no emails. Step 2, AI-suggested notes, still to do.) Decision in
+- [x] **Decide: an athlete "memory" for the AI coach** — (Built: Athlete notes, and AI-suggested
+      notes a person accepts or dismisses; no hiding from the AI, no emails.) Decision in
       `docs/athlete-memory.md` (26 Oct): yes, as "Athlete notes" (short shared notes per
       athlete with categories and review dates, in the database; then AI-suggested notes
       a person accepts). Waiting for the owner's go-ahead. Original item: (a memory.md per athlete,
@@ -456,6 +456,24 @@
         (the `AiCall` table has neither), and show tokens per type on the
         admin page, so each change above can be checked against real numbers.
         Goes with "Admin: AI use per user".
+
+- [ ] **Why did Mike Nel (mike@mmc24.com) make AI calls with no data of his own?** (26 Oct)
+      Admin → Details shows 6 calls this month: 5 on his own account, and 1 for
+      Michael Nel (the athlete he coaches). His account has no Strava, Garmin or
+      Intervals.icu connection and no activities, but it does have 1 plan,
+      1 race and 1 workout.
+      - Find out what the 5 were. Those calls are from before calls had a
+        type, so match them by time against his plans, AI notes (readiness
+        and weekly) and chats on the server. Most likely he tried the AI coach
+        on his own account: a plan for his race, "Check today's readiness",
+        or a chat.
+      - Guard against it. Before an AI call for an athlete with no synced
+        data, say "The AI coach has nothing to go on yet. Connect Strava or
+        Garmin first", and don't call the AI. For plans, allow it after a
+        clear warning (a plan from just a goal and hours can still be
+        useful).
+      - The scheduled morning notes already skip accounts without data
+        (since 26 Oct).
 
 ## Later
 

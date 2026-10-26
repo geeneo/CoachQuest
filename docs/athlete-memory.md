@@ -1,6 +1,6 @@
 # Decision: an athlete "memory" for the AI coach
 
-Status: **decided 26 Oct 2026; step 1 built.** Owner's answers: notes can't be hidden from the AI, and nobody is emailed about note changes.
+Status: **decided 26 Oct 2026; steps 1 and 2 built.** Owner's answers: notes can't be hidden from the AI, and nobody is emailed about note changes.
 
 ## What the AI coach knows today
 

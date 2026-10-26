@@ -23,6 +23,7 @@ from .db import (
     DeletedActivity,
     ExternalWorkout,
     Grant,
+    NoteSuggestion,
     OAuthState,
     PasswordReset,
     PendingMfa,
@@ -105,6 +106,9 @@ def delete_account(db: DbSession, user: User) -> None:
     db.execute(update(AuthEvent).where(AuthEvent.user_id == uid).values(user_id=None))
     db.execute(update(Comment).where(Comment.edited_by == uid).values(edited_by=None))
     # Notes about them go; notes they wrote about other athletes stay, unsigned.
+    db.execute(delete(NoteSuggestion).where(NoteSuggestion.athlete_id == uid))
+    db.execute(update(NoteSuggestion).where(NoteSuggestion.asked_by == uid).values(asked_by=None))
+    db.execute(update(NoteSuggestion).where(NoteSuggestion.decided_by == uid).values(decided_by=None))
     db.execute(delete(AthleteNote).where(AthleteNote.athlete_id == uid))
     db.execute(update(AthleteNote).where(AthleteNote.author_id == uid).values(author_id=None))
     db.execute(update(AthleteNote).where(AthleteNote.updated_by == uid).values(updated_by=None))

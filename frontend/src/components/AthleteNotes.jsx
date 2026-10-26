@@ -1,4 +1,4 @@
-import { CheckCircle2, Pencil, Trash2 } from "lucide-react";
+import { Check, CheckCircle2, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
@@ -47,6 +47,9 @@ export default function AthleteNotes({ id, isMe }) {
         up for review after 6 weeks; a note past its review date is left out until someone confirms it.
       </p>
       {res.error && <div className="error">{res.error.message}</div>}
+      {res.data?.suggestions?.length > 0 && (
+        <Suggestions list={res.data.suggestions} cats={cats} decide={(sid, body) => call(`/suggestions/${sid}`, "POST", body)} />
+      )}
       {groups.map(([cat, list]) => (
         <div key={cat} className="note-group">
           <h3>{cats[cat]}</h3>
@@ -168,5 +171,80 @@ export default function AthleteNotes({ id, isMe }) {
       </form>
       {error && <div className="error small">{error}</div>}
     </section>
+  );
+}
+
+// Notes the AI coach suggested: nothing is saved until a person accepts.
+function Suggestions({ list, cats, decide }) {
+  const [editing, setEditing] = useState(null);
+  return (
+    <div className="note-group suggestions">
+      <h3>
+        <Sparkles size={14} /> Suggested by the AI coach
+      </h3>
+      <ul className="instructions">
+        {list.map((s) =>
+          editing?.id === s.id ? (
+            <li key={s.id} className="note suggestion">
+              <form
+                className="instruction-form"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (await decide(s.id, { accept: true, body: editing.body, category: editing.category })) setEditing(null);
+                }}
+              >
+                <textarea
+                  rows={2}
+                  maxLength={300}
+                  minLength={3}
+                  required
+                  value={editing.body}
+                  onChange={(e) => setEditing({ ...editing, body: e.target.value })}
+                />
+                <select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })}>
+                  {Object.entries(cats).map(([k, label]) => (
+                    <option key={k} value={k}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn small primary">Save as note</button>
+                <button type="button" className="btn small" onClick={() => setEditing(null)}>
+                  Cancel
+                </button>
+              </form>
+            </li>
+          ) : (
+            <li key={s.id} className="note suggestion">
+              <div className="instruction-body">{s.body}</div>
+              <div className="small muted">
+                {s.category_label} · from {s.source === "weekly" ? "a weekly review" : "a chat"} · {formatDate(s.created_at)}
+              </div>
+              <div className="row tight">
+                <button className="btn small primary" onClick={() => decide(s.id, { accept: true })}>
+                  <Check size={14} /> Accept
+                </button>
+                <button
+                  className="icon-btn"
+                  title="Edit, then save as a note"
+                  aria-label="Edit"
+                  onClick={() => setEditing({ id: s.id, body: s.body, category: s.category })}
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  className="icon-btn"
+                  title="Dismiss (the AI won't suggest it again)"
+                  aria-label="Dismiss"
+                  onClick={() => decide(s.id, { accept: false })}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </li>
+          ),
+        )}
+      </ul>
+    </div>
   );
 }

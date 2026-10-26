@@ -23,6 +23,7 @@ def _list(db: DbSession, a: User) -> dict:
     return {
         "notes": athlete_notes.listing(db, a.id, localtime.today(a)),
         "categories": athlete_notes.CATEGORIES,
+        "suggestions": athlete_notes.suggestions(db, a.id),
     }
 
 
@@ -75,4 +76,25 @@ def delete_note(athlete: str, note_id: int, user: User = Depends(current_user), 
     a = _athlete(db, user, athlete)
     db.delete(athlete_notes.get(db, a.id, note_id))
     db.commit()
+    return _list(db, a)
+
+
+class Decision(BaseModel):
+    accept: bool
+    category: str | None = None
+    body: str | None = Field(default=None, min_length=3, max_length=300)
+
+
+@router.post("/suggestions/{suggestion_id}")
+def decide_suggestion(
+    athlete: str,
+    suggestion_id: int,
+    body: Decision,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Accept (optionally edited) or dismiss a note the AI coach suggested."""
+    a = _athlete(db, user, athlete)
+    s = athlete_notes.get_suggestion(db, a.id, suggestion_id)
+    athlete_notes.decide(db, user, s, body.accept, localtime.today(a), body.category, body.body)
     return _list(db, a)

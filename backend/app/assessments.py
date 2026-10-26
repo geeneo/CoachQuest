@@ -63,12 +63,51 @@ against one, say so plainly rather than ignoring it.
 Write about 250 words of Markdown with these headings: "How the week went", "Recovery and wellness",
 "Progress", "Next week". Quote the numbers that matter. Under "Next week" give 2-4 concrete changes,
 within the coach instructions; flag any instruction the week's data argues against.
+Answer as JSON: `review_md` holds the review; `note_suggestions` holds 0-3 suggested athlete notes
+(usually none).
 
 """
     + PROMPT_RULE
     + "\n\n"
     + athlete_notes.PROMPT_RULE
+    + "\n\n"
+    + athlete_notes.SUGGEST_RULE
 )
+
+WEEKLY_SCHEMA = {
+    "type": "json_schema",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "review_md": {"type": "string"},
+            "note_suggestions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "category": {"type": "string", "enum": list(athlete_notes.CATEGORIES)},
+                        "note": {"type": "string"},
+                    },
+                    "required": ["category", "note"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["review_md", "note_suggestions"],
+        "additionalProperties": False,
+    },
+}
+
+
+def _weekly_answer(text: str) -> tuple[str, list[dict]]:
+    """(review, suggestions) from the JSON answer; plain text (older answers, tests) is the review alone."""
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return text, []
+    if not isinstance(data, dict) or not isinstance(data.get("review_md"), str):
+        return text, []
+    return data["review_md"].strip(), [s for s in data.get("note_suggestions") or [] if isinstance(s, dict)][:3]
 
 
 def readiness_verdict(wellness: list, tsb: float | None) -> tuple[str, list[str], dict]:
@@ -256,6 +295,9 @@ def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: dat
         background = athlete_notes.for_ai(db, athlete.id, week_end + timedelta(days=1))
         if background:
             facts["athlete_notes"] = background
+        dismissed = athlete_notes.dismissed_for_ai(db, athlete.id)
+        if dismissed:
+            facts["dismissed_note_suggestions"] = dismissed
         done = compliance.week(db, athlete, scopes, week_start)
         if done["scheduled"]:
             facts["workout_compliance"] = {
@@ -296,8 +338,17 @@ async def create(db: DbSession, viewer: User, athlete: User, kind: str, schedule
         same.reused = True  # nothing new since the last note for this day or week: no AI call
         return same
     text, model = await ask_claude(
-        db, viewer, athlete, prompt, facts_json(facts), kind="readiness" if kind == "daily" else "weekly"
+        db,
+        viewer,
+        athlete,
+        prompt,
+        facts_json(facts),
+        output_format=None if kind == "daily" else WEEKLY_SCHEMA,
+        kind="readiness" if kind == "daily" else "weekly",
     )
+    suggested: list[dict] = []
+    if kind == "weekly":
+        text, suggested = _weekly_answer(text)
     a = Assessment(
         athlete_id=athlete.id,
         author_id=None if scheduled else viewer.id,
@@ -310,6 +361,11 @@ async def create(db: DbSession, viewer: User, athlete: User, kind: str, schedule
     )
     db.add(a)
     db.commit()
+    if "plans" in scopes:  # notes (and so suggestions) are under the plans permission
+        for item in suggested:
+            athlete_notes.suggest(
+                db, athlete.id, viewer, str(item.get("category", "")), str(item.get("note", "")), "weekly"
+            )
     return a
 
 

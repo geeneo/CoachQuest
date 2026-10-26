@@ -1631,3 +1631,13 @@ ul.instructions > li details {
   font-size: 0.95rem;
   margin: 0.25rem 0 0.4rem;
 }
+ul.instructions > li.note.suggestion {
+  border-left-color: var(--brand-orange);
+  border-left-style: dashed;
+}
+.note-group.suggestions h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--brand-orange);
+}

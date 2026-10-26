@@ -332,6 +332,24 @@ class AthleteNote(Base):
     history: Mapped[list | None] = mapped_column(JSON, nullable=True)  # earlier versions, oldest first
 
 
+class NoteSuggestion(Base):
+    """A note the AI coach proposed (athlete_notes.py). Saved as a note only when a person accepts it;
+    dismissed ones are kept so the same suggestion isn't made again."""
+
+    __tablename__ = "note_suggestions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    category: Mapped[str] = mapped_column(String(12))
+    body: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(10))  # chat | weekly
+    asked_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="pending")  # pending | accepted | dismissed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class Workout(Base):
     """A reusable workout in someone's library (see workouts.py for the steps format)."""
 
