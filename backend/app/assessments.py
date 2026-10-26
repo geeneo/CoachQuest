@@ -402,7 +402,7 @@ async def run_scheduled(kind: str) -> None:
             except CoachError as exc:
                 log.warning("Scheduled %s assessment for user %s skipped: %s", kind, user.id, exc)
                 continue
-            if (user.ai_settings or {}).get("email") and mailer.configured():
+            if (user.ai_settings or {}).get("email") and not user.emails_disabled and mailer.configured():
                 subject = "Your CoachQuest weekly review" if kind == "weekly" else f"Today: {a.verdict.upper()}"
                 try:
                     await mailer.send(user.email, subject, f"{a.content_md}\n\n{settings.public_base_url}/")

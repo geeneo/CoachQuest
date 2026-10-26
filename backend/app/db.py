@@ -77,6 +77,8 @@ class User(Base):
     platform_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Admin controls for the AI coach: off for this user, and a monthly limit overriding the site's.
     ai_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Admin switch: no emails at all to this user, except password resets and the sign-up approval.
+    emails_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_monthly_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
@@ -608,6 +610,7 @@ _ADDED_COLUMNS = {
         "platform_prefs": "JSON",
         "date_format": "VARCHAR(10)",
         "ai_disabled": "BOOLEAN NOT NULL DEFAULT 0",
+        "emails_disabled": "BOOLEAN NOT NULL DEFAULT 0",
         "ai_monthly_limit": "INTEGER",
         "time_format": "VARCHAR(4)",
     },

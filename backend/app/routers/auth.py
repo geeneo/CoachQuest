@@ -55,6 +55,7 @@ def user_out(user: User) -> dict:
         "notify_sharing": user.notify_sharing,
         "notify_comments": user.notify_comments,
         "timezone": user.timezone,
+        "emails_disabled": user.emails_disabled,
         "date_format": datefmt.date_format(user),
         "time_format": datefmt.time_format(user),
         "birth_date": user.birth_date,
@@ -90,7 +91,7 @@ PENDING_MESSAGE = (
 
 
 async def _tell_admins_about(db: DbSession, user: User) -> None:
-    admins = db.scalars(select(User).where(User.is_admin, User.is_active)).all()
+    admins = db.scalars(select(User).where(User.is_admin, User.is_active, User.emails_disabled.is_(False))).all()
     for admin in admins:
         try:
             await mailer.send(

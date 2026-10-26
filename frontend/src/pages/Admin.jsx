@@ -578,6 +578,18 @@ function UserDetail({ u, isMe, update, reload }) {
               />{" "}
               Active (can sign in)
             </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={!u.emails_disabled}
+                onChange={(e) =>
+                  (e.target.checked || confirm(`Stop all emails to ${u.display_name}? Password reset links still go out.`)) &&
+                  update(u, { emails_disabled: !e.target.checked })
+                }
+              />{" "}
+              Emails to this user
+              <span className="hint">Off: no sharing, comment, plan or AI note emails. Password resets and approval still sent.</span>
+            </label>
           </div>
           <ManageUser u={u} reload={reload} />
         </>

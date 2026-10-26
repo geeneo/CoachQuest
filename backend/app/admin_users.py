@@ -174,6 +174,8 @@ def overview(db: DbSession) -> list[dict]:
             attention += 2
         if u.ai_disabled:
             flags.append("AI off")
+        if u.emails_disabled:
+            flags.append("emails off")
         limit = monthly_limit(u)
         if limit and ai.get(u.id, {}).get("calls", 0) >= 0.8 * limit:
             flags.append("AI limit nearly used")
@@ -205,6 +207,7 @@ def overview(db: DbSession) -> list[dict]:
                 "scheduled_workouts": scheduled.get(u.id, 0),
                 "ai_month": ai.get(u.id, {"calls": 0, "tokens": 0, "for_others": 0}),
                 "ai_disabled": u.ai_disabled,
+                "emails_disabled": u.emails_disabled,
                 "ai_monthly_limit": u.ai_monthly_limit,
                 "ai_limit": monthly_limit(u),
                 "storage_bytes": storage.get(u.id, 0),

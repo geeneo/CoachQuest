@@ -188,6 +188,7 @@ class UserUpdate(BaseModel):
     is_admin: bool | None = None
     is_active: bool | None = None
     ai_disabled: bool | None = None
+    emails_disabled: bool | None = None
     # A number overrides the site's monthly limit for this user (0 = no limit); null goes back to the site's.
     ai_monthly_limit: int | None = Field(default=None, ge=0, le=100000)
 
@@ -342,6 +343,10 @@ def update_user(
         if not body.is_active:
             # Sign the user out everywhere right away.
             db.execute(delete(Session).where(Session.user_id == user.id))
+    if body.emails_disabled is not None and body.emails_disabled != user.emails_disabled:
+        user.emails_disabled = body.emails_disabled
+        event = "admin_emails_off" if body.emails_disabled else "admin_emails_on"
+        auth_log.admin_action(db, request, event, admin, user)
     if body.ai_disabled is not None and body.ai_disabled != user.ai_disabled:
         user.ai_disabled = body.ai_disabled
         auth_log.admin_action(db, request, "admin_ai_off" if body.ai_disabled else "admin_ai_on", admin, user)

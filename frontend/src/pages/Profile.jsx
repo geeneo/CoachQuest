@@ -125,10 +125,17 @@ export default function Profile() {
           </select>
           <span className="hint">Times are in your timezone. Date pickers follow your browser's language.</span>
         </label>
+        {user.emails_disabled && (
+          <div className="wide small warn-text">
+            The administrator has turned off emails to your account, so the email options below have no effect.
+            Password reset links still reach you.
+          </div>
+        )}
         <label className="check wide">
           <input
             type="checkbox"
             checked={form.notify_sharing}
+            disabled={user.emails_disabled}
             onChange={(e) => setForm({ ...form, notify_sharing: e.target.checked })}
           />
           Email me when someone invites me as their coach, accepts my invitation, or changes or stops sharing
@@ -137,6 +144,7 @@ export default function Profile() {
           <input
             type="checkbox"
             checked={form.notify_comments}
+            disabled={user.emails_disabled}
             onChange={(e) => setForm({ ...form, notify_comments: e.target.checked })}
           />
           Email me when someone comments on my training plan, or on a plan of an athlete I coach

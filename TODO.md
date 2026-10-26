@@ -475,7 +475,7 @@
       - The scheduled morning notes already skip accounts without data
         (since 26 Oct).
 
-- [ ] **Admin: turn off emails to a user** (26 Oct). In Admin → Users → Details,
+- [x] **Admin: turn off emails to a user** (Done.) (26 Oct). In Admin → Users → Details,
       a switch "Emails to this user" that stops every email CoachQuest
       would send them (sharing, comments, plan approvals, scheduled AI
       notes), whatever their own Profile switches say.

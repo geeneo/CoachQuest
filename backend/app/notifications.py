@@ -45,7 +45,7 @@ def notify(
     setting: str = "notify_sharing",
 ) -> None:
     """`link` is (label, path) of the page the email points to; `setting` the Profile switch that allows it."""
-    if not getattr(to, setting) or not to.is_active or not mailer.configured():
+    if to.emails_disabled or not getattr(to, setting) or not to.is_active or not mailer.configured():
         return
     text = (
         f"Hi {to.display_name},\n\n{body}\n\nOpen {link[0]}: {settings.public_base_url}{link[1]}\n\n"
