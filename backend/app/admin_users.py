@@ -11,10 +11,11 @@ when the build has it) split by the user's share of its rows.
 
 from datetime import timedelta
 
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.orm import Session as DbSession
 
 from . import auth_log
+from .coach import monthly_limit
 from .db import (
     Activity,
     AiCall,
@@ -136,14 +137,17 @@ def overview(db: DbSession) -> list[dict]:
     plans = _counts(db, Plan.athlete_id)
     races = _counts(db, Race.user_id, Race.active.is_(True))
     scheduled = _counts(db, ScheduledWorkout.athlete_id)
-    ai = {
-        uid: {"calls": n, "tokens": tokens}
-        for uid, n, tokens in db.execute(
-            select(AiCall.user_id, func.count(), func.sum(AiCall.input_tokens + AiCall.output_tokens))
-            .where(AiCall.at >= month)
-            .group_by(AiCall.user_id)
-        )
-    }
+    ai: dict[int, dict] = {}
+    for uid, athlete_id, n, tokens in db.execute(
+        select(AiCall.user_id, AiCall.athlete_id, func.count(), func.sum(_ALL_TOKENS))
+        .where(AiCall.at >= month)
+        .group_by(AiCall.user_id, AiCall.athlete_id)
+    ):
+        row = ai.setdefault(uid, {"calls": 0, "tokens": 0, "for_others": 0})
+        row["calls"] += n
+        row["tokens"] += tokens or 0
+        if athlete_id != uid:
+            row["for_others"] += n
     storage = _storage(db)
 
     rows = []
@@ -168,6 +172,12 @@ def overview(db: DbSession) -> list[dict]:
         if uj.get("failed") or uj.get("blocked"):
             flags.append("workout delivery failed")
             attention += 2
+        if u.ai_disabled:
+            flags.append("AI off")
+        limit = monthly_limit(u)
+        if limit and ai.get(u.id, {}).get("calls", 0) >= 0.8 * limit:
+            flags.append("AI limit nearly used")
+            attention += 1
         if failed.get(u.id, 0) >= 5:
             flags.append(f"{failed[u.id]} failed sign-ins")
             attention += 1
@@ -193,7 +203,10 @@ def overview(db: DbSession) -> list[dict]:
                 "plans": plans.get(u.id, 0),
                 "races": races.get(u.id, 0),
                 "scheduled_workouts": scheduled.get(u.id, 0),
-                "ai_month": ai.get(u.id, {"calls": 0, "tokens": 0}),
+                "ai_month": ai.get(u.id, {"calls": 0, "tokens": 0, "for_others": 0}),
+                "ai_disabled": u.ai_disabled,
+                "ai_monthly_limit": u.ai_monthly_limit,
+                "ai_limit": monthly_limit(u),
                 "storage_bytes": storage.get(u.id, 0),
                 "flags": flags,
                 "attention": attention,
@@ -241,4 +254,68 @@ def detail(db: DbSession, user: User) -> dict:
         "athletes": [
             {"name": names.get(g.athlete_id, "?"), "scopes": g.scopes} for g in grants if g.coach_id == user.id
         ],
+        "ai": ai_detail(db, user),
+    }
+
+
+# Rough $ per million tokens (input, output) for the cost estimate on the admin page; cache reads cost
+# 0.1x the input price and cache writes 1.25x. Unknown models show no estimate. Check anthropic.com/pricing.
+PRICES = {
+    "claude-opus-5-5": (4.0, 20.0),
+    "claude-sonnet-5-5": (2.0, 10.0),
+    "claude-haiku-5-5": (0.10, 0.50),
+}
+_ALL_TOKENS = AiCall.input_tokens + AiCall.output_tokens + AiCall.cache_read_tokens + AiCall.cache_write_tokens
+
+
+def _cost(model: str, inp: int, out: int, read: int, write: int) -> float | None:
+    price = PRICES.get(model)
+    if price is None:
+        return None
+    return (inp * price[0] + out * price[1] + read * price[0] * 0.1 + write * price[0] * 1.25) / 1_000_000
+
+
+def ai_detail(db: DbSession, user: User) -> dict:
+    """This month's AI calls the user asked for, by kind and by athlete, with tokens and a rough cost."""
+    month = utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    rows = db.execute(
+        select(
+            AiCall.kind,
+            AiCall.athlete_id,
+            AiCall.model,
+            func.count(),
+            func.sum(AiCall.input_tokens),
+            func.sum(AiCall.output_tokens),
+            func.sum(AiCall.cache_read_tokens),
+            func.sum(AiCall.cache_write_tokens),
+            func.sum(case((AiCall.status.not_in(("ok", "end_turn", "tool_use")), 1), else_=0)),
+        )
+        .where(AiCall.user_id == user.id, AiCall.at >= month)
+        .group_by(AiCall.kind, AiCall.athlete_id, AiCall.model)
+    ).all()
+    names = {u.id: u.display_name for u in db.scalars(select(User).where(User.id.in_({r[1] for r in rows})))}
+    by_kind: dict[str, dict] = {}
+    by_athlete: dict[str, dict] = {}
+    total_cost, priced = 0.0, True
+    for kind, athlete_id, model, n, inp, out, read, write, failed in rows:
+        inp, out, read, write = inp or 0, out or 0, read or 0, write or 0
+        cost = _cost(model, inp, out, read, write)
+        priced = priced and cost is not None
+        total_cost += cost or 0
+        who = "themselves" if athlete_id == user.id else names.get(athlete_id, "a deleted athlete")
+        for key, bucket in ((kind or "other", by_kind), (who, by_athlete)):
+            b = bucket.setdefault(key, {"calls": 0, "failed": 0, "input": 0, "output": 0, "cache_read": 0})
+            b["calls"] += n
+            b["failed"] += failed or 0
+            b["input"] += inp + write
+            b["output"] += out
+            b["cache_read"] += read
+    return {
+        "by_kind": by_kind,
+        "by_athlete": by_athlete,
+        "cost_usd": round(total_cost, 2) if rows else 0,
+        "cost_complete": priced,
+        "limit": monthly_limit(user),
+        "own_limit": user.ai_monthly_limit,
+        "disabled": user.ai_disabled,
     }

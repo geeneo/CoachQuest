@@ -53,7 +53,7 @@ async def create_assessment(
         a = await assessments.create(db, user, db.get(User, athlete_id), body.kind)
     except CoachError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
-    return assessments.assessment_out(a)
+    return {**assessments.assessment_out(a), "unchanged": getattr(a, "reused", False)}
 
 
 class AiSettings(BaseModel):

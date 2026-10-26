@@ -14,15 +14,19 @@ import anthropic
 from fastapi import HTTPException
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, datefmt, instructions, localtime, plan_tracker, runtime
+from . import athlete_notes, datefmt, instructions, localtime, plan_tracker
 from .assessments import progress
-from .coach import CoachError, claude_client, log_call
+from .coach import CACHED, CoachError, claude_client, log_call, model_for
 from .db import CoachChat, Plan, User, utcnow
 from .deps import allowed_scopes, require_scope
 from .queries import activities_since, activity_out, load_curve, volume_summary, wellness_out, wellness_since
 from .routers.races import race_out, upcoming
 
 MAX_TOOL_ROUNDS = 6
+# Every question resends the whole chat (earlier answers and lookups included), so long chats get
+# expensive. After this many questions the athlete or coach starts a new chat.
+MAX_QUESTIONS = 12
+DAILY_FITNESS_DAYS = 56  # get_fitness: daily rows for this long, weekly averages before it
 
 SYSTEM = """You are the athlete's endurance coach on CoachQuest, answering questions in a chat.
 
@@ -85,7 +89,7 @@ def run_tool(db: DbSession, viewer: User, athlete_id: int, name: str, inp: dict)
     if name == "get_activities":
         days = _days(inp, 30, 365)
         acts = activities_since(db, athlete_id, datetime.now() - timedelta(days=days))
-        return [activity_out(a) for a in reversed(acts)][:150]
+        return [_activity_brief(a) for a in reversed(acts)][:150]
     if name == "get_volume_summary":
         days = _days(inp, 30, 365)
         since = datetime.combine(today - timedelta(days=max(days, 84)), datetime.min.time())
@@ -93,7 +97,7 @@ def run_tool(db: DbSession, viewer: User, athlete_id: int, name: str, inp: dict)
         return volume_summary(activities_since(db, athlete_id, since), days, today, week_start)
     if name == "get_fitness":
         curve, _ = load_curve(db, athlete_id, _days(inp, 42, 365), today)
-        return [{"day": d.day, "tss": d.tss, "ctl": d.ctl, "atl": d.atl, "tsb": d.tsb} for d in curve]
+        return _fitness_rows(curve)
     if name == "get_wellness":
         return [wellness_out(w) for w in wellness_since(db, athlete_id, today - timedelta(days=_days(inp, 14, 120)))]
     if name == "get_progress":
@@ -114,6 +118,43 @@ def run_tool(db: DbSession, viewer: User, athlete_id: int, name: str, inp: dict)
     return {"plan": None}
 
 
+def _activity_brief(a) -> dict:
+    """What the AI needs from an activity (the page's activity_out has much more)."""
+    out = activity_out(a)
+    brief = {
+        "date": out["start_time"].date().isoformat(),
+        "type": out["category"],
+        "name": (out["name"] or "")[:60],
+        "min": round(out["duration_s"] / 60),
+        "km": round(out["distance_km"], 1),
+        "elev_m": out["elevation_m"],
+        "tss": round(out["tss"]) if out["tss"] else None,
+        "avg_hr": round(out["avg_hr"]) if out["avg_hr"] else None,
+        "np_w": round(out["norm_power"]) if out["norm_power"] else None,
+        "note": out["note_tag"],
+        "race": out["is_race"] or None,
+    }
+    return {k: v for k, v in brief.items() if v is not None}
+
+
+def _fitness_rows(curve) -> list[dict]:
+    """Daily load for the last weeks, weekly averages before that: the same picture in far fewer rows."""
+    recent, older = curve[-DAILY_FITNESS_DAYS:], curve[:-DAILY_FITNESS_DAYS]
+    rows = []
+    for i in range(0, len(older), 7):
+        week = older[i : i + 7]
+        rows.append(
+            {
+                "week_from": week[0].day,
+                "tss_total": round(sum(d.tss for d in week)),
+                "ctl": week[-1].ctl,
+                "atl": week[-1].atl,
+                "tsb": week[-1].tsb,
+            }
+        )
+    return rows + [{"day": d.day, "tss": d.tss, "ctl": d.ctl, "atl": d.atl, "tsb": d.tsb} for d in recent]
+
+
 def visible(messages: list[dict]) -> list[dict]:
     """What the browser shows: the person's questions and Claude's text answers."""
     out = []
@@ -128,9 +169,13 @@ def visible(messages: list[dict]) -> list[dict]:
 
 
 async def ask(db: DbSession, chat: CoachChat, viewer: User, athlete: User, question: str) -> CoachChat:
+    asked = sum(1 for m in chat.messages if m["role"] == "user" and isinstance(m["content"], str))
+    if asked >= MAX_QUESTIONS:
+        raise CoachError("This chat is getting long. Start a new chat to keep answers quick and cheap.", 409)
     client = claude_client(db, viewer)
     scopes = sorted(allowed_scopes(db, viewer, athlete.id))
-    system = SYSTEM + f"\n\nToday is {date.today().isoformat()}. The athlete is {athlete.display_name}. "
+    # SYSTEM (with the tools before it) is the same for everyone and is cached; this part varies.
+    system = f"Today is {date.today().isoformat()}. The athlete is {athlete.display_name}. "
     system += f"Shared with this user: {', '.join(scopes)}. " + datefmt.ai_instruction(viewer)
     if "plans" in scopes:
         today = localtime.today(athlete)
@@ -141,7 +186,7 @@ async def ask(db: DbSession, chat: CoachChat, viewer: User, athlete: User, quest
         if background:
             system += "\n\n" + athlete_notes.PROMPT_RULE + "\n\nathlete_notes (data): " + json.dumps(background)
     messages = list(chat.messages) + [{"role": "user", "content": question}]
-    model = runtime.get("anthropic_model")
+    model, effort = model_for("chat")
     for _ in range(MAX_TOOL_ROUNDS):
         started = time.monotonic()
         try:
@@ -150,21 +195,23 @@ async def ask(db: DbSession, chat: CoachChat, viewer: User, athlete: User, quest
                 max_tokens=16000,
                 betas=["server-side-fallback-2026-07-01"],
                 fallbacks="default",
-                output_config={"effort": "medium"},
-                system=system,
+                output_config={"effort": effort},
+                system=[{"type": "text", "text": SYSTEM, "cache_control": CACHED}, {"type": "text", "text": system}],
                 tools=TOOLS,
                 messages=messages,
+                # Caches the conversation so far: the next lookup round and the next question reread it at ~0.1x.
+                cache_control=CACHED,
             )
         except anthropic.RateLimitError:
-            log_call(db, viewer, athlete, model, "rate_limited", started)
+            log_call(db, viewer, athlete, model, "rate_limited", started, kind="chat")
             raise CoachError("The AI coach is busy, try again in a minute.", 429) from None
         except anthropic.APIStatusError as exc:
-            log_call(db, viewer, athlete, model, f"api_{exc.status_code}", started)
+            log_call(db, viewer, athlete, model, f"api_{exc.status_code}", started, kind="chat")
             raise CoachError("The AI coach failed, try again later.") from exc
         except anthropic.APIConnectionError:
-            log_call(db, viewer, athlete, model, "connection", started)
+            log_call(db, viewer, athlete, model, "connection", started, kind="chat")
             raise CoachError("Could not reach the AI coach.") from None
-        log_call(db, viewer, athlete, response.model, response.stop_reason or "ok", started, response.usage)
+        log_call(db, viewer, athlete, response.model, response.stop_reason or "ok", started, response.usage, "chat")
         if response.stop_reason == "refusal":
             raise CoachError("The AI coach declined this question. Try asking it differently.", 422)
         # Stored unchanged so thinking blocks stay valid for the next turn.

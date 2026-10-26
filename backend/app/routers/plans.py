@@ -335,8 +335,8 @@ async def replan(
             "reason": body.reason,
             "keep": keep,
             "so_far": [{"start": w["start"], "phase": w["phase"], **w["summary"]} for w in tracked[:first]],
-            # What the athlete and their coaches said about the plan and its workouts (newest 30).
-            "comments": comments.for_plan(db, p),
+            # What the athlete and their coaches said about the plan and its workouts (newest 15).
+            "comments": comments.for_plan(db, p, limit=15),
             **({"coach_notes": body.coach_notes.strip()} if body.coach_notes.strip() else {}),
         },
     }

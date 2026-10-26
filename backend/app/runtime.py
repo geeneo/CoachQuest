@@ -103,12 +103,25 @@ EDITABLE: dict[str, Editable] = {
         pattern=r"[0-9]{1,4}",
         help="What coaches looked at. Empty: same as the sign-in log. 0 keeps it.",
     ),
+    "anthropic_model_short": Editable(
+        "Model for notes, reviews and chat",
+        "AI coach",
+        pattern=r"[a-z0-9][a-z0-9.\-]{2,63}",
+        help="Readiness notes, weekly reviews and chat answers are short; a cheaper model such as "
+        "claude-sonnet-5-5 or claude-haiku-5-5 costs a fraction. Empty: the same model as plans.",
+    ),
+    "anthropic_effort_short": Editable(
+        "Effort for notes, reviews and chat",
+        "AI coach",
+        choices=("low", "medium", "high", "xhigh", "max"),
+        help="Lower effort means fewer thinking tokens. Plans keep the Effort above.",
+    ),
     "ai_monthly_limit": Editable(
         "Monthly AI calls per user",
         "AI coach",
         pattern=r"[0-9]{1,5}",
         help="Every request to Claude counts: a plan or note is 1, a chat answer that looks things up 2-4. "
-        "0 means no limit.",
+        "0 means no limit. Admin → Users → Details can set a different limit, or turn the AI off, per user.",
     ),
     "smtp_host": Editable(
         "SMTP server", "Email", pattern=r"[A-Za-z0-9.\-]{1,253}", help="e.g. smtp.gmail.com or smtp.office365.com."

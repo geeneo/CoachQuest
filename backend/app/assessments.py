@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import athlete_notes, comments, compliance, instructions, mailer, plan_tracker
 from .activity_types import category, is_ride
-from .coach import CoachError, ask_claude
+from .coach import CoachError, ask_claude, facts_json
 from .config import settings
 from .db import Assessment, Plan, SessionLocal, User
 from .deps import allowed_scopes
@@ -290,20 +290,46 @@ async def create(db: DbSession, viewer: User, athlete: User, kind: str, schedule
     else:
         last_week = week_start_of(today, athlete.week_start or 0) - timedelta(weeks=1)
         facts, prompt, period = weekly_facts(db, athlete, scopes, last_week), WEEKLY_PROMPT, last_week
-    text, model = await ask_claude(db, viewer, athlete, prompt, json.dumps(facts, default=str, indent=1))
+    stored = json.loads(json.dumps(facts, default=str))
+    same = _unchanged(db, athlete.id, kind, period, stored)
+    if same is not None:
+        same.reused = True  # nothing new since the last note for this day or week: no AI call
+        return same
+    text, model = await ask_claude(
+        db, viewer, athlete, prompt, facts_json(facts), kind="readiness" if kind == "daily" else "weekly"
+    )
     a = Assessment(
         athlete_id=athlete.id,
         author_id=None if scheduled else viewer.id,
         kind=kind,
         period_start=period,
         verdict=facts.get("verdict"),
-        facts=json.loads(json.dumps(facts, default=str)),
+        facts=stored,
         content_md=text,
         model=model,
     )
     db.add(a)
     db.commit()
     return a
+
+
+def _unchanged(db: DbSession, athlete_id: int, kind: str, period: date, facts: dict) -> Assessment | None:
+    """The newest note for this day (or week) when it was written from exactly these facts."""
+    last = db.scalar(
+        select(Assessment)
+        .where(Assessment.athlete_id == athlete_id, Assessment.kind == kind, Assessment.period_start == period)
+        .order_by(Assessment.created_at.desc())
+    )
+    return last if last is not None and last.facts == facts else None
+
+
+def has_recent_data(db: DbSession, user: User, days: int = 14) -> bool:
+    """Anything synced lately? Scheduled notes for an account without data are skipped (they'd cost tokens)."""
+    since = date.today() - timedelta(days=days)
+    return bool(
+        activities_since(db, user.id, datetime.combine(since, datetime.min.time()))
+        or wellness_since(db, user.id, since)
+    )
 
 
 async def run_scheduled(kind: str) -> None:
@@ -313,6 +339,7 @@ async def run_scheduled(kind: str) -> None:
         users = [u for u in db.scalars(select(User).where(User.is_active)).all() if (u.ai_settings or {}).get(kind)]
         if kind == "weekly":
             users = [u for u in users if date.today().weekday() == (u.week_start or 0)]
+        users = [u for u in users if not u.ai_disabled and has_recent_data(db, u)]
         for user in users:
             try:
                 a = await create(db, user, user, kind, scheduled=True)

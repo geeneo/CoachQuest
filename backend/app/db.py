@@ -75,6 +75,9 @@ class User(Base):
     time_format: Mapped[str | None] = mapped_column(String(4), nullable=True)
     # {"preferred": ["zwift"], "auto": {"zwift": false}}; see platforms.py
     platform_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Admin controls for the AI coach: off for this user, and a monthly limit overriding the site's.
+    ai_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_monthly_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Session(Base):
@@ -503,8 +506,12 @@ class AiCall(Base):
     model: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(40))
     latency_ms: Mapped[int] = mapped_column(Integer)
-    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)  # uncached input only
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    # What the call was for (coach.KINDS) and the prompt-cache tokens (read ~0.1x, written ~1.25x the input price).
+    kind: Mapped[str] = mapped_column(String(12), default="")
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0)
     at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -582,7 +589,14 @@ _ADDED_COLUMNS = {
         "timezone": "VARCHAR(64)",
         "platform_prefs": "JSON",
         "date_format": "VARCHAR(10)",
+        "ai_disabled": "BOOLEAN NOT NULL DEFAULT 0",
+        "ai_monthly_limit": "INTEGER",
         "time_format": "VARCHAR(4)",
+    },
+    "ai_calls": {
+        "kind": "VARCHAR(12) NOT NULL DEFAULT ''",
+        "cache_read_tokens": "INTEGER NOT NULL DEFAULT 0",
+        "cache_write_tokens": "INTEGER NOT NULL DEFAULT 0",
     },
 }
 

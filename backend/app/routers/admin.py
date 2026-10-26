@@ -180,6 +180,9 @@ async def user_sync_now(user_id: int, provider: str, _: User = Depends(admin_use
 class UserUpdate(BaseModel):
     is_admin: bool | None = None
     is_active: bool | None = None
+    ai_disabled: bool | None = None
+    # A number overrides the site's monthly limit for this user (0 = no limit); null goes back to the site's.
+    ai_monthly_limit: int | None = Field(default=None, ge=0, le=100000)
 
 
 class SetPassword(BaseModel):
@@ -332,6 +335,12 @@ def update_user(
         if not body.is_active:
             # Sign the user out everywhere right away.
             db.execute(delete(Session).where(Session.user_id == user.id))
+    if body.ai_disabled is not None and body.ai_disabled != user.ai_disabled:
+        user.ai_disabled = body.ai_disabled
+        auth_log.admin_action(db, request, "admin_ai_off" if body.ai_disabled else "admin_ai_on", admin, user)
+    if "ai_monthly_limit" in body.model_fields_set and body.ai_monthly_limit != user.ai_monthly_limit:
+        user.ai_monthly_limit = body.ai_monthly_limit
+        auth_log.admin_action(db, request, "admin_ai_limit", admin, user)
     db.commit()
     return {"ok": True}
 

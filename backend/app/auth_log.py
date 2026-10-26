@@ -35,6 +35,9 @@ EVENTS = {
     "admin_disabled": "Disabled by an admin",
     "admin_enabled": "Enabled by an admin",
     "admin_deleted": "Deleted by an admin",
+    "admin_ai_off": "AI coach turned off by an admin",
+    "admin_ai_on": "AI coach turned on by an admin",
+    "admin_ai_limit": "AI coach limit changed by an admin",
 }
 FAILURES = {"login_failed", "login_pending", "login_disabled"}
 

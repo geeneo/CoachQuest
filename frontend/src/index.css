@@ -1623,3 +1623,11 @@ ul.instructions > li.note.inactive {
 ul.instructions > li details {
   grid-column: 1;
 }
+.ai-use {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+.ai-use h3 {
+  font-size: 0.95rem;
+  margin: 0.25rem 0 0.4rem;
+}

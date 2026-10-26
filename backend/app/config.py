@@ -48,6 +48,9 @@ class Settings:
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
     anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "high")
+    # Readiness notes, weekly reviews and chat. Empty model: the same as plans.
+    anthropic_model_short: str = os.getenv("ANTHROPIC_MODEL_SHORT", "")
+    anthropic_effort_short: str = os.getenv("ANTHROPIC_EFFORT_SHORT", "medium")
     ai_monthly_limit: str = os.getenv("AI_MONTHLY_LIMIT", "200")
     auth_log_days: str = os.getenv("AUTH_LOG_DAYS", "90")
     access_log_days: str = os.getenv("ACCESS_LOG_DAYS", "")

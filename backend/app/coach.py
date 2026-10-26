@@ -159,56 +159,104 @@ class CoachError(Exception):
         self.status = status
 
 
+# What each AI call is for (AiCall.kind). "Short" kinds use the cheaper settings (anthropic_*_short).
+KINDS = ("plan", "replan", "readiness", "weekly", "chat")
+SHORT_KINDS = ("readiness", "weekly", "chat")
+# The instructions are the same for everyone, so they're cached (cache reads cost ~0.1x the input price).
+CACHED = {"type": "ephemeral"}
+
+
+def model_for(kind: str) -> tuple[str, str]:
+    """(model, effort) for a kind of call: plans use the main settings, the short kinds their own."""
+    if kind in SHORT_KINDS:
+        return (
+            runtime.get("anthropic_model_short") or runtime.get("anthropic_model"),
+            runtime.get("anthropic_effort_short") or "medium",
+        )
+    return runtime.get("anthropic_model"), runtime.get("anthropic_effort")
+
+
 def calls_this_month(db: DbSession, user_id: int) -> int:
     start = utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     return db.scalar(select(func.count()).where(AiCall.user_id == user_id, AiCall.at >= start)) or 0
 
 
+def monthly_limit(viewer: User) -> int:
+    """The user's own limit when an admin set one, else the site's; 0 = no limit."""
+    if viewer.ai_monthly_limit is not None:
+        return viewer.ai_monthly_limit
+    return int(runtime.get("ai_monthly_limit") or 0)
+
+
 def claude_client(db: DbSession, viewer: User) -> anthropic.AsyncAnthropic:
-    """Checks the key and the viewer's monthly allowance before any call."""
+    """Checks the key, the admin's switch and the viewer's monthly allowance before any call."""
     api_key = runtime.get("anthropic_api_key")
     if not api_key:
         raise CoachError("The AI coach is not configured on this server.", 503)
-    limit = int(runtime.get("ai_monthly_limit") or 0)
+    if viewer.ai_disabled:
+        raise CoachError("The administrator has paused the AI coach for your account.", 403)
+    limit = monthly_limit(viewer)
     if limit and calls_this_month(db, viewer.id) >= limit:
         raise CoachError(f"You've used this month's {limit} AI coach requests. Ask your administrator for more.", 429)
     return anthropic.AsyncAnthropic(api_key=api_key)
 
 
-def log_call(db: DbSession, viewer: User, athlete: User, model: str, status: str, started: float, usage=None) -> None:
+def log_call(
+    db: DbSession, viewer: User, athlete: User, model: str, status: str, started: float, usage=None, kind: str = ""
+) -> None:
     db.add(
         AiCall(
             user_id=viewer.id,
             athlete_id=athlete.id,
             model=model,
             status=status,
+            kind=kind,
             latency_ms=int((time.monotonic() - started) * 1000),
             input_tokens=getattr(usage, "input_tokens", 0) or 0,
             output_tokens=getattr(usage, "output_tokens", 0) or 0,
+            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
+            cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
         )
     )
     db.commit()
 
 
+def facts_json(facts: dict) -> str:
+    """Compact JSON for Claude: no indents or spaces (fewer input tokens), keys in a fixed order."""
+    return json.dumps(facts, default=str, separators=(",", ":"), sort_keys=True)
+
+
 async def ask_claude(
-    db: DbSession, viewer: User, athlete: User, system: str, content: str, output_format: dict | None = None
+    db: DbSession,
+    viewer: User,
+    athlete: User,
+    system: str,
+    content: str,
+    output_format: dict | None = None,
+    kind: str = "plan",
 ) -> tuple[str, str]:
-    """One Claude call with logging of metadata only. Returns (text, model that served it)."""
+    """One Claude call with logging of metadata only. Returns (text, model that served it).
+
+    `system` is the fixed instructions for this kind of call: it's cached, so keep anything
+    that varies per user or per day out of it (it goes in a second block, or in `content`)."""
     client = claude_client(db, viewer)
     started = time.monotonic()
-    status, usage, model = "ok", None, runtime.get("anthropic_model")
-    output_config = {"effort": runtime.get("anthropic_effort")}
+    model, effort = model_for(kind)
+    status, usage = "ok", None
+    output_config = {"effort": effort}
     if output_format:
         output_config["format"] = output_format
-    system += "\n\n" + datefmt.ai_instruction(viewer)
     try:
         async with client.beta.messages.stream(
             model=model,
-            max_tokens=32000,
+            max_tokens=32000 if kind in ("plan", "replan") else 16000,
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
             output_config=output_config,
-            system=system,
+            system=[
+                {"type": "text", "text": system, "cache_control": CACHED},
+                {"type": "text", "text": datefmt.ai_instruction(viewer)},
+            ],
             messages=[{"role": "user", "content": content}],
         ) as stream:
             message = await stream.get_final_message()
@@ -235,7 +283,7 @@ async def ask_claude(
         status = "connection"
         raise CoachError("Could not reach the AI coach.") from None
     finally:
-        log_call(db, viewer, athlete, model, status, started, usage)
+        log_call(db, viewer, athlete, model, status, started, usage, kind)
 
 
 WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
@@ -334,9 +382,8 @@ def plan_schema() -> dict:
 
 async def generate_plan(db: DbSession, viewer: User, athlete: User, facts: dict) -> tuple[dict, str]:
     """Returns ({"summary_md": ..., "weeks": [...]}, model that served it)."""
-    text, model = await ask_claude(
-        db, viewer, athlete, SYSTEM_PROMPT, json.dumps(facts, default=str, indent=1), plan_schema()
-    )
+    kind = "replan" if (facts.get("request") or {}).get("replan") else "plan"
+    text, model = await ask_claude(db, viewer, athlete, SYSTEM_PROMPT, facts_json(facts), plan_schema(), kind)
     try:
         return json.loads(text), model
     except ValueError as exc:

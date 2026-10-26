@@ -66,14 +66,14 @@ def test_daily_assessment_uses_code_verdict(athlete, monkeypatch):
     p, uid = athlete
     seen = {}
 
-    async def fake_ask(db, viewer, ath, system, content, output_format=None):
+    async def fake_ask(db, viewer, ath, system, content, output_format=None, kind=None):
         seen["system"], seen["content"] = system, content
         return "**Rest today.** HRV is well down.", "claude-test"
 
     monkeypatch.setattr(assessments, "ask_claude", fake_ask)
     r = p.post("/api/athletes/me/coach/assessments", json={"kind": "daily"})
     assert r.status_code == 200, r.text
-    assert r.json()["verdict"] == "rest" and '"verdict": "rest"' in seen["content"]
+    assert r.json()["verdict"] == "rest" and '"verdict":"rest"' in seen["content"]
     overview = p.get("/api/athletes/me/coach").json()
     assert overview["latest_daily"]["verdict"] == "rest"
     assert overview["progress"]["ctl"]["now"] > 0
@@ -83,7 +83,7 @@ def test_weekly_assessment_facts(athlete, monkeypatch):
     p, _ = athlete
     seen = {}
 
-    async def fake_ask(db, viewer, ath, system, content, output_format=None):
+    async def fake_ask(db, viewer, ath, system, content, output_format=None, kind=None):
         seen["content"] = content
         return "## How the week went\nGood.", "claude-test"
 

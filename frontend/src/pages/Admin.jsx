@@ -413,8 +413,19 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
         </td>
         <td className="small">
           <div>
-            {u.ai_month.calls} AI calls{u.ai_month.tokens ? ` · ${Math.round(u.ai_month.tokens / 1000)}k tokens` : ""}
+            {u.ai_disabled ? (
+              <span className="badge bad">AI off</span>
+            ) : (
+              <>
+                {u.ai_month.calls}
+                {u.ai_limit ? ` / ${u.ai_limit}` : ""} AI calls
+              </>
+            )}
+            {u.ai_month.tokens ? ` · ${Math.round(u.ai_month.tokens / 1000)}k tokens` : ""}
           </div>
+          {u.ai_month.for_others > 0 && (
+            <div className="muted">{u.ai_month.for_others} for athletes they coach</div>
+          )}
           <div className="muted">≈ {bytes(u.storage_bytes)}</div>
         </td>
       </tr>
@@ -526,6 +537,7 @@ function UserDetail({ u, isMe, update, reload }) {
           </div>
         )}
       </div>
+      {d.data && <AiUse u={u} ai={d.data.ai} update={update} />}
       {!isMe && (
         <>
           <div className="row wrap">
@@ -547,6 +559,103 @@ function UserDetail({ u, isMe, update, reload }) {
           <ManageUser u={u} reload={reload} />
         </>
       )}
+    </div>
+  );
+}
+
+const AI_KINDS = { plan: "Plans", replan: "Re-plans", readiness: "Readiness notes", weekly: "Weekly reviews", chat: "Chat" };
+
+// This month's AI use for one user, and the admin's switch and limit for it.
+function AiUse({ u, ai, update }) {
+  const [limit, setLimit] = useState(u.ai_monthly_limit ?? "");
+  const k = (n) => (n >= 1000 ? `${Math.round(n / 1000)}k` : n);
+  const rows = (obj, label) =>
+    Object.entries(obj).map(([key, b]) => (
+      <tr key={key}>
+        <td>{label(key)}</td>
+        <td className="num">
+          {b.calls}
+          {b.failed ? <span className="error-text"> ({b.failed} failed)</span> : null}
+        </td>
+        <td className="num">{k(b.input)}</td>
+        <td className="num">{k(b.cache_read)}</td>
+        <td className="num">{k(b.output)}</td>
+      </tr>
+    ));
+  const head = (first) => (
+    <thead>
+      <tr>
+        <th>{first}</th>
+        <th className="num">Calls</th>
+        <th className="num">Input</th>
+        <th className="num">From cache</th>
+        <th className="num">Output</th>
+      </tr>
+    </thead>
+  );
+  const empty = !Object.keys(ai.by_kind).length;
+  return (
+    <div className="ai-use">
+      <h3>AI coach this month</h3>
+      {empty ? (
+        <p className="small muted">No AI calls this month.</p>
+      ) : (
+        <div className="user-detail">
+          <table className="small">
+            {head("What for")}
+            <tbody>{rows(ai.by_kind, (key) => AI_KINDS[key] || "Earlier calls (type not recorded)")}</tbody>
+          </table>
+          <table className="small">
+            {head("Whose data")}
+            <tbody>{rows(ai.by_athlete, (key) => (key === "themselves" ? "Their own" : key))}</tbody>
+          </table>
+        </div>
+      )}
+      {!empty && (
+        <p className="small muted">
+          Rough cost: ${ai.cost_usd.toFixed(2)}
+          {ai.cost_complete ? "" : " (some calls used a model without a price here)"}. Calls count against the person
+          who asked, also when it's for an athlete they coach. Cached input costs about a tenth.
+        </p>
+      )}
+      <div className="row wrap">
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={!u.ai_disabled}
+            onChange={(e) =>
+              (e.target.checked || confirm(`Turn the AI coach off for ${u.display_name}? Their AI requests stop at once.`)) &&
+              update(u, { ai_disabled: !e.target.checked })
+            }
+          />{" "}
+          AI coach on
+        </label>
+        <form
+          className="row tight"
+          onSubmit={(e) => {
+            e.preventDefault();
+            update(u, { ai_monthly_limit: limit === "" ? null : Number(limit) });
+          }}
+        >
+          <label className="inline small">
+            Monthly limit
+            <input
+              type="number"
+              min={0}
+              max={100000}
+              style={{ width: "7rem" }}
+              placeholder="site's limit"
+              value={limit}
+              onChange={(e) => setLimit(e.target.value)}
+            />
+          </label>
+          <button className="btn small">Save</button>
+        </form>
+        <span className="small muted">
+          Now: {u.ai_limit ? `${u.ai_limit} calls` : "no limit"}
+          {u.ai_monthly_limit == null ? " (the site's)" : " (set for this user)"}. Empty: the site's limit; 0: no limit.
+        </span>
+      </div>
     </div>
   );
 }

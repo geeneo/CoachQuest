@@ -400,7 +400,7 @@
         build. Rebuild (`bash build.sh`), then re-check; if it still fails,
         note the athlete and what they share.
 
-- [ ] **Admin: AI use per user, with a per-user limit and an off switch** (26 Oct).
+- [x] **Admin: AI use per user, with a per-user limit and an off switch** (Done; the 80% email and a token budget are not built.) (26 Oct).
       Mike Nel (mike@mmc24.com) shows 6 AI calls / 28k tokens but has no data
       of his own: he's a coach.
       - Why: the AI use column counts calls by the person who *asked*, not
@@ -420,7 +420,7 @@
       - Optional: a monthly token budget (not only a call count), and an email
         to the admin when someone reaches 80% of their limit.
 
-- [ ] **Use fewer AI tokens** (26 Oct; from a read of coach.py, assessments.py,
+- [x] **Use fewer AI tokens** (Done: caching, cheaper settings for short jobs, no pointless notes, chat cap, smaller lookups, compact JSON, leaner re-plans, measuring. Old chats' history is left as it is: editing it would break the AI's stored reasoning.) (26 Oct; from a read of coach.py, assessments.py,
       coach_chat.py). Each AI call has a type: plan, re-plan, readiness note,
       weekly review or chat. Roughly in order of savings:
       - **Prompt caching (biggest win).** No call uses it today. The long

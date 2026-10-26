@@ -21,7 +21,8 @@ export default function AiCoach({ id, isMe }) {
     setBusy(kind);
     setError(null);
     try {
-      await api(`/api/athletes/${id}/coach/assessments`, { method: "POST", body: { kind } });
+      const a = await api(`/api/athletes/${id}/coach/assessments`, { method: "POST", body: { kind } });
+      if (a.unchanged) setError("Nothing has changed since the last note, so it wasn't written again (no AI call).");
       res.reload();
     } catch (err) {
       setError(err.message);
