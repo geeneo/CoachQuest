@@ -1,35 +1,18 @@
-import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useApi } from "../hooks/useApi.js";
 import { Stat } from "./WellnessPanel.jsx";
 
-const PERIODS = [7, 30, 90];
 const tooltipStyle = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8 };
 const number = (n) => (n == null ? null : Math.round(n).toLocaleString());
 
-export default function VolumeStats({ id }) {
-  const [days, setDays] = useState(30);
+// Totals, activity mix and elevation for the period chosen at the top of the overview.
+export default function VolumeStats({ id, days }) {
   const res = useApi(`/api/athletes/${id}/summary?days=${days}`);
   const s = res.data;
+  const byDay = s?.elevation?.by === "day";
   return (
     <section className="card">
-      <div className="row between">
-        <h2>Volume</h2>
-        <div className="chips" role="radiogroup" aria-label="Period">
-          {PERIODS.map((d) => (
-            <button
-              key={d}
-              type="button"
-              role="radio"
-              aria-checked={days === d}
-              className={`chip ${days === d ? "on" : ""}`}
-              onClick={() => setDays(d)}
-            >
-              {d} days
-            </button>
-          ))}
-        </div>
-      </div>
+      <h2>Volume (last {days} days)</h2>
       {res.error && <div className="error">{res.error.message}</div>}
       {s && (
         <>
@@ -71,12 +54,14 @@ export default function VolumeStats({ id }) {
               )}
             </figure>
             <figure>
-              <figcaption>Weekly elevation (12 weeks)</figcaption>
+              <figcaption>
+                {byDay ? `Daily elevation (${days} days)` : `Weekly elevation (${s.elevation.points.length} weeks)`}
+              </figcaption>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={s.weekly_elevation} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
+                <BarChart data={s.elevation.points} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
                   <CartesianGrid stroke="var(--grid)" vertical={false} />
                   <XAxis
-                    dataKey="week_start"
+                    dataKey="start"
                     tickFormatter={(w) => w.slice(5)}
                     stroke="var(--muted)"
                     fontSize={12}
@@ -87,7 +72,7 @@ export default function VolumeStats({ id }) {
                   <Tooltip
                     contentStyle={tooltipStyle}
                     cursor={{ fill: "var(--panel-2)" }}
-                    labelFormatter={(w) => `Week of ${w}`}
+                    labelFormatter={(w) => (byDay ? w : `Week of ${w}`)}
                     formatter={(v) => [`${v.toLocaleString()} m`, "Elevation"]}
                   />
                   <Bar dataKey="elevation_m" name="Elevation" fill="var(--c3)" radius={[4, 4, 0, 0]} maxBarSize={40} />

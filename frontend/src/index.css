@@ -1464,3 +1464,6 @@ table.dashboard tr.attention td:first-child {
   border-color: var(--warn);
   color: var(--warn);
 }
+.period-bar {
+  margin: 0 0 0.75rem;
+}

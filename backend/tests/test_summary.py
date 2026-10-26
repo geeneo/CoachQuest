@@ -77,3 +77,15 @@ def test_weekly_elevation_with_sunday_weeks():
     assert monday_weeks[-1] == {"week_start": "2026-10-19", "elevation_m": 500}
     assert sunday_weeks[-1] == {"week_start": "2026-10-25", "elevation_m": 300}
     assert sunday_weeks[-2] == {"week_start": "2026-10-18", "elevation_m": 200}
+
+
+def test_elevation_follows_the_period():
+    acts = [_a(0, elev=300), _a(40, elev=500)]
+    week = volume_summary(acts, 7, TODAY)["elevation"]
+    assert week["by"] == "day" and len(week["points"]) == 7
+    assert week["points"][-1]["start"] == TODAY.isoformat() and week["points"][-1]["elevation_m"] == 300
+    month = volume_summary(acts, 30, TODAY)["elevation"]
+    assert month["by"] == "week" and len(month["points"]) == 5
+    assert sum(p["elevation_m"] for p in month["points"]) == 300
+    quarter = volume_summary(acts, 90, TODAY)["elevation"]
+    assert len(quarter["points"]) == 13 and sum(p["elevation_m"] for p in quarter["points"]) == 800

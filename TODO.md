@@ -322,7 +322,7 @@
       - Used for age-based estimates (max HR when unknown) and by the AI coach
         (recovery and training load advice). Only shared with coaches under
         "Profile"; never shown on the dashboard.
-- [ ] **My training: one period switch for the whole page.** Choosing 7 / 30 /
+- [x] **My training: one period switch for the whole page.** (Done.) Choosing 7 / 30 /
       90 days (screenshot 26 Oct) changes only the Volume cards and the
       activity mix today. It should also change:
       - **Weekly elevation:** now always the last 12 weeks. For 7 days show

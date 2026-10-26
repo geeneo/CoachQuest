@@ -63,17 +63,60 @@ export default function AthleteView({ self }) {
   );
 }
 
+const PERIODS = [7, 30, 90];
+
+// The overview's period, remembered per browser (falls back to 30 days when storage is unavailable).
+function usePeriod() {
+  const [days, setDays] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem("cq.period"));
+      return PERIODS.includes(saved) ? saved : 30;
+    } catch {
+      return 30;
+    }
+  });
+  const choose = (d) => {
+    setDays(d);
+    try {
+      localStorage.setItem("cq.period", String(d));
+    } catch {
+      // private window or blocked storage: just don't remember
+    }
+  };
+  return [days, choose];
+}
+
 function Overview({ id, scopes, isMe }) {
-  const fitness = useApi(scopes.has("fitness") ? `/api/athletes/${id}/fitness?days=120` : null);
-  const wellness = useApi(scopes.has("wellness") ? `/api/athletes/${id}/wellness?days=30` : null);
+  const [days, setDays] = usePeriod();
+  const fitness = useApi(scopes.has("fitness") ? `/api/athletes/${id}/fitness?days=${days}` : null);
+  const wellness = useApi(scopes.has("wellness") ? `/api/athletes/${id}/wellness?days=${days}` : null);
   const today = fitness.data?.[fitness.data.length - 1];
   return (
     <>
       {scopes.has("plans") && <UpcomingRaces id={id} isMe={isMe} ctl={today?.ctl} />}
-      {scopes.has("activities") && <VolumeStats id={id} />}
+      {(scopes.has("activities") || scopes.has("fitness") || scopes.has("wellness")) && (
+        <div className="row between period-bar">
+          <span className="muted small">Volume, elevation, training load and wellness for the last {days} days</span>
+          <div className="chips" role="radiogroup" aria-label="Period">
+            {PERIODS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                role="radio"
+                aria-checked={days === d}
+                className={`chip ${days === d ? "on" : ""}`}
+                onClick={() => setDays(d)}
+              >
+                {d} days
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {scopes.has("activities") && <VolumeStats id={id} days={days} />}
       {scopes.has("fitness") && (
         <section className="card">
-          <h2>Training load</h2>
+          <h2>Training load (last {days} days)</h2>
           <div className="stats">
             <Stat label="Fitness (CTL)" value={today?.ctl} />
             <Stat label="Fatigue (ATL)" value={today?.atl} />
@@ -85,7 +128,7 @@ function Overview({ id, scopes, isMe }) {
       )}
       {scopes.has("wellness") && (
         <section className="card">
-          <h2>Wellness (last 30 days)</h2>
+          <h2>Wellness (last {days} days)</h2>
           {wellness.error ? <div className="error">{wellness.error.message}</div> : <WellnessPanel rows={wellness.data} />}
         </section>
       )}
