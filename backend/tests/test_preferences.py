@@ -11,13 +11,13 @@ def test_defaults_and_update(make_user):
         "PUT",
         "/api/me/preferences",
         json={
-            "weekday_prefs": {"mon": ["Rest"], "sat": ["Race", "Road"]},
+            "weekday_prefs": {"mon": ["Rest"], "sat": ["Road"]},
             "note_tags": ["Illness", "work-trip", "illness"],
         },
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["weekday_prefs"]["sat"] == ["Road", "Race"]  # kept in the standard order
+    assert body["weekday_prefs"]["sat"] == ["Road"]
     assert body["note_tags"] == ["illness", "work-trip"]
 
 
@@ -53,7 +53,7 @@ def test_ai_coach_gets_weekday_preferences(make_user, monkeypatch):
     p = make_user("a@example.com")
     p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"mon": ["Rest"], "tue": ["Zwift / indoor"]}})
     p.post("/api/athletes/me/plans", json={"title": "t", "goal": "g"})
-    assert seen["weekday_preferences"] == {"mon": ["Rest"], "tue": ["Zwift / indoor"]}
+    assert seen["weekday_preferences"] == {"mon": "Rest", "tue": "Zwift / indoor"}
 
 
 def test_coach_needs_plans_scope(make_user):
@@ -67,5 +67,18 @@ def test_coach_needs_plans_scope(make_user):
 
 def test_walk_and_hike_are_session_types(make_user):
     p = make_user("w@example.com")
+    r = p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"sun": ["Hike"], "sat": ["Walk"]}})
+    assert r.status_code == 200 and r.json()["weekday_prefs"]["sun"] == ["Hike"]
+
+
+def test_one_type_per_day(make_user):
+    from app.db import SessionLocal, User
+
+    p = make_user("one@example.com")
     r = p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"sun": ["Walk", "Hike"]}})
-    assert r.status_code == 200 and r.json()["weekday_prefs"]["sun"] == ["Walk", "Hike"]
+    assert r.status_code == 422 and "one session type per day" in r.text
+    uid = p.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:  # saved before the rule: the first counts
+        db.get(User, uid).weekday_prefs = {"wed": ["Road", "Zwift / indoor"]}
+        db.commit()
+    assert p.get("/api/athletes/me/preferences").json()["weekday_prefs"]["wed"] == ["Road"]
