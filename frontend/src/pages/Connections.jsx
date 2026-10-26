@@ -350,16 +350,22 @@ function isoDaysAgo(days) {
   return days == null ? "2009-01-01" : new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 }
 
-function Backfill({ conn, provider, run, busy }) {
+// Also used in Admin → Users, with `urls` pointing at the admin endpoints for that user.
+export function Backfill({ conn, provider, run, busy, urls }) {
+  const u = urls || {
+    start: `/api/connections/${provider}/backfill`,
+    cancel: `/api/connections/${provider}/backfill`,
+    refresh: `/api/connections/${provider}/refresh`,
+  };
   const [choice, setChoice] = useState("1y");
   const bf = conn.backfill;
   const active = bf && (bf.status === "running" || bf.status === "waiting");
   const start = () => {
     const days = BACKFILL_CHOICES.find((c) => c[0] === choice)[2];
-    run(() => api(`/api/connections/${provider}/backfill`, { method: "POST", body: { since: isoDaysAgo(days) } }));
+    run(() => api(u.start, { method: "POST", body: { since: isoDaysAgo(days) } }));
   };
-  const cancel = () => run(() => api(`/api/connections/${provider}/backfill`, { method: "DELETE" }));
-  const refresh = () => run(() => api(`/api/connections/${provider}/refresh`, { method: "POST" }));
+  const cancel = () => run(() => api(u.cancel, { method: "DELETE" }));
+  const refresh = () => run(() => api(u.refresh, { method: "POST" }));
   const refreshing = bf?.mode === "refresh";
   const reached = bf?.cursor ? bf.cursor.slice(0, 10) : null;
 

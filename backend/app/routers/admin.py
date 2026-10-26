@@ -2,17 +2,17 @@
 
 import logging
 import shutil
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import anthropic
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
-from .. import accounts, admin_users, auth_log, mailer, runtime
+from .. import accounts, admin_users, auth_log, backfill, mailer, runtime
 from ..config import settings
 from ..db import (
     AccessLog,
@@ -192,6 +192,48 @@ async def user_sync_now(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return await connections.sync_for(provider, user, db, force)
+
+
+def _user_conn(db: DbSession, user_id: int, provider: str):
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return connections._conn(db, user, provider)
+
+
+class BackfillIn(BaseModel):
+    since: date
+
+
+@router.post("/users/{user_id}/backfill/{provider}")
+def user_backfill(
+    user_id: int,
+    provider: str,
+    body: BackfillIn,
+    background: BackgroundTasks,
+    _: User = Depends(admin_user),
+    db: DbSession = Depends(get_db),
+):
+    """Import a user's older Strava / Garmin data, as they can on their Connections page."""
+    return connections.begin_backfill(db, _user_conn(db, user_id, provider), body.since, background)
+
+
+@router.post("/users/{user_id}/refresh/{provider}")
+def user_refresh(
+    user_id: int,
+    provider: str,
+    background: BackgroundTasks,
+    _: User = Depends(admin_user),
+    db: DbSession = Depends(get_db),
+):
+    return connections.begin_refresh(db, _user_conn(db, user_id, provider), background)
+
+
+@router.delete("/users/{user_id}/backfill/{provider}")
+def user_cancel_backfill(user_id: int, provider: str, _: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    conn = _user_conn(db, user_id, provider)
+    backfill.cancel(db, conn)
+    return connections.conn_out(conn)
 
 
 class UserUpdate(BaseModel):

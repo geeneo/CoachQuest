@@ -364,11 +364,15 @@ def start_backfill(
     db: DbSession = Depends(get_db),
 ):
     """Import data older than what the first sync brought in."""
-    conn = _conn(db, user, provider)
+    return begin_backfill(db, _conn(db, user, provider), body.since, background)
+
+
+def begin_backfill(db: DbSession, conn: Connection, since: date, background: BackgroundTasks) -> dict:
+    """Shared with Admin → Users, which starts imports for a user."""
     if conn.backfill and conn.backfill.get("status") in ("running", "waiting"):
         raise HTTPException(status_code=409, detail="An import is already running for this connection")
     try:
-        backfill.start(db, conn, body.since)
+        backfill.start(db, conn, since)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     background.add_task(backfill.run, conn.id)
@@ -380,7 +384,10 @@ def refresh_activities(
     provider: str, background: BackgroundTasks, user: User = Depends(current_user), db: DbSession = Depends(get_db)
 ):
     """Re-download stored activities to fill in fields added since they were imported."""
-    conn = _conn(db, user, provider)
+    return begin_refresh(db, _conn(db, user, provider), background)
+
+
+def begin_refresh(db: DbSession, conn: Connection, background: BackgroundTasks) -> dict:
     try:
         backfill.refresh(db, conn)
     except ValueError as exc:

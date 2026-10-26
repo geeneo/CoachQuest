@@ -14,7 +14,7 @@ from datetime import timedelta
 from sqlalchemy import case, func, select, text
 from sqlalchemy.orm import Session as DbSession
 
-from . import auth_log, runtime
+from . import auth_log, backfill, runtime, sync_options
 from .coach import monthly_limit
 from .db import (
     Activity,
@@ -124,6 +124,9 @@ def overview(db: DbSession) -> list[dict]:
             "status": c.status,
             "last_sync_at": c.last_sync_at,
             "last_error": c.last_error,
+            # For "Import older data" in the user's details.
+            "backfill": backfill.state(c),
+            "options": sync_options.options(c),
         }
     for uid, app in strava_apps(db).items():
         conns[uid]["strava"]["app"] = app

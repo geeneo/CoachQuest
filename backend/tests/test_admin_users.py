@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from app import backfill
 from app.db import AccessLog, Activity, AuthEvent, Connection, Session, SessionLocal, SyncJob, utcnow
 from app.routers import connections
 from app.security import encrypt_json
@@ -121,3 +122,28 @@ def test_shows_which_strava_app_holds_each_link(make_user):
     assert "idle on shared Strava app" in rows[ids["idle"]]["flags"]
     assert "idle on shared Strava app" not in rows[ids["shared"]]["flags"]
     assert admin.get("/api/admin/stats").json()["strava_shared"] == 3
+
+
+def test_admin_imports_older_data_for_a_user(make_user, monkeypatch):
+    started = []
+
+    async def fake_run(conn_id):
+        started.append(conn_id)
+
+    monkeypatch.setattr(backfill, "run", fake_run)
+    admin = make_user("admin@example.com", "Admin")
+    rider = make_user("rider@example.com", "Rider")
+    rid = _uid(rider)
+    assert admin.post(f"/api/admin/users/{rid}/backfill/strava", json={"since": "2024-01-01"}).status_code == 404
+    _strava(rid, None)
+    r = admin.post(f"/api/admin/users/{rid}/backfill/strava", json={"since": "2024-01-01"})
+    assert r.status_code == 200 and r.json()["backfill"]["status"] == "running" and len(started) == 1
+    row = next(x for x in admin.get("/api/admin/users").json() if x["id"] == rid)
+    assert row["connections"]["strava"]["backfill"]["target"] == "2024-01-01"
+    assert row["connections"]["strava"]["options"] == {"activities": True}
+    # One import at a time, same as on the user's own page.
+    assert admin.post(f"/api/admin/users/{rid}/backfill/strava", json={"since": "2023-01-01"}).status_code == 409
+    r = admin.delete(f"/api/admin/users/{rid}/backfill/strava")
+    assert r.json()["backfill"]["status"] == "cancelled"
+    assert admin.post(f"/api/admin/users/{rid}/refresh/strava").status_code == 409  # no activities yet
+    assert rider.post(f"/api/admin/users/{rid}/backfill/strava", json={"since": "2024-01-01"}).status_code == 403

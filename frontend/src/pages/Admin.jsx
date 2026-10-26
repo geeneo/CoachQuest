@@ -6,6 +6,7 @@ import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { dateTime, formatDate } from "../lib/format.js";
 import { AdminSignIns } from "../components/SignInLog.jsx";
+import { Backfill } from "./Connections.jsx";
 
 const SOURCE = { web: "set here", env: "from .env", unset: "not set" };
 
@@ -505,6 +506,20 @@ function UserDetail({ u, isMe, update, reload }) {
     );
   };
   const linked = PROVIDERS.filter(([k]) => u.connections[k]);
+  const [busy, setBusy] = useState(false);
+  // For the "Import older data" controls: run an admin call, then show the new state.
+  const run = async (fn) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await fn();
+      reload();
+    } catch (e) {
+      setMsg({ error: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
   // Admin override: every connected source, one after another, ignoring the 5-minute limit.
   const syncAll = async () => {
     setMsg({ ok: "Syncing…" });
@@ -578,6 +593,24 @@ function UserDetail({ u, isMe, update, reload }) {
               )}
             </div>
           )}
+          {linked
+            .filter(([k]) => k !== "intervals_icu")
+            .map(([k, label]) => (
+              <div key={k}>
+                <h3>{label}: older data</h3>
+                <Backfill
+                  conn={u.connections[k]}
+                  provider={k}
+                  run={run}
+                  busy={busy}
+                  urls={{
+                    start: `/api/admin/users/${u.id}/backfill/${k}`,
+                    cancel: `/api/admin/users/${u.id}/backfill/${k}`,
+                    refresh: `/api/admin/users/${u.id}/refresh/${k}`,
+                  }}
+                />
+              </div>
+            ))}
           {d.data && (
             <>
               <h3>Activities by sport</h3>
