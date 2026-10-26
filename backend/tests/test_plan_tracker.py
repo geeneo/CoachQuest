@@ -156,6 +156,29 @@ def test_apply_preferences_only_future_unlocked(plan_id):
     assert nxt[1]["type"] == "Rest" and nxt[5]["type"] == "Road"  # Saturday locked, kept
 
 
+def test_apply_preferences_rest_day_becomes_a_ride_day():
+    from datetime import date as d_
+
+    day = lambda wd, t, desc, mins, w=None: {  # noqa: E731
+        "date": f"2030-01-0{wd + 1}",
+        "weekday": plan_tracker.WEEKDAYS[wd],
+        "type": t,
+        "description": desc,
+        "duration_min": mins,
+        "intensity": [],
+        "locked": False,
+        "workout": w,
+    }
+    weeks = [{"days": [day(0, "Rest", "Rest.", 0), day(1, "Zwift / indoor", "SS", 60, {"name": "SS"})]}]
+    changed, empty = plan_tracker.apply_preferences(
+        weeks, {"mon": ["Zwift / indoor"], "tue": ["Road"]}, d_(2029, 12, 31)
+    )
+    mon, tue = weeks[0]["days"]
+    assert (changed, empty) == (2, 1)
+    assert mon["type"] == "Zwift / indoor" and "not planned yet" in mon["description"]  # not "Rest."
+    assert tue["type"] == "Road" and tue["description"] == "SS" and tue["workout"] is None
+
+
 def test_replan_keeps_past_and_locked_days(plan_id, monkeypatch):
     p, plan = plan_id
     seen = {}

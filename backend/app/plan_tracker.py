@@ -178,19 +178,32 @@ def find_day(weeks: list[dict], day: str) -> tuple[int, int]:
     raise KeyError(day)
 
 
-def apply_preferences(weeks: list[dict], prefs: dict[str, list[str]], today: date) -> int:
-    """Set future, unlocked days to the athlete's first preferred type for that weekday. Returns days changed."""
-    changed = 0
+NOT_PLANNED = "{type} session, not planned yet: re-plan from this week to fill it in, or edit it."
+
+
+def apply_preferences(weeks: list[dict], prefs: dict[str, list[str]], today: date) -> tuple[int, int]:
+    """Set future, unlocked days to the athlete's first preferred type for that weekday.
+
+    Only the type changes, so a rest day that becomes a training day has no session yet: it says so
+    (and is counted) instead of keeping "Rest.". A structured indoor workout stays only on indoor
+    days. Returns (days changed, training days left to plan)."""
+    changed = empty = 0
     for week in weeks:
         for d in week["days"]:
             wanted = prefs.get(d["weekday"]) or []
             if d["locked"] or date.fromisoformat(d["date"]) <= today or not wanted or d["type"] in wanted:
                 continue
+            was_rest = d["type"] == "Rest" or not d.get("duration_min")
             d["type"] = wanted[0]
             if wanted[0] == "Rest":
-                d.update(description="Rest day.", duration_min=0, intensity=[])
+                d.update(description="Rest day.", duration_min=0, intensity=[], workout=None)
+            elif was_rest:
+                d.update(description=NOT_PLANNED.format(type=wanted[0]), duration_min=0, intensity=[], workout=None)
+                empty += 1
+            elif wanted[0] != "Zwift / indoor":
+                d["workout"] = None  # an indoor workout doesn't belong on a road or run day
             changed += 1
-    return changed
+    return changed, empty
 
 
 def replan_from(weeks: list[dict], today: date) -> int:

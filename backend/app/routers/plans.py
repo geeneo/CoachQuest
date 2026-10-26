@@ -290,9 +290,9 @@ def apply_preferences(
     weeks = _editable(p)
     athlete_user = db.get(User, p.athlete_id)
     prefs = preferences_out(athlete_user)["weekday_prefs"]
-    changed = plan_tracker.apply_preferences(weeks, prefs, localtime.today(athlete_user))
+    changed, empty = plan_tracker.apply_preferences(weeks, prefs, localtime.today(athlete_user))
     _save_weeks(db, p, weeks, background)
-    return {**plan_out(p, db, full=True, viewer=user), "changed": changed}
+    return {**plan_out(p, db, full=True, viewer=user), "changed": changed, "to_plan": empty}
 
 
 class Replan(BaseModel):

@@ -36,7 +36,13 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
   };
   const applyPrefs = async () => {
     const r = await call("/apply-preferences", "POST");
-    if (r) setNotice(`${r.changed} future day${r.changed === 1 ? "" : "s"} changed to your weekday preferences.`);
+    if (r)
+      setNotice(
+        `${r.changed} future day${r.changed === 1 ? "" : "s"} changed to your weekday preferences.` +
+          (r.to_plan
+            ? ` ${r.to_plan} new training day${r.to_plan === 1 ? " has" : "s have"} no session yet: use "Re-plan from this week" to fill ${r.to_plan === 1 ? "it" : "them"} in.`
+            : ""),
+      );
   };
 
   const [replan, setReplan] = useState(null); // null = closed, else the reason being typed
