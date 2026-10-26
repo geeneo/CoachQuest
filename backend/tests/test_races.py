@@ -53,6 +53,6 @@ def test_upcoming_races_go_to_the_ai_coach(make_user, monkeypatch):
     _race(p, code="past", target_date=(date.today() - timedelta(days=5)).isoformat())
     _race(p, code="soon", target_date=(date.today() + timedelta(days=40)).isoformat(), target_ctl=90)
     _race(p, code="off", target_date=(date.today() + timedelta(days=50)).isoformat(), active=False)
-    p.post("/api/athletes/me/plans", json={"title": "t", "goal": "g"})
+    p.post("/api/athletes/me/plans", json={"without_data": True, "title": "t", "goal": "g"})
     assert [r["code"] for r in seen["upcoming_races"]] == ["soon"]
     assert seen["upcoming_races"][0]["target_ctl"] == 90

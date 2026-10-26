@@ -63,7 +63,14 @@ export default function PlansPanel({ id, athlete }) {
         event_date: form.event_date || null,
         start_date: form.start_date || null,
       };
-      const plan = await api(`/api/athletes/${id}/plans`, { method: "POST", body });
+      let plan;
+      try {
+        plan = await api(`/api/athletes/${id}/plans`, { method: "POST", body });
+      } catch (err) {
+        // No synced data yet: say so, and only spend AI tokens if they still want a plan from goal and hours.
+        if (err.detail?.code !== "no_data" || !confirm(`${err.message}\n\nMake a plan anyway?`)) throw err;
+        plan = await api(`/api/athletes/${id}/plans`, { method: "POST", body: { ...body, without_data: true } });
+      }
       navigate(`/athletes/${athlete.id}/plans/${plan.id}`);
     } catch (err) {
       setError(err.message);

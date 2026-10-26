@@ -90,7 +90,13 @@ def plan_id(make_user, monkeypatch):
     start = date.today() - timedelta(days=date.today().weekday())  # this Monday
     r = p.post(
         "/api/athletes/me/plans",
-        json={"title": "DC", "goal": "Double Century", "weeks": 2, "start_date": start.isoformat()},
+        json={
+            "without_data": True,
+            "title": "DC",
+            "goal": "Double Century",
+            "weeks": 2,
+            "start_date": start.isoformat(),
+        },
     )
     assert r.status_code == 200, r.text
     return p, r.json()

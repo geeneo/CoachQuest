@@ -85,7 +85,10 @@ def test_plan_prompt_contains_only_shared_data(make_user, monkeypatch):
     monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
     athlete, coach, athlete_id, grant_id = _setup(make_user, ["activities", "plans"])
     coach.post(f"/api/grants/{grant_id}/accept")
-    r = coach.post(f"/api/athletes/{athlete_id}/plans", json={"title": "Base", "goal": "Gran fondo", "weeks": 4})
+    r = coach.post(
+        f"/api/athletes/{athlete_id}/plans",
+        json={"without_data": True, "title": "Base", "goal": "Gran fondo", "weeks": 4},
+    )
     assert r.status_code == 200, r.text
     assert "recent_activities" in seen
     assert "wellness" not in seen and "load" not in seen
@@ -96,7 +99,7 @@ def test_plan_prompt_contains_only_shared_data(make_user, monkeypatch):
 def test_plans_need_plans_scope(make_user):
     _, coach, athlete_id, grant_id = _setup(make_user, ["activities"])
     coach.post(f"/api/grants/{grant_id}/accept")
-    r = coach.post(f"/api/athletes/{athlete_id}/plans", json={"title": "x", "goal": "y"})
+    r = coach.post(f"/api/athletes/{athlete_id}/plans", json={"without_data": True, "title": "x", "goal": "y"})
     assert r.status_code == 404
 
 
@@ -129,7 +132,7 @@ def test_ai_prompt_respects_profile_and_weight(make_user, monkeypatch):
 
     monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
     _, coach, athlete_id = _profile_setup(make_user, ["profile", "plans"])
-    coach.post(f"/api/athletes/{athlete_id}/plans", json={"title": "t", "goal": "g"})
+    coach.post(f"/api/athletes/{athlete_id}/plans", json={"without_data": True, "title": "t", "goal": "g"})
     assert seen["athlete"]["ftp_watts"] == 260
     assert "weight_kg" not in seen["athlete"]
 

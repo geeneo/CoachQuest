@@ -26,7 +26,14 @@ def team(make_user, monkeypatch):
 def _create(p, who="me", **extra):
     r = p.post(
         f"/api/athletes/{who}/plans",
-        json={"title": "Block", "goal": "FTP", "weeks": 2, "start_date": _next_monday().isoformat(), **extra},
+        json={
+            "without_data": True,
+            "title": "Block",
+            "goal": "FTP",
+            "weeks": 2,
+            "start_date": _next_monday().isoformat(),
+            **extra,
+        },
     )
     assert r.status_code == 200, r.text
     return r.json()
@@ -113,7 +120,7 @@ def test_coach_plans_and_coach_notes(team):
     assert athlete.post(f"{url}/replan", json={"coach_notes": "I'm the coach"}).status_code == 422
     r = athlete.post(
         "/api/athletes/me/plans",
-        json={"title": "B", "goal": "x", "weeks": 1, "coach_notes": "Sneaky"},
+        json={"without_data": True, "title": "B", "goal": "x", "weeks": 1, "coach_notes": "Sneaky"},
     )
     assert r.status_code == 422
 

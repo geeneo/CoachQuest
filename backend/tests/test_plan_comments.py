@@ -32,7 +32,7 @@ def setup(make_user, monkeypatch):
     monday = date.today() - timedelta(days=date.today().weekday())
     plan = athlete.post(
         "/api/athletes/me/plans",
-        json={"title": "Block", "goal": "FTP", "weeks": 2, "start_date": monday.isoformat()},
+        json={"without_data": True, "title": "Block", "goal": "FTP", "weeks": 2, "start_date": monday.isoformat()},
     ).json()
     base = f"/api/athletes/{aid}/plans/{plan['id']}/comments"
     return athlete, coach, aid, plan, base, monday, seen

@@ -389,7 +389,7 @@
         panel; actions there such as "sync now" or "reconnect needed" email.
       - Admin only, and each view logged like a coach's access.
 
-- [ ] **Bug: the 7 / 30 / 90-day switch doesn't work for a coach** (26 Oct).
+- [x] **Bug: the 7 / 30 / 90-day switch doesn't work for a coach** (Closed 26 Oct: works after the rebuild.) (26 Oct).
       As a coach, My athletes → an athlete → Overview: choosing a period
       doesn't change the charts. Reproduce with a coach account (shares with
       and without fitness / wellness / activities), check what the page asks
@@ -457,7 +457,7 @@
         admin page, so each change above can be checked against real numbers.
         Goes with "Admin: AI use per user".
 
-- [ ] **Why did Mike Nel (mike@mmc24.com) make AI calls with no data of his own?** (26 Oct)
+- [x] **Why did Mike Nel (mike@mmc24.com) make AI calls with no data of his own?** (Done: guard built; Admin → Details → AI → "Latest calls" shows what each was for, old ones matched by time.) (26 Oct)
       Admin → Details shows 6 calls this month: 5 on his own account, and 1 for
       Michael Nel (the athlete he coaches). His account has no Strava, Garmin or
       Intervals.icu connection and no activities, but it does have 1 plan,

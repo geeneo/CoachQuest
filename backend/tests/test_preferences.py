@@ -52,7 +52,7 @@ def test_ai_coach_gets_weekday_preferences(make_user, monkeypatch):
     monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
     p = make_user("a@example.com")
     p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"mon": ["Rest"], "tue": ["Zwift / indoor"]}})
-    p.post("/api/athletes/me/plans", json={"title": "t", "goal": "g"})
+    p.post("/api/athletes/me/plans", json={"without_data": True, "title": "t", "goal": "g"})
     assert seen["weekday_preferences"] == {"mon": "Rest", "tue": "Zwift / indoor"}
 
 

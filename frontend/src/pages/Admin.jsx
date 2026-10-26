@@ -655,6 +655,36 @@ function AiUse({ u, ai, update }) {
           </table>
         </div>
       )}
+      {ai.recent?.length > 0 && (
+        <details>
+          <summary className="small">Latest {ai.recent.length} calls</summary>
+          <table className="small">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>What for</th>
+                <th>Whose data</th>
+                <th>Result</th>
+                <th className="num">Tokens</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ai.recent.map((r, i) => (
+                <tr key={i}>
+                  <td>{dateTime(r.at)}</td>
+                  <td>
+                    {AI_KINDS[r.kind] || "Unknown"}
+                    {r.guessed && <span className="muted" title="Matched by time to what they created"> (likely)</span>}
+                  </td>
+                  <td>{r.whose === "themselves" ? "Their own" : r.whose}</td>
+                  <td className={["ok", "end_turn", "tool_use"].includes(r.status) ? "" : "error-text"}>{r.status}</td>
+                  <td className="num">{k(r.tokens)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
       {!empty && (
         <p className="small muted">
           Rough cost: ${ai.cost_usd.toFixed(2)}

@@ -67,7 +67,14 @@ def _next_monday():
 def _create(p, **extra):
     r = p.post(
         "/api/athletes/me/plans",
-        json={"title": "Block", "goal": "FTP", "weeks": 2, "start_date": _next_monday().isoformat(), **extra},
+        json={
+            "without_data": True,
+            "title": "Block",
+            "goal": "FTP",
+            "weeks": 2,
+            "start_date": _next_monday().isoformat(),
+            **extra,
+        },
     )
     assert r.status_code == 200, r.text
     return r.json()

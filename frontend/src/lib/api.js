@@ -3,8 +3,9 @@
 
 export class ApiError extends Error {
   constructor(status, detail) {
-    super(typeof detail === "string" ? detail : "Request failed");
+    super(typeof detail === "string" ? detail : detail?.message || "Request failed");
     this.status = status;
+    this.detail = detail; // a string, or {code, message} when the page can act on it
   }
 }
 

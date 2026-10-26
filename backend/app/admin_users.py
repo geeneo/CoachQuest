@@ -315,6 +315,7 @@ def ai_detail(db: DbSession, user: User) -> dict:
             b["output"] += out
             b["cache_read"] += read
     return {
+        "recent": recent_calls(db, user, names),
         "by_kind": by_kind,
         "by_athlete": by_athlete,
         "cost_usd": round(total_cost, 2) if rows else 0,
@@ -323,3 +324,43 @@ def ai_detail(db: DbSession, user: User) -> dict:
         "own_limit": user.ai_monthly_limit,
         "disabled": user.ai_disabled,
     }
+
+
+def _guess_kind(db: DbSession, user: User, call: AiCall) -> str | None:
+    """For calls logged before calls had a type: what the user made at that moment (a plan, a note, a chat)."""
+    if call.status in ("end_turn", "tool_use", "pause_turn", "stop_sequence"):
+        return "chat"  # only the chat logs Claude's stop reason; plans and notes log "ok"
+    near = (call.at - timedelta(minutes=5), call.at + timedelta(minutes=5))
+    if db.scalar(select(Plan.id).where(Plan.author_id == user.id, Plan.created_at.between(*near))):
+        return "plan"
+    note = db.scalar(
+        select(Assessment.kind).where(Assessment.author_id == user.id, Assessment.created_at.between(*near))
+    )
+    if note:
+        return "readiness" if note == "daily" else "weekly"
+    if db.scalar(select(CoachChat.id).where(CoachChat.viewer_id == user.id, CoachChat.updated_at.between(*near))):
+        return "chat"
+    return None
+
+
+def recent_calls(db: DbSession, user: User, names: dict[int, str], limit: int = 20) -> list[dict]:
+    """The user's latest AI calls: when, what for (guessed for old ones), whose data, result and tokens."""
+    rows = db.scalars(select(AiCall).where(AiCall.user_id == user.id).order_by(AiCall.at.desc()).limit(limit)).all()
+    missing = {r.athlete_id for r in rows} - set(names) - {user.id}
+    if missing:
+        names = {**names, **{u.id: u.display_name for u in db.scalars(select(User).where(User.id.in_(missing)))}}
+    out = []
+    for r in rows:
+        guessed = None if r.kind else _guess_kind(db, user, r)
+        out.append(
+            {
+                "at": r.at,
+                "kind": r.kind or guessed,
+                "guessed": guessed is not None,
+                "whose": "themselves" if r.athlete_id == user.id else names.get(r.athlete_id, "a deleted athlete"),
+                "status": r.status,
+                "tokens": r.input_tokens + r.output_tokens + r.cache_read_tokens + r.cache_write_tokens,
+                "model": r.model,
+            }
+        )
+    return out

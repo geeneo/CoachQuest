@@ -296,7 +296,7 @@ def test_calendar_shows_plan_days(make_user, monkeypatch):
     monday = date.today() - timedelta(days=date.today().weekday())
     plan = a.post(
         "/api/athletes/me/plans",
-        json={"title": "DC", "goal": "DC", "weeks": 1, "start_date": monday.isoformat()},
+        json={"without_data": True, "title": "DC", "goal": "DC", "weeks": 1, "start_date": monday.isoformat()},
     ).json()
     cal = a.get(f"/api/athletes/me/calendar?start={monday}&end={monday + timedelta(days=6)}").json()
     assert cal["days"][1]["plan"]["type"] == "Zwift / indoor" and cal["days"][0]["plan"]["type"] == "Rest"

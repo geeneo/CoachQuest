@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import athlete_notes, comments, compliance, instructions, mailer, plan_tracker
 from .activity_types import category, is_ride
-from .coach import CoachError, ask_claude, facts_json
+from .coach import CoachError, ask_claude, facts_json, require_data
 from .config import settings
 from .db import Assessment, Plan, SessionLocal, User
 from .deps import allowed_scopes
@@ -332,6 +332,7 @@ async def create(db: DbSession, viewer: User, athlete: User, kind: str, schedule
     else:
         last_week = week_start_of(today, athlete.week_start or 0) - timedelta(weeks=1)
         facts, prompt, period = weekly_facts(db, athlete, scopes, last_week), WEEKLY_PROMPT, last_week
+    require_data(db, athlete)
     stored = json.loads(json.dumps(facts, default=str))
     same = _unchanged(db, athlete.id, kind, period, stored)
     if same is not None:

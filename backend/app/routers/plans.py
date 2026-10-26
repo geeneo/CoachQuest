@@ -10,7 +10,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import comments, localtime, plan_approval, plan_tracker, plan_workouts, sync_engine, zwo
-from ..coach import PHASES, CoachError, build_facts, generate_plan
+from ..coach import PHASES, CoachError, build_facts, generate_plan, has_data
 from ..db import Comment, Plan, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..queries import activities_since
@@ -28,6 +28,8 @@ class PlanRequest(BaseModel):
     hours_per_week: float = Field(default=8, ge=1, le=30)
     available_days: list[str] = Field(default_factory=lambda: ["Tue", "Thu", "Sat", "Sun"])
     notes: str = Field(default="", max_length=2000)
+    # True after the person saw the "no data yet" warning and wants a plan from the goal and hours alone.
+    without_data: bool = False
     # From the athlete's human coach: the AI must follow them (only a coach can send these).
     coach_notes: str = Field(default="", max_length=2000)
     # Indoor days become structured workouts on the calendar (and go to the athlete's platforms).
@@ -170,8 +172,17 @@ async def create_plan(
     require_scope(db, user, athlete_id, "plans")
     target = db.get(User, athlete_id)
     _check_coach_notes(user, athlete_id, body.coach_notes)
+    if not body.without_data and not has_data(db, athlete_id):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "no_data",
+                "message": "No activities or wellness synced yet, so the plan can only use the goal, hours and "
+                "days you give. Connect Strava or Garmin first for a plan based on real training.",
+            },
+        )
     monday = plan_tracker.first_week_start(body.start_date, localtime.today(target), target.week_start or 0)
-    request = body.model_dump(mode="json", exclude={"title"})
+    request = body.model_dump(mode="json", exclude={"title", "without_data"})
     if not request["coach_notes"]:
         del request["coach_notes"]
     request["start_date"] = monday.isoformat()

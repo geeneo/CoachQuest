@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import athlete_notes, datefmt, instructions, localtime, plan_tracker
 from .assessments import progress
-from .coach import CACHED, CoachError, claude_client, log_call, model_for
+from .coach import CACHED, CoachError, claude_client, log_call, model_for, require_data
 from .db import CoachChat, Plan, User, utcnow
 from .deps import allowed_scopes, require_scope
 from .queries import activities_since, activity_out, load_curve, volume_summary, wellness_out, wellness_since
@@ -190,6 +190,7 @@ async def ask(db: DbSession, chat: CoachChat, viewer: User, athlete: User, quest
     asked = sum(1 for m in chat.messages if m["role"] == "user" and isinstance(m["content"], str))
     if asked >= MAX_QUESTIONS:
         raise CoachError("This chat is getting long. Start a new chat to keep answers quick and cheap.", 409)
+    require_data(db, athlete)
     client = claude_client(db, viewer)
     scopes = sorted(allowed_scopes(db, viewer, athlete.id))
     # SYSTEM (with the tools before it) is the same for everyone and is cached; this part varies.

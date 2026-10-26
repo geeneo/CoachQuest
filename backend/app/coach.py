@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session as DbSession
 from . import athlete_notes, datefmt, instructions, runtime
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
-from .queries import load_curve, profile_out, wellness_since
+from .queries import activities_since, load_curve, profile_out, wellness_since
 from .routers.preferences import SESSION_TYPES, preferences_out
 from .routers.races import race_out, upcoming
 
@@ -220,6 +220,25 @@ def log_call(
         )
     )
     db.commit()
+
+
+NO_DATA_DAYS = 60
+NO_DATA = (
+    "The AI coach has nothing to go on yet: no activities or wellness in the last {days} days. "
+    "Connect Strava or Garmin first (Connections)."
+)
+
+
+def has_data(db: DbSession, athlete_id: int, days: int = NO_DATA_DAYS) -> bool:
+    """Any synced activities or wellness lately? Without them an AI answer is generic and wastes tokens."""
+    since = date.today() - timedelta(days=days)
+    acts = activities_since(db, athlete_id, datetime.combine(since, datetime.min.time()))
+    return bool(acts or wellness_since(db, athlete_id, since))
+
+
+def require_data(db: DbSession, athlete: User) -> None:
+    if not has_data(db, athlete.id):
+        raise CoachError(NO_DATA.format(days=NO_DATA_DAYS), 409)
 
 
 def facts_json(facts: dict) -> str:
