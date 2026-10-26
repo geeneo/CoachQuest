@@ -487,6 +487,20 @@
       - The user sees in Profile that the admin has turned their emails off
         (their own switches greyed out).
 
+- [ ] **Intervals.icu: "Sync now" button** (26 Oct). On Connections → Intervals.icu
+      (screenshot: only "active", last sync and the three switches today):
+      - "Sync now" sends every scheduled workout from today on to
+        Intervals.icu again, even unchanged ones (normally skipped), so
+        Intervals.icu tells MyWhoosh / Zwift again. Riders report that a
+        changed workout is what makes MyWhoosh pick it up. Also runs the
+        activity / wellness import when switched on.
+      - Shows the result: "4 workouts sent, 0 failed", with any errors, and
+        updates "Last sync".
+      - Same 5-minute limit as Strava and Garmin "Sync now", so it can't be
+        hammered. The API for the import part exists already
+        (`POST /api/connections/intervals_icu/sync`); the page has no button
+        and the forced re-send doesn't exist yet.
+
 ## Later
 
 - [ ] Account export and delete (POPIA/GDPR), privacy notice and consent text
