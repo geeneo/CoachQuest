@@ -232,9 +232,11 @@
 - [ ] **The real coach has a say in the AI coach.** A human coach (with the
       Training plans permission) can give the AI coach input that it must
       follow, so the coach stays in charge of the training:
-      - Standing coach instructions per athlete, e.g. "no intervals on
+      - [x] Standing coach instructions per athlete, e.g. "no intervals on
         Mondays", "keep long rides under 4 h until the knee is fine",
-        "build towards 300 W FTP by March". The athlete can see them.
+        "build towards 300 W FTP by March". The athlete can see them. Done:
+        AI coach and Plans tabs; optional end date, pause, emails; every AI
+        plan, re-plan, readiness note, weekly review and chat follows them.
       - Input per plan and per re-plan: a "Coach's notes" box that goes to
         Claude with the request. Shown on the plan so everyone sees what
         shaped it.
@@ -245,7 +247,7 @@
         coached athlete stays "draft, waiting for coach" until the coach
         approves it, edits it, or sends it back. Only approved workouts go
         to Zwift.
-      - In the facts sent to Claude, the coach's instructions rank above the
+      - [x] (Done with the standing instructions.) In the facts sent to Claude, the coach's instructions rank above the
         AI's own judgement, and the plan says where it followed them. The
         weekly review flags any conflict with the data (e.g. the coach asked
         for more volume but fatigue is flagged) instead of silently

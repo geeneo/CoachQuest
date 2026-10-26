@@ -1529,3 +1529,49 @@ ul.plain {
   font-size: 0.95rem;
   margin: 0.5rem 0 0.35rem;
 }
+
+/* ---- coach instructions ---- */
+ul.instructions {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+}
+ul.instructions > li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--brand-orange);
+  background: var(--panel-2);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+ul.instructions > li .instruction-body {
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+ul.instructions > li .row {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: start;
+}
+ul.instructions > li.inactive {
+  border-left-color: var(--border);
+  opacity: 0.65;
+}
+ul.instructions > li > form {
+  grid-column: 1 / -1;
+}
+.instruction-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+.instruction-form textarea {
+  flex: 1 1 100%;
+}
+.instruction-form input[type="date"] {
+  width: auto;
+  min-width: 10.5rem;
+}

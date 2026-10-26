@@ -11,7 +11,20 @@ from sqlalchemy import select
 from . import assessments, auth_log, backfill, runtime, sync_engine
 from .config import check_required, settings
 from .db import Connection, SessionLocal, init_db
-from .routers import admin, athletes, auth, coach_ai, comments, connections, grants, plans, preferences, races, workouts
+from .routers import (
+    admin,
+    athletes,
+    auth,
+    coach_ai,
+    comments,
+    connections,
+    grants,
+    instructions,
+    plans,
+    preferences,
+    races,
+    workouts,
+)
 from .routers.connections import run_sync
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -88,6 +101,7 @@ for r in (
     races.router,
     workouts.router,
     comments.router,
+    instructions.router,
 ):
     app.include_router(r)
 

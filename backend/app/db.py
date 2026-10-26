@@ -270,6 +270,26 @@ class Comment(Base):
     edited_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
 
+class CoachInstruction(Base):
+    """A standing instruction for the AI coach about one athlete ("no intervals on Mondays").
+
+    Written by a coach with the plans scope or by the athlete; every plan, re-plan,
+    readiness note, weekly review and chat answer follows the active ones.
+    """
+
+    __tablename__ = "coach_instructions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    body: Mapped[str] = mapped_column(Text)
+    until: Mapped[date | None] = mapped_column(Date, nullable=True)  # last day it applies; None = until removed
+    active: Mapped[bool] = mapped_column(Boolean, default=True)  # paused when False
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
 class Workout(Base):
     """A reusable workout in someone's library (see workouts.py for the steps format)."""
 

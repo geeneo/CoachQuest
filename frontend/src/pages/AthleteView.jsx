@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import Activities from "../components/ActivitiesTable.jsx";
 import FitnessChart from "../components/FitnessChart.jsx";
 import AiCoach from "../components/AiCoach.jsx";
+import CoachInstructions from "../components/CoachInstructions.jsx";
 import TrainingCalendar from "../components/TrainingCalendar.jsx";
 import UpcomingRaces from "../components/UpcomingRaces.jsx";
 import VolumeStats from "../components/VolumeStats.jsx";
@@ -57,8 +58,18 @@ export default function AthleteView({ self }) {
       {current === "overview" && <Overview id={id} scopes={scopes} isMe={!!self} />}
       {current === "activities" && <Activities id={id} editable={!!self} />}
       {current === "calendar" && <TrainingCalendar id={id} isMe={!!self} />}
-      {current === "coach" && <AiCoach id={id} isMe={!!self} />}
-      {current === "plans" && <PlansPanel id={id} athlete={s} />}
+      {current === "coach" && (
+        <>
+          <CoachInstructions id={id} isMe={!!self} />
+          <AiCoach id={id} isMe={!!self} />
+        </>
+      )}
+      {current === "plans" && (
+        <>
+          <CoachInstructions id={id} isMe={!!self} />
+          <PlansPanel id={id} athlete={s} />
+        </>
+      )}
     </>
   );
 }

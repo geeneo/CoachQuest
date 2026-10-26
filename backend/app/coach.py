@@ -15,7 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import datefmt, runtime
+from . import datefmt, instructions, runtime
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import load_curve, profile_out, wellness_since
@@ -24,7 +24,8 @@ from .routers.races import race_out, upcoming
 
 log = logging.getLogger("coachquest.ai")
 
-SYSTEM_PROMPT = """You are an experienced endurance coach (cycling, running, triathlon) writing a \
+SYSTEM_PROMPT = (
+    """You are an experienced endurance coach (cycling, running, triathlon) writing a \
 training plan for one athlete on the CoachQuest platform.
 
 The user message holds a JSON document of facts computed from the athlete's synced Strava and \
@@ -62,7 +63,11 @@ seconds and add up to the day's duration_min. Optional cadence in rpm. Every oth
 targets), duration in minutes, and intensity chips such as "Z2", "95-105% FTP" or "LTHR 160-165".
 - Each week: a phase and a one-line focus.
 - `summary_md` is Markdown: a 2-3 sentence summary, "Key observations", then short "Adjust if" rules \
-(sick, missed sessions, poor sleep/HRV). This plan is general guidance, not medical advice."""
+(sick, missed sessions, poor sleep/HRV). This plan is general guidance, not medical advice.
+
+"""
+    + instructions.PROMPT_RULE
+)
 
 
 def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, today: date | None = None) -> dict:
@@ -128,6 +133,9 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
             {k: v for k, v in race_out(r, today).items() if k not in ("id", "active")}
             for r in upcoming(db, athlete.id, today)
         ][:5]
+        standing = instructions.for_ai(db, athlete.id, today)
+        if standing:
+            facts["coach_instructions"] = standing
     facts["flags"] = readiness_flags(
         curve if "fitness" in scopes else [],
         wellness,
