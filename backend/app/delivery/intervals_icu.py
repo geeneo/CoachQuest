@@ -68,6 +68,40 @@ class LinkError(Exception):
     pass
 
 
+async def check_app() -> dict:
+    """Admin test: are the Client ID and secret right? Nobody signs in and nothing changes.
+
+    Exchanges a made-up code. Intervals.icu answers "Client and/or secret not found" when the
+    ID or secret is wrong; any other refusal means it knew the app and only rejected the code."""
+    out = {"redirect_uri": redirect_uri()}
+    if not configured():
+        return {**out, "ok": False, "message": "Set the Client ID and Client secret first."}
+    data = {
+        "client_id": runtime.get("intervals_client_id"),
+        "client_secret": runtime.get("intervals_client_secret"),
+        "code": "coachquest-connection-test",
+    }
+    try:
+        async with _client() as c:
+            r = await c.post("/api/oauth/token", data=data)
+    except httpx.HTTPError as exc:
+        return {**out, "ok": False, "message": f"Could not reach intervals.icu ({type(exc).__name__})."}
+    if "not found" in r.text.lower() and "client" in r.text.lower():
+        return {**out, "ok": False, "message": "Intervals.icu doesn't know this Client ID and secret. Copy both again."}
+    if r.status_code >= 500:
+        return {**out, "ok": False, "message": f"Intervals.icu had a problem (HTTP {r.status_code}). Try later."}
+    notes = []
+    if not out["redirect_uri"].startswith("https://"):
+        notes.append("PUBLIC_BASE_URL isn't https, so signing in will only work for local testing")
+    message = (
+        "Client ID and secret accepted by Intervals.icu. Make sure this Redirect URL is added to the app on "
+        f"intervals.icu/settings/apps: {out['redirect_uri']}"
+    )
+    if notes:
+        message += ". Note: " + "; ".join(notes) + "."
+    return {**out, "ok": True, "message": message}
+
+
 async def exchange_code(code: str) -> dict:
     """Swap the one-time code for a token. Returns {access_token, scope, athlete_id, athlete_name}."""
     data = {

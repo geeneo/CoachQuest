@@ -28,6 +28,7 @@ from ..db import (
     get_db,
     utcnow,
 )
+from ..delivery import intervals_icu
 from ..deps import admin_user
 from . import connections
 
@@ -131,6 +132,12 @@ async def test_anthropic(_: User = Depends(admin_user)):
 
 class TestEmail(BaseModel):
     to: EmailStr | None = None
+
+
+@router.post("/settings/test-intervals")
+async def test_intervals(_: User = Depends(admin_user)):
+    """Checks the Intervals.icu Client ID and secret without anyone signing in."""
+    return await intervals_icu.check_app()
 
 
 @router.post("/settings/test-email")

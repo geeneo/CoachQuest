@@ -50,6 +50,7 @@ function Settings() {
   const [msg, setMsg] = useState(null);
   const [test, setTest] = useState(null);
   const [mailTest, setMailTest] = useState(null);
+  const [icuTest, setIcuTest] = useState(null);
   const [busy, setBusy] = useState(false);
 
   if (res.loading) return <section className="card muted">Loading settings…</section>;
@@ -81,6 +82,15 @@ function Settings() {
       setTest(await api("/api/admin/settings/test-anthropic", { method: "POST" }));
     } catch (err) {
       setTest({ ok: false, message: err.message });
+    }
+  };
+
+  const testIntervals = async () => {
+    setIcuTest({ message: "Testing…" });
+    try {
+      setIcuTest(await api("/api/admin/settings/test-intervals", { method: "POST" }));
+    } catch (err) {
+      setIcuTest({ ok: false, message: err.message });
     }
   };
 
@@ -118,6 +128,19 @@ function Settings() {
               {test && (
                 <span className={`small ${test.ok ? "text-ok" : test.ok === false ? "text-bad" : "muted"}`}>
                   {test.ok ? <CheckCircle2 size={14} /> : test.ok === false ? <XCircle size={14} /> : null} {test.message}
+                </span>
+              )}
+            </div>
+          )}
+          {g === "Intervals.icu" && (
+            <div className="row wrap">
+              <button type="button" className="btn" onClick={testIntervals} disabled={dirty}>
+                Test Intervals.icu app
+              </button>
+              {icuTest && (
+                <span className={`small ${icuTest.ok ? "text-ok" : icuTest.ok === false ? "text-bad" : "muted"}`}>
+                  {icuTest.ok ? <CheckCircle2 size={14} /> : icuTest.ok === false ? <XCircle size={14} /> : null}{" "}
+                  {icuTest.message}
                 </span>
               )}
             </div>
