@@ -5,7 +5,7 @@ import Markdown from "../components/Markdown.jsx";
 import PlanTracker from "../components/PlanTracker.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../lib/auth.jsx";
-import { dateTime } from "../lib/format.js";
+import { dateTime, formatDate } from "../lib/format.js";
 
 export default function PlanView() {
   const { athleteId, planId } = useParams();
@@ -28,7 +28,7 @@ export default function PlanView() {
       <h1>{p.title}</h1>
       <p className="muted small">
         {p.request.goal} · {p.request.weeks} weeks
-        {p.start_date ? ` from ${p.start_date}` : ""} · {p.request.hours_per_week} h/week · by {p.author} ·{" "}
+        {p.start_date ? ` from ${formatDate(p.start_date)}` : ""} · {p.request.hours_per_week} h/week · by {p.author} ·{" "}
         {dateTime(p.created_at)} · {p.model}
       </p>
       {p.facts?.flags?.length > 0 && (

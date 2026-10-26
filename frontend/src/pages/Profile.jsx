@@ -2,7 +2,7 @@ import { useState } from "react";
 import TrainingPreferences from "../components/TrainingPreferences.jsx";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
-import { dateTime } from "../lib/format.js";
+import { DATE_FORMATS, dateTime, formatDate } from "../lib/format.js";
 import { getTheme, setTheme } from "../lib/theme.js";
 import { MySignIns } from "../components/SignInLog.jsx";
 
@@ -31,6 +31,8 @@ export default function Profile() {
     notify_sharing: user.notify_sharing ?? true,
     notify_comments: user.notify_comments ?? true,
     timezone: user.timezone || "",
+    date_format: user.date_format || "d_mon_y",
+    time_format: user.time_format || "24h",
     birth_date: user.birth_date || "",
     ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, user[k] ?? ""])),
   }));
@@ -44,6 +46,8 @@ export default function Profile() {
       display_name: form.display_name,
       goal: form.goal || null,
       week_start: Number(form.week_start),
+      date_format: form.date_format,
+      time_format: form.time_format,
       notify_sharing: form.notify_sharing,
       notify_comments: form.notify_comments,
       ...(form.timezone ? { timezone: form.timezone } : {}),
@@ -96,11 +100,31 @@ export default function Profile() {
           Birth date
           <input type="date" value={form.birth_date} onChange={set("birth_date")} max={new Date().toISOString().slice(0, 10)} />
           <span className="hint">
+            {form.birth_date ? `${formatDate(form.birth_date)}. ` : ""}
             {user.age != null ? `Age ${user.age}. ` : ""}Coaches who see your profile, and the AI coach, get your age only.
           </span>
           {sourceLine(user, "birth_date") && <span className="hint source">{sourceLine(user, "birth_date")}</span>}
         </label>
         <TimezoneField value={form.timezone} onChange={(timezone) => setForm({ ...form, timezone })} />
+        <label>
+          Date format
+          <select value={form.date_format} onChange={set("date_format")}>
+            {Object.entries(DATE_FORMATS).map(([k, example]) => (
+              <option key={k} value={k}>
+                {example}
+              </option>
+            ))}
+          </select>
+          <span className="hint">Used on every page, in emails and in the AI coach's notes.</span>
+        </label>
+        <label>
+          Time format
+          <select value={form.time_format} onChange={set("time_format")}>
+            <option value="24h">24-hour (17:30)</option>
+            <option value="12h">12-hour (5:30 pm)</option>
+          </select>
+          <span className="hint">Times are in your timezone. Date pickers follow your browser's language.</span>
+        </label>
         <label className="check wide">
           <input
             type="checkbox"

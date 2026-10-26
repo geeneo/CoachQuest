@@ -14,7 +14,7 @@ import anthropic
 from fastapi import HTTPException
 from sqlalchemy.orm import Session as DbSession
 
-from . import plan_tracker, runtime
+from . import datefmt, plan_tracker, runtime
 from .assessments import progress
 from .coach import CoachError, claude_client, log_call
 from .db import CoachChat, Plan, User, utcnow
@@ -131,7 +131,7 @@ async def ask(db: DbSession, chat: CoachChat, viewer: User, athlete: User, quest
     client = claude_client(db, viewer)
     scopes = sorted(allowed_scopes(db, viewer, athlete.id))
     system = SYSTEM + f"\n\nToday is {date.today().isoformat()}. The athlete is {athlete.display_name}. "
-    system += f"Shared with this user: {', '.join(scopes)}."
+    system += f"Shared with this user: {', '.join(scopes)}. " + datefmt.ai_instruction(viewer)
     messages = list(chat.messages) + [{"role": "user", "content": question}]
     model = runtime.get("anthropic_model")
     for _ in range(MAX_TOOL_ROUNDS):

@@ -1,14 +1,9 @@
 import { MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { dateTime } from "../lib/format.js";
+import { dateTime, formatDate } from "../lib/format.js";
 
-const fmtDay = (iso) =>
-  new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+const fmtDay = (iso) => formatDate(iso, { weekday: "short", year: false });
 
 // Where a thread's comments live. Plans have their own URLs (comments can be about one day);
 // AI coach notes ("assessment") and calendar workouts ("workout") share one endpoint.

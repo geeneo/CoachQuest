@@ -4,6 +4,7 @@
 """
 
 from datetime import date, datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from .. import dashboard, localtime, profile_sync
 from ..activity_types import CHOICES
+from ..datefmt import DATE_FORMATS, TIME_FORMATS
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..providers import garmin
@@ -42,6 +44,8 @@ class ProfileUpdate(BaseModel):
     notify_comments: bool | None = None
     timezone: str | None = Field(default=None, max_length=64)
     birth_date: date | None = None
+    date_format: Literal[DATE_FORMATS] | None = None
+    time_format: Literal[TIME_FORMATS] | None = None
 
     @field_validator("birth_date")
     @classmethod

@@ -3,7 +3,7 @@ import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
-import { duration } from "../lib/format.js";
+import { dateTime, duration, formatDate } from "../lib/format.js";
 import { addDays, localToday } from "../lib/workout.js";
 import { CommentsToggle } from "./PlanComments.jsx";
 import WorkoutChart from "./WorkoutChart.jsx";
@@ -230,11 +230,7 @@ export default function TrainingCalendar({ id, isMe }) {
 }
 
 function fmtDay(iso, long = false) {
-  return new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, {
-    weekday: long ? "long" : undefined,
-    day: "numeric",
-    month: "short",
-  });
+  return formatDate(iso, { weekday: long ? "long" : undefined, year: false });
 }
 
 function PlatformLine({ platforms, isMe }) {
@@ -417,7 +413,7 @@ function DeliveryList({ w, id, onError, reload }) {
         <li key={d.provider}>
           {DELIVERY[d.state]?.icon} {PLATFORM[d.provider] || d.provider}: {DELIVERY[d.state]?.label}
           {d.action === "delete" ? " (removing)" : ""}
-          {d.at ? ` · ${new Date(d.at.endsWith("Z") ? d.at : d.at + "Z").toLocaleString()}` : ""}
+          {d.at ? ` · ${dateTime(d.at)}` : ""}
           {d.message && <span className="muted"> — {d.message}</span>}
           {d.state === "blocked" && <Link to="/connections#platforms"> Reconnect</Link>}
           {d.state === "failed" && d.job_id && (
@@ -449,7 +445,7 @@ function RideMatch({ w, id, edit }) {
         <option value="none">Not done</option>
         {cands.data.map((c) => (
           <option key={c.id} value={String(c.id)}>
-            {c.date} · {c.name} · {c.minutes}′{c.used_by ? ` (now on "${c.used_by}")` : ""}
+            {fmtDay(c.date)} · {c.name} · {c.minutes}′{c.used_by ? ` (now on "${c.used_by}")` : ""}
           </option>
         ))}
       </select>

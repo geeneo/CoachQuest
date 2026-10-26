@@ -17,7 +17,7 @@ from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import plan_tracker
+from . import datefmt, plan_tracker
 from .db import Assessment, Comment, Grant, Plan, ScheduledWorkout, User, utcnow
 from .notifications import notify
 
@@ -33,14 +33,15 @@ def resolve(db: DbSession, target: str, target_id: int, athlete_id: int):
     return obj
 
 
-def describe(target: str, obj) -> str:
+def describe(target: str, obj, reader: User) -> str:
+    """What a comment is about, with dates in the reader's format."""
     if target == "plan":
         return f'the training plan "{obj.title}"'
     if target == "workout":
-        return f'the workout "{obj.name}" on {obj.day.strftime("%a %d %b")}'
+        return f'the workout "{obj.name}" on {datefmt.day(obj.day, reader, weekday=True)}'
     if obj.kind == "weekly":
-        return f"the weekly review for the week of {obj.period_start.strftime('%d %b')}"
-    return f"the readiness note for {obj.period_start.strftime('%a %d %b')}"
+        return f"the weekly review for the week of {datefmt.day(obj.period_start, reader)}"
+    return f"the readiness note for {datefmt.day(obj.period_start, reader, weekday=True)}"
 
 
 def page(target: str, obj, athlete_id: int, for_athlete: bool) -> str:
@@ -129,9 +130,9 @@ def add(
     )
     db.add(c)
     db.commit()
-    where = f" (about {day.strftime('%a %d %b')})" if day else ""
-    what = describe(target, obj)
     for other in _recipients(db, athlete_id, author):
+        where = f" (about {datefmt.day(day, other, weekday=True)})" if day else ""
+        what = describe(target, obj, other)
         notify(
             background,
             other,

@@ -1,10 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api } from "./api.js";
+import { setFormatPrefs } from "./format.js";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined); // undefined = still checking
+  // Before children render, so every date on the page uses this user's format.
+  setFormatPrefs(user);
 
   const refresh = useCallback(async () => {
     try {

@@ -355,7 +355,7 @@
         transparent / SVG version made later. Use resized copies, not the
         0.5–0.9 MB originals, so pages stay quick.
 
-- [ ] **Date format setting** (screenshot 26 Oct). Dates follow the browser's
+- [x] **Date format setting** (Done: Profile → Date format and Time format.) (screenshot 26 Oct). Dates follow the browser's
       language, so the same page mixes formats: "From Garmin, 10/26/2026,
       8:28:05 AM" (US month/day, 12-hour, seconds) next to a birth date of
       "1968/07/01".
@@ -382,6 +382,17 @@
       - Sort and filter (e.g. sync problems first), click a user for a detail
         panel; actions there such as "sync now" or "reconnect needed" email.
       - Admin only, and each view logged like a coach's access.
+
+- [ ] **Bug: the 7 / 30 / 90-day switch doesn't work for a coach** (26 Oct).
+      As a coach, My athletes → an athlete → Overview: choosing a period
+      doesn't change the charts. Reproduce with a coach account (shares with
+      and without fitness / wellness / activities), check what the page asks
+      the API for and fix; add a test for the coach's view.
+      - Checked 26 Oct on the current code: as Coach Sam, choosing 7 days
+        reloads volume, training load and wellness for 7 days. The switch
+        came in with commit a556ca5; the server probably runs an older
+        build. Rebuild (`bash build.sh`), then re-check; if it still fails,
+        note the athlete and what they share.
 
 ## Later
 

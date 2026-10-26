@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
+import { formatDate } from "../lib/format.js";
 
 export default function UpcomingRaces({ id, isMe, ctl }) {
   const races = useApi(`/api/athletes/${id}/races`);
@@ -34,7 +35,7 @@ export default function UpcomingRaces({ id, isMe, ctl }) {
               {r.days_to_go === 0 ? "Today" : `${r.days_to_go} days`}
             </div>
             <div className="stat-sub">
-              {r.name} · {r.target_date}
+              {r.name} · {formatDate(r.target_date)}
               {r.distance_km ? ` · ${r.distance_km} km` : ""}
               {r.target_ctl ? ` · CTL ${ctl ?? "?"} → ${r.target_ctl}` : ""}
             </div>

@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import accounts, auth_log, mailer, profile_sync, runtime
+from .. import accounts, auth_log, datefmt, mailer, profile_sync, runtime
 from ..config import SESSION_COOKIE, settings
 from ..db import AuthEvent, Session, User, get_db, utcnow
 from ..deps import current_user
@@ -55,6 +55,8 @@ def user_out(user: User) -> dict:
         "notify_sharing": user.notify_sharing,
         "notify_comments": user.notify_comments,
         "timezone": user.timezone,
+        "date_format": datefmt.date_format(user),
+        "time_format": datefmt.time_format(user),
         "birth_date": user.birth_date,
         "age": profile_sync.age(user.birth_date),
     }

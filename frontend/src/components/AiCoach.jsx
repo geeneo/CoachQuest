@@ -2,7 +2,7 @@ import { Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
-import { dateTime } from "../lib/format.js";
+import { dateTime, formatDate } from "../lib/format.js";
 import Markdown from "./Markdown.jsx";
 import { Stat } from "./WellnessPanel.jsx";
 import { CommentsToggle } from "./PlanComments.jsx";
@@ -63,7 +63,7 @@ function Readiness({ id, daily, busy, onRun }) {
             <span>{text}</span>
           </div>
           <div>
-            {!fresh && <p className="muted small">From {daily.period_start}. Run a new check for today.</p>}
+            {!fresh && <p className="muted small">From {formatDate(daily.period_start, { weekday: "short" })}. Run a new check for today.</p>}
             <Markdown>{daily.content_md}</Markdown>
             {daily.facts?.reasons?.length > 0 && (
               <p className="hint">Decided by CoachQuest from: {daily.facts.reasons.join(" · ")}</p>
@@ -128,7 +128,7 @@ function WeeklyReviews({ id, reviews, busy, onRun }) {
       {reviews.map((r) => (
         <details key={r.id} open={open === r.id} onToggle={(e) => e.target.open && setOpen(r.id)} className="review">
           <summary>
-            Week of {r.period_start} <span className="muted small">· {dateTime(r.created_at)}</span>
+            Week of {formatDate(r.period_start)} <span className="muted small">· {dateTime(r.created_at)}</span>
           </summary>
           <Markdown>{r.content_md}</Markdown>
           <CommentsToggle athleteId={id} target="assessment" targetId={r.id} count={r.comments} />

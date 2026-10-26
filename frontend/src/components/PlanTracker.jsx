@@ -2,13 +2,13 @@ import { ArrowLeftRight, Lock, MessageSquare, Unlock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
-import { duration } from "../lib/format.js";
+import { duration, shortDate } from "../lib/format.js";
 import Markdown from "./Markdown.jsx";
 import PlanComments from "./PlanComments.jsx";
 
 const PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition"];
 const DAY_LABEL = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
-const fmtDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" });
+const fmtDate = shortDate;
 
 export default function PlanTracker({ plan, athleteId, setPlan }) {
   const prefs = useApi(`/api/athletes/${athleteId}/preferences`);

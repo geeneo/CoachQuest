@@ -4,7 +4,7 @@ import { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
-import { dateTime } from "../lib/format.js";
+import { dateTime, formatDate } from "../lib/format.js";
 import { AdminSignIns } from "../components/SignInLog.jsx";
 
 const SOURCE = { web: "set here", env: "from .env", unset: "not set" };
@@ -307,10 +307,6 @@ function Users({ onChange }) {
   );
 }
 
-function day(value) {
-  return value ? new Date(value.endsWith("Z") ? value : value + "Z").toLocaleDateString() : "–";
-}
-
 function ConnState({ c }) {
   if (!c) return <span className="muted">–</span>;
   if (c.status === "error")
@@ -319,7 +315,7 @@ function ConnState({ c }) {
         error
       </span>
     );
-  return <span className="ok-text">{c.last_sync_at ? day(c.last_sync_at) : "connected"}</span>;
+  return <span className="ok-text">{c.last_sync_at ? formatDate(c.last_sync_at) : "connected"}</span>;
 }
 
 function UserRow({ u, isMe, open, toggle, update, reload }) {
@@ -341,7 +337,7 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
           {isMe && <span className="muted"> (you)</span>} {u.is_admin && <span className="badge">admin</span>}{" "}
           {!u.is_active && <span className="badge bad">disabled</span>}
           <div className="small muted">{u.email}</div>
-          <div className="small muted">joined {day(u.created_at)}</div>
+          <div className="small muted">joined {formatDate(u.created_at)}</div>
           {u.flags.length > 0 && (
             <div className="chips tight">
               {u.flags.map((f) => (
@@ -381,7 +377,7 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
                   .map(([k, n]) => `${PROVIDERS.find((p) => p[0] === k)?.[1] || k} ${n}`)
                   .join(" · ")}
               </div>
-              <div className="muted">latest {day(a.last)}</div>
+              <div className="muted">latest {formatDate(a.last)}</div>
             </>
           )}
           <div className="muted">{u.wellness_days} wellness days</div>
@@ -491,7 +487,7 @@ function UserDetail({ u, isMe, update, reload }) {
                 {u.activities.first && (
                   <span className="muted">
                     {" "}
-                    ({day(u.activities.first)} to {day(u.activities.last)})
+                    ({formatDate(u.activities.first)} to {formatDate(u.activities.last)})
                   </span>
                 )}
               </p>

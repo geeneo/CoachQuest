@@ -15,7 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import runtime
+from . import datefmt, runtime
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import load_curve, profile_out, wellness_since
@@ -184,6 +184,7 @@ async def ask_claude(
     output_config = {"effort": runtime.get("anthropic_effort")}
     if output_format:
         output_config["format"] = output_format
+    system += "\n\n" + datefmt.ai_instruction(viewer)
     try:
         async with client.beta.messages.stream(
             model=model,

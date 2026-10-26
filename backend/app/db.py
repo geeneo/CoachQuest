@@ -70,6 +70,9 @@ class User(Base):
     # IANA name, e.g. "Africa/Johannesburg". Decides "today" and which day an activity
     # (stored in UTC) falls on. None = UTC.
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # How dates and times are shown (see datefmt.py); None = the default.
+    date_format: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    time_format: Mapped[str | None] = mapped_column(String(4), nullable=True)
     # {"preferred": ["zwift"], "auto": {"zwift": false}}; see platforms.py
     platform_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
@@ -513,6 +516,8 @@ _ADDED_COLUMNS = {
         "birth_date": "DATE",
         "timezone": "VARCHAR(64)",
         "platform_prefs": "JSON",
+        "date_format": "VARCHAR(10)",
+        "time_format": "VARCHAR(4)",
     },
 }
 
