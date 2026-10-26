@@ -81,6 +81,8 @@ class User(Base):
     emails_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Set by a coach or an admin: plans the athlete asks the AI for apply without a coach's approval.
     plan_approval_off: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Hours a coach has to answer before the athlete may decide themselves; None = 48, 0 = never.
+    approval_wait_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # When is_active is off: why, since when, and whether they paused it themselves (Profile).
     disabled_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -618,6 +620,7 @@ _ADDED_COLUMNS = {
         "ai_disabled": "BOOLEAN NOT NULL DEFAULT 0",
         "emails_disabled": "BOOLEAN NOT NULL DEFAULT 0",
         "plan_approval_off": "BOOLEAN NOT NULL DEFAULT 0",
+        "approval_wait_hours": "INTEGER",
         "disabled_reason": "VARCHAR(200)",
         "disabled_at": "DATETIME",
         "disabled_by_self": "BOOLEAN NOT NULL DEFAULT 0",

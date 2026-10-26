@@ -514,7 +514,7 @@
         switched off).
       - Much cheaper than a full re-plan: one day in, one day out.
 
-- [ ] **Athlete may approve when the coach doesn't answer** (26 Oct). A plan,
+- [x] **Athlete may approve when the coach doesn't answer** (Done.) (26 Oct). A plan,
       re-plan or re-planned day waiting for a coach shouldn't block training
       when no coach reacts.
       - After a waiting time (e.g. 48 hours; the coach can choose 24 h,

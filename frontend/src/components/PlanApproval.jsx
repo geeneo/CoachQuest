@@ -10,6 +10,8 @@ const EVENTS = {
   sent_back: "Sent back",
   replan_proposed: "Re-plan proposed",
   replanned: "Re-planned",
+  day_proposed: "Day re-plan proposed",
+  reminded: "Coaches reminded",
 };
 
 // Coach approval for AI plans (backend plan_approval.py): the banner, the re-plan proposal and the buttons.
@@ -105,6 +107,15 @@ export function PlanApproval({ plan, athleteId, setPlan }) {
             </details>
           )}
         </>
+      )}
+      {plan.viewer_role === "athlete" && waiting && plan.athlete_decides_at !== undefined && (
+        <p className="small muted">
+          {plan.can_approve
+            ? "No coach has answered in time (or the day comes first), so you can decide yourself."
+            : plan.athlete_decides_at
+              ? `If no coach answers, you can approve or send it back yourself from ${dateTime(plan.athlete_decides_at)}.`
+              : "Only your coach can approve this."}
+        </p>
       )}
       {plan.can_approve && waiting && (
         <div className="row wrap">

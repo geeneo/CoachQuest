@@ -59,7 +59,10 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
         if viewer is not None:
             out["viewer_role"] = plan_approval.role(viewer, p.athlete_id)
             waiting = p.approval != plan_approval.APPROVED or bool(p.pending)
-            out["can_approve"] = waiting and plan_approval.can_approve(db, viewer, p.athlete_id)
+            out["can_approve"] = waiting and plan_approval.can_approve(db, viewer, p.athlete_id, p)
+            if waiting and viewer.id == p.athlete_id and plan_approval.required(db, viewer):
+                at = plan_approval.athlete_may_decide_at(p, viewer)
+                out["athlete_decides_at"] = at.isoformat() if at else None
         if p.weeks:
             # A day early: a ride late on the first local day can be stored as the day before in UTC.
             start = datetime.combine(date.fromisoformat(p.weeks[0]["start"]), datetime.min.time()) - timedelta(1)
@@ -124,7 +127,8 @@ def current_plan(athlete: str, user: User = Depends(current_user), db: DbSession
 
 
 class ApprovalSetting(BaseModel):
-    required: bool
+    required: bool | None = None
+    wait_hours: int | None = None
 
 
 @router.put("/approval-setting")
@@ -137,9 +141,18 @@ def set_approval_setting(
     if user.id == athlete_id:
         raise HTTPException(status_code=403, detail="Your coach (or an admin) decides this")
     target = db.get(User, athlete_id)
-    target.plan_approval_off = not body.required
+    if body.required is not None:
+        target.plan_approval_off = not body.required
+    if body.wait_hours is not None:
+        if body.wait_hours not in plan_approval.WAIT_CHOICES:
+            raise HTTPException(status_code=422, detail="Choose 24, 48 or 72 hours, or 0 for never")
+        target.approval_wait_hours = body.wait_hours
     db.commit()
-    return {"required": plan_approval.required(db, target), "off": target.plan_approval_off}
+    return {
+        "required": plan_approval.required(db, target),
+        "off": target.plan_approval_off,
+        "wait_hours": plan_approval.wait_hours(target),
+    }
 
 
 @router.get("/approval-setting")
@@ -151,6 +164,7 @@ def get_approval_setting(athlete: str, user: User = Depends(current_user), db: D
         "required": plan_approval.required(db, target),
         "off": target.plan_approval_off,
         "has_coach": bool(plan_approval.coaches(db, athlete_id)),
+        "wait_hours": plan_approval.wait_hours(target),
         "can_change": user.id != athlete_id,
     }
 
@@ -542,7 +556,10 @@ def approve(
     else:
         what = "approved"
     p.approval = plan_approval.APPROVED
-    plan_approval.log(p, user, "approved")
+    note = None
+    if user.id == p.athlete_id and plan_approval.required(db, user):
+        note = plan_approval.athlete_decided(db, background, p, user, "approved")
+    plan_approval.log(p, user, "approved", note=note)
     _save_weeks(db, p, p.weeks, background)
     plan_approval.tell_athlete(db, background, p, user, what)
     return {**plan_out(p, db, full=True, viewer=user), "changed": changed}
@@ -564,6 +581,8 @@ def send_back(
         p.pending = None
     else:
         p.approval = plan_approval.SENT_BACK
+    if user.id == p.athlete_id and plan_approval.required(db, user):
+        plan_approval.athlete_decided(db, background, p, user, "sent back")
     plan_approval.log(p, user, "sent_back", note=body.note.strip())
     db.commit()
     # The comment emails the athlete and the other coaches, and the next re-plan reads it.

@@ -11,12 +11,17 @@ def test_coach_switches_approval_off(team, make_user):  # noqa: F811
         "required": True,
         "off": False,
         "has_coach": True,
+        "wait_hours": 0,
         "can_change": False,
     }
     assert (
         athlete.request("PUT", "/api/athletes/me/plans/approval-setting", json={"required": False}).status_code == 403
     )
-    assert cobus.request("PUT", url, json={"required": False}).json() == {"required": False, "off": True}
+    assert cobus.request("PUT", url, json={"required": False}).json() == {
+        "required": False,
+        "off": True,
+        "wait_hours": 0,
+    }
     # The athlete can now approve what was waiting, and new plans apply at once.
     plan_url = f"/api/athletes/me/plans/{p['id']}"
     assert athlete.get(plan_url).json()["can_approve"] is True

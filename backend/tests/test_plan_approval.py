@@ -3,7 +3,7 @@
 import pytest
 from test_phase3 import HARD, STEADY, _next_monday, _scheduled, _week
 
-from app.db import Comment, SessionLocal
+from app.db import Comment, SessionLocal, User
 
 
 @pytest.fixture()
@@ -20,6 +20,9 @@ def team(make_user, monkeypatch):
     aid = athlete.get("/api/auth/me").json()["id"]
     g = athlete.post("/api/grants", json={"coach_email": "c@example.com", "scopes": ["plans"]}).json()
     cobus.post(f"/api/grants/{g['id']}/accept")
+    with SessionLocal() as db:  # only the coach decides here (the waiting time has its own tests)
+        db.query(User).filter_by(id=aid).one().approval_wait_hours = 0
+        db.commit()
     return athlete, cobus, aid, seen
 
 

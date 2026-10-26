@@ -32,9 +32,9 @@ export default function PlansPanel({ id, athlete }) {
     setForm((f) => ({ ...f, available_days: days }));
   }, [prefs.data]);
   const approval = useApi(`/api/athletes/${id}/plans/approval-setting`);
-  const setApproval = async (required) => {
+  const setApproval = async (body) => {
     try {
-      await api(`/api/athletes/${id}/plans/approval-setting`, { method: "PUT", body: { required } });
+      await api(`/api/athletes/${id}/plans/approval-setting`, { method: "PUT", body });
       approval.reload();
     } catch (err) {
       setError(err.message);
@@ -119,18 +119,38 @@ export default function PlansPanel({ id, athlete }) {
         </p>
         {approval.data?.has_coach &&
           (approval.data.can_change ? (
-            <label className="check small">
-              <input
-                type="checkbox"
-                checked={!approval.data.off}
-                onChange={(e) => setApproval(e.target.checked)}
-              />{" "}
-              Plans and re-plans {athlete.display_name} asks the AI for wait for a coach's approval
-            </label>
+            <div className="row wrap small">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={!approval.data.off}
+                  onChange={(e) => setApproval({ required: e.target.checked })}
+                />{" "}
+                Plans and re-plans {athlete.display_name} asks the AI for wait for a coach's approval
+              </label>
+              {!approval.data.off && (
+                <label className="inline">
+                  If no coach answers, {athlete.display_name} may decide after
+                  <select
+                    value={approval.data.wait_hours}
+                    onChange={(e) => setApproval({ wait_hours: Number(e.target.value) })}
+                  >
+                    <option value={24}>24 hours</option>
+                    <option value={48}>48 hours</option>
+                    <option value={72}>72 hours</option>
+                    <option value={0}>never</option>
+                  </select>
+                </label>
+              )}
+            </div>
           ) : (
             <p className="small muted">
               {approval.data.required
-                ? "Plans and re-plans you ask for wait for your coach's approval before workouts go to your calendar."
+                ? `Plans and re-plans you ask for wait for your coach's approval before workouts go to your calendar${
+                    approval.data.wait_hours
+                      ? `; if no coach answers within ${approval.data.wait_hours} hours (or the day comes first), you can decide yourself.`
+                      : "."
+                  }`
                 : "Your coach lets your plans and re-plans apply straight away (no approval needed)."}
             </p>
           ))}

@@ -14,7 +14,7 @@ stops sharing, or a coach (or an admin) switches approval off for the athlete
 approve their own waiting ones.
 """
 
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import select
@@ -46,11 +46,86 @@ def needs_approval(db: DbSession, athlete_id: int, requester: User) -> bool:
     return requester.id == athlete_id and required(db, requester)
 
 
-def can_approve(db: DbSession, user: User, athlete_id: int) -> bool:
+DEFAULT_WAIT_HOURS = 48
+WAIT_CHOICES = (24, 48, 72, 0)  # 0 = never: only a coach decides
+
+
+def wait_hours(athlete: User) -> int:
+    return DEFAULT_WAIT_HOURS if athlete.approval_wait_hours is None else athlete.approval_wait_hours
+
+
+def waiting_since(p: Plan) -> datetime | None:
+    """When the waiting proposal (or the waiting plan) was made."""
+    if p.pending and p.pending.get("at"):
+        return datetime.fromisoformat(p.pending["at"])
+    if p.approval == AWAITING:
+        made = [h for h in (p.history or []) if h.get("event") in ("created", "replanned")]
+        return datetime.fromisoformat(made[-1]["at"]) if made else None
+    return None
+
+
+def first_day(p: Plan) -> date | None:
+    """The first day the waiting change touches."""
+    if p.pending:
+        dates = [c["date"] for c in p.pending.get("changes") or []]
+        return date.fromisoformat(min(dates)) if dates else None
+    return p.start_date
+
+
+def athlete_may_decide_at(p: Plan, athlete: User) -> datetime | None:
+    """From when the athlete may approve or send back what waits for a coach (None: only a coach).
+
+    After the coach's waiting time; at once when the change starts before that time is up (e.g. tomorrow's
+    session), so a slow answer never blocks training."""
+    since, hours = waiting_since(p), wait_hours(athlete)
+    if since is None or hours == 0:
+        return None
+    deadline = since + timedelta(hours=hours)
+    first = first_day(p)
+    if first is not None and first <= deadline.date():
+        return since
+    return deadline
+
+
+def can_approve(db: DbSession, user: User, athlete_id: int, p: Plan | None = None) -> bool:
     team = coaches(db, athlete_id)
     if user.id == athlete_id:
-        return not team or user.plan_approval_off
+        if not team or user.plan_approval_off:
+            return True
+        at = athlete_may_decide_at(p, user) if p is not None else None
+        return at is not None and utcnow() >= at
     return any(c.id == user.id for c in team)
+
+
+def remind_coaches(db: DbSession, background: BackgroundTasks | None = None) -> int:
+    """Hourly: halfway through the waiting time, remind the coaches once. Returns reminders sent."""
+    sent = 0
+    now = utcnow()
+    for p in db.scalars(select(Plan).where((Plan.approval == AWAITING) | Plan.pending.is_not(None))):
+        athlete = db.get(User, p.athlete_id)
+        since, hours = waiting_since(p), wait_hours(athlete) if athlete else 0
+        if not since or not hours or not athlete.is_active or now < since + timedelta(hours=hours / 2):
+            continue
+        if any(h.get("event") == "reminded" and h.get("at", "") >= since.isoformat() for h in p.history or []):
+            continue
+        tasks = background or BackgroundTasks()
+        for c in coaches(db, p.athlete_id):
+            notify(
+                tasks,
+                c,
+                f"Reminder: {athlete.display_name}'s plan waits for your approval",
+                f'{athlete.display_name}\'s "{p.title}" still waits for a coach. If no coach answers within '
+                f"{hours} hours of the request, {athlete.display_name} may approve it themselves.",
+                ("the plan", f"/athletes/{p.athlete_id}/plans/{p.id}"),
+                setting="notify_comments",
+            )
+        p.history = [
+            *(p.history or []),
+            {"at": now.isoformat(timespec="seconds"), "by": "CoachQuest", "role": "reminder", "event": "reminded"},
+        ]
+        db.commit()
+        sent += 1
+    return sent
 
 
 def role(user: User, athlete_id: int) -> str:
@@ -117,7 +192,7 @@ def propose_day(p: Plan, user: User, date_iso: str, new: dict, why: str, model: 
 
 
 def require_approver(db: DbSession, user: User, p: Plan) -> None:
-    if not can_approve(db, user, p.athlete_id):
+    if not can_approve(db, user, p.athlete_id, p):
         raise HTTPException(status_code=403, detail="Only the athlete's coach can approve or send back this plan")
     if p.approval == APPROVED and not p.pending:
         raise HTTPException(status_code=409, detail="Nothing is waiting for approval on this plan")
@@ -149,3 +224,29 @@ def tell_athlete(db: DbSession, background: BackgroundTasks, p: Plan, coach: Use
         ("the plan", f"/athletes/{p.athlete_id}/plans/{p.id}"),
         setting="notify_comments",
     )
+
+
+async def remind_job() -> None:
+    """Scheduler job (hourly)."""
+    from .db import SessionLocal
+
+    tasks = BackgroundTasks()
+    with SessionLocal() as db:
+        remind_coaches(db, tasks)
+    await tasks()
+
+
+def athlete_decided(db: DbSession, background: BackgroundTasks, p: Plan, athlete: User, what: str) -> str:
+    """When the athlete decides instead of a coach: the note for the history, and the coaches are told."""
+    note = f"by the athlete (no coach answer within {wait_hours(athlete)} h, or the day came first)"
+    for c in coaches(db, p.athlete_id):
+        notify(
+            background,
+            c,
+            f'{athlete.display_name} {what} "{p.title}" without a coach',
+            f'No coach answered in time, so {athlete.display_name} {what} "{p.title}" themselves. '
+            "You can still re-plan or edit it.",
+            ("the plan", f"/athletes/{p.athlete_id}/plans/{p.id}"),
+            setting="notify_comments",
+        )
+    return note
