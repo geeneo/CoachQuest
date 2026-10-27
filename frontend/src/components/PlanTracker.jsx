@@ -525,7 +525,8 @@ function PlatformMatches({ day, ctx }) {
       {matches.map((m) => (
         <span key={m.id} className="row tight">
           <span title={`${duration(m.duration_s)}${m.tss != null ? ` · ${m.tss} TSS` : ""}`}>
-            Closest on {m.platform_name}: <strong>{m.name}</strong>{" "}
+            Closest on {m.platform_name}: <strong>{m.name}</strong>
+            {m.collection && <span className="muted"> · {m.collection}</span>}{" "}
             <span className="muted">({m.score}% match)</span>
           </span>
           <button type="button" className="link-btn small" onClick={() => ctx.usePlatform(day.date, m)}>

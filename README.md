@@ -131,7 +131,9 @@ Neither Zwift nor MyWhoosh lets another app search its workouts, so admins
 keep one shared catalog: Admin → Platform workouts, upload .zwo files per
 platform, a .zip full of them (Zwift's own ZIP of its legacy workouts works),
 or paste a link to a .zwo or .zip for the server to download (public
-addresses only, 25 MB at most). MyWhoosh workouts download as .zwo too.
+addresses only, 25 MB at most). "Use Zwift's official workouts ZIP" fills in
+the link to the ZIP Zwift posted on its forum (Workout Refresh, October 2023):
+about 1,270 rides, with their Zwift collection names. MyWhoosh workouts download as .zwo too.
 CoachQuest doesn't crawl fan sites such as What's on Zwift or mywhooshinfo.com:
 both block automated access. Each upcoming indoor plan
 day then shows the closest catalog workout on the athlete's preferred

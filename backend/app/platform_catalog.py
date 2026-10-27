@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
+from sqlalchemy.orm import load_only
 
 from . import runtime, workouts
 from .db import PlatformWorkout, User
@@ -92,11 +93,11 @@ def parse_zwo(text: str) -> dict:
     if root.tag != "workout_file":
         raise ZwoError("Not a Zwift workout file (.zwo)")
     sport = (root.findtext("sportType") or "bike").strip().lower()
-    if sport != "bike":
+    if sport not in ("bike", "ride", "cycling"):
         raise ZwoError(f"Only bike workouts can be matched (this one is {sport})")
     body = root.find("workout")
-    if body is None or not len(body):
-        raise ZwoError("The file has no workout steps")
+    if body is None or not len(body) or all(el.tag.lower() == "restday" for el in body):
+        raise ZwoError("A rest day or empty workout: nothing to match")
     steps = []
     for el in body:
         tag = el.tag.lower()
@@ -148,7 +149,14 @@ def parse_zwo(text: str) -> dict:
         steps = workouts.validate_steps(steps[:100])
     except ValueError as exc:
         raise ZwoError(str(exc).splitlines()[0]) from None
-    return {"name": name, "description": (root.findtext("description") or "").strip()[:2000], "steps": steps}
+    # Zwift's own files say which collection they come from ("4wk FTP Booster", "Week 4").
+    where = [(root.findtext(t) or "").strip() for t in ("category", "subcategory")]
+    return {
+        "name": name,
+        "description": (root.findtext("description") or "").strip()[:2000],
+        "collection": " · ".join(x for x in where if x)[:160],
+        "steps": steps,
+    }
 
 
 # ---- Matching ----
@@ -212,7 +220,10 @@ def best_matches(db: DbSession, steps: list[dict], platforms: list[str], catalog
 
 
 def load(db: DbSession, platforms: list[str]) -> list[PlatformWorkout]:
-    return list(db.scalars(select(PlatformWorkout).where(PlatformWorkout.platform.in_(platforms))))
+    """The catalog for matching: features only, not the steps (a full Zwift catalog is 1,000+ workouts)."""
+    cols = (PlatformWorkout.platform, PlatformWorkout.name, PlatformWorkout.collection, PlatformWorkout.features)
+    query = select(PlatformWorkout).options(load_only(*cols)).where(PlatformWorkout.platform.in_(platforms))
+    return list(db.scalars(query))
 
 
 def match_out(w: PlatformWorkout, s: int) -> dict:
@@ -222,6 +233,7 @@ def match_out(w: PlatformWorkout, s: int) -> dict:
         "platform": w.platform,
         "platform_name": PLATFORMS[w.platform],
         "name": w.name,
+        "collection": w.collection or "",
         "score": s,
         "duration_s": f["duration_s"],
         "tss": f["tss"],
@@ -234,6 +246,7 @@ def catalog_out(w: PlatformWorkout) -> dict:
         "id": w.id,
         "platform": w.platform,
         "name": w.name,
+        "collection": w.collection or "",
         "description": w.description,
         "steps": len(w.steps),
         "duration_s": w.features["duration_s"],
@@ -253,6 +266,7 @@ def add(db: DbSession, platform: str, parsed: dict, admin_id: int) -> str:
         w = PlatformWorkout(platform=platform, name=parsed["name"], added_by=admin_id)
         db.add(w)
     w.description = parsed["description"]
+    w.collection = parsed.get("collection") or ""
     w.steps = parsed["steps"]
     w.features = features(parsed["steps"])
     return result

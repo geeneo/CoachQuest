@@ -1126,6 +1126,17 @@ function PlatformWorkouts() {
         <button className="btn" disabled={busy || !link.trim()}>
           Import from link
         </button>
+        <button
+          type="button"
+          className="link-btn small"
+          title="Zwift's ZIP of its legacy workouts, posted on Zwift's forum (Workout Refresh, October 2023)"
+          onClick={() => {
+            setPlatform("zwift");
+            setLink(ZWIFT_LEGACY_ZIP);
+          }}
+        >
+          Use Zwift's official workouts ZIP
+        </button>
       </form>
       {msg?.ok && <div className="ok small">{msg.ok}</div>}
       {msg?.errors?.length > 0 && (
@@ -1155,7 +1166,10 @@ function PlatformWorkouts() {
               {d.workouts.map((w) => (
                 <tr key={w.id}>
                   <td>{d.platforms[w.platform]}</td>
-                  <td title={w.description}>{w.name}</td>
+                  <td title={w.description}>
+                    {w.name}
+                    {w.collection && <div className="small muted">{w.collection}</div>}
+                  </td>
                   <td>{duration(w.duration_s)}</td>
                   <td>
                     {w.intensity_factor ?? "–"} · {w.tss ?? "–"}
@@ -1175,6 +1189,9 @@ function PlatformWorkouts() {
     </section>
   );
 }
+
+// Zwift's own ZIP of its legacy workouts (about 1,300 rides), from its forum thread "Workout Refresh [October 2023]".
+const ZWIFT_LEGACY_ZIP = "https://forums.zwift.com/uploads/short-url/kfwBnOg1iFvfNh65haAupeMIuav.zip";
 
 function toBase64(buffer) {
   // In chunks: String.fromCharCode with a whole large file overflows the call stack.

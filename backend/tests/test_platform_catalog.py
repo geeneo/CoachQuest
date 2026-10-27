@@ -209,3 +209,20 @@ def test_links_must_be_public_web_files():
     for url in ("ftp://example.com/a.zwo", "file:///etc/passwd", "http://127.0.0.1/a.zwo", "http://10.0.0.5/a.zip"):
         with pytest.raises(platform_catalog.ZwoError):
             platform_catalog.download(url)
+
+
+def test_zwift_files_from_the_official_zip():
+    # Zwift's own files: sportType "ride" on some, a collection, and rest days with no steps.
+    ride = THRESHOLD_ZWO.replace("<sportType>bike</sportType>", "<sportType>ride</sportType>").replace(
+        "<author>Zwift</author>",
+        "<author>Zwift</author><category>4wk FTP Booster</category><subcategory>Week 2</subcategory>",
+    )
+    w = platform_catalog.parse_zwo(ride)
+    assert w["collection"] == "4wk FTP Booster · Week 2"
+    rest = "<workout_file><name>Rest</name><sportType>bike</sportType><workout><RestDay/></workout></workout_file>"
+    for empty in (rest, rest.replace("<workout><RestDay/></workout>", "<workout />")):
+        try:
+            platform_catalog.parse_zwo(empty)
+            raise AssertionError(empty)
+        except platform_catalog.ZwoError as exc:
+            assert "rest day" in str(exc)

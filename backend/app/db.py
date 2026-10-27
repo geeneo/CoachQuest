@@ -422,6 +422,8 @@ class PlatformWorkout(Base):
     platform: Mapped[str] = mapped_column(String(20), index=True)  # zwift | mywhoosh
     name: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
+    # Where it sits on the platform, from the file (Zwift: "4wk FTP Booster · Week 4").
+    collection: Mapped[str] = mapped_column(String(160), default="")
     steps: Mapped[list] = mapped_column(JSON)
     # platform_catalog.features(steps), kept so matching doesn't recompute them.
     features: Mapped[dict] = mapped_column(JSON)
@@ -652,6 +654,7 @@ _ADDED_COLUMNS = {
         "time_format": "VARCHAR(4)",
     },
     "races": {"target_seconds": "INTEGER", "ctl_advice": "JSON"},
+    "platform_workouts": {"collection": "VARCHAR(160) NOT NULL DEFAULT ''"},
     "ai_calls": {
         "kind": "VARCHAR(12) NOT NULL DEFAULT ''",
         "cache_read_tokens": "INTEGER NOT NULL DEFAULT 0",
