@@ -109,6 +109,19 @@ server {
         return 302 /connections?error=session;
     }
 
+    # ---- admin: Zwift / MyWhoosh catalog uploads, which can be whole .zip files ----
+    location = /api/admin/platform-workouts {
+        auth_request /_auth;
+        auth_request_set $cq_user_id $upstream_http_x_auth_user_id;
+        error_page 401 = @unauthorized;
+        limit_req zone=cq_api burst=10 nodelay;
+        client_max_body_size 40m;
+        include /etc/nginx/conf.d/cq_proxy.inc;
+        proxy_set_header X-Auth-User-Id $cq_user_id;
+        proxy_read_timeout 300s;
+        proxy_pass http://cq_api;
+    }
+
     # ---- everything else under /api requires a valid session ----
     location /api/ {
         auth_request /_auth;

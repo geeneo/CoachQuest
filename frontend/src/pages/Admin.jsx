@@ -1041,25 +1041,45 @@ function PlatformWorkouts() {
   const [platform, setPlatform] = useState("zwift");
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
-  const upload = async (e) => {
-    const picked = [...e.target.files];
-    e.target.value = "";
-    if (!picked.length) return;
+  const [link, setLink] = useState("");
+  // Upload or import, then say what happened (and which files couldn't be read).
+  const run = async (fn) => {
     setBusy(true);
     setMsg(null);
     try {
-      const files = await Promise.all(picked.map(async (f) => ({ name: f.name, content: await f.text() })));
-      const r = await api("/api/admin/platform-workouts", { method: "POST", body: { platform, files } });
-      setMsg({
-        ok: `${r.added} added, ${r.updated} replaced.`,
-        errors: r.errors,
-      });
+      const r = await fn();
+      const more = r.error_count > r.errors.length ? ` (first ${r.errors.length} of ${r.error_count} problems shown)` : "";
+      setMsg({ ok: `${r.added} added, ${r.updated} replaced.${more}`, errors: r.errors });
       res.reload();
+      return true;
     } catch (err) {
       setMsg({ error: err.message });
     } finally {
       setBusy(false);
     }
+  };
+  const upload = (e) => {
+    const picked = [...e.target.files];
+    e.target.value = "";
+    if (!picked.length) return;
+    run(async () => {
+      // .zwo files go as text; .zip files as base64.
+      const files = await Promise.all(
+        picked.map(async (f) =>
+          f.name.toLowerCase().endsWith(".zip")
+            ? { name: f.name, content: toBase64(await f.arrayBuffer()), base64: true }
+            : { name: f.name, content: await f.text() },
+        ),
+      );
+      return api("/api/admin/platform-workouts", { method: "POST", body: { platform, files } });
+    });
+  };
+  const importLink = async (e) => {
+    e.preventDefault();
+    const ok = await run(() =>
+      api("/api/admin/platform-workouts/import-url", { method: "POST", body: { platform, url: link.trim() } }),
+    );
+    if (ok) setLink("");
   };
   const remove = (w) =>
     confirm(`Remove "${w.name}" from the catalog?`) &&
@@ -1069,9 +1089,10 @@ function PlatformWorkouts() {
     <section className="card">
       <h2>Platform workouts</h2>
       <p className="muted small">
-        Zwift and MyWhoosh workouts that indoor plan days are matched against. Upload .zwo files (MyWhoosh workouts
-        download as .zwo too); a workout with the same name is replaced. Athletes see only the name and open it on
-        their platform. Matching shows for athletes who ticked Zwift or MyWhoosh under Connections.
+        Zwift and MyWhoosh workouts that indoor plan days are matched against. Upload .zwo files or a .zip full of them
+        (Zwift's own ZIP of its legacy workouts works), or paste a link to one; MyWhoosh workouts download as .zwo too.
+        A workout with the same name is replaced. Athletes see only the name and open it on their platform. Matching
+        shows for athletes who ticked Zwift or MyWhoosh under Connections.
       </p>
       {d && !d.enabled && (
         <div className="error small">
@@ -1090,10 +1111,22 @@ function PlatformWorkouts() {
           </select>
         </label>
         <label className="btn">
-          {busy ? "Uploading…" : "Upload .zwo files"}
-          <input type="file" accept=".zwo" multiple hidden disabled={busy} onChange={upload} />
+          {busy ? "Working…" : "Upload .zwo or .zip files"}
+          <input type="file" accept=".zwo,.zip" multiple hidden disabled={busy} onChange={upload} />
         </label>
       </div>
+      <form className="row wrap" onSubmit={importLink}>
+        <input
+          type="url"
+          className="grow"
+          placeholder="…or paste a link to a .zwo or .zip file"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+        />
+        <button className="btn" disabled={busy || !link.trim()}>
+          Import from link
+        </button>
+      </form>
       {msg?.ok && <div className="ok small">{msg.ok}</div>}
       {msg?.errors?.length > 0 && (
         <ul className="error small">
@@ -1141,4 +1174,12 @@ function PlatformWorkouts() {
       )}
     </section>
   );
+}
+
+function toBase64(buffer) {
+  // In chunks: String.fromCharCode with a whole large file overflows the call stack.
+  const bytes = new Uint8Array(buffer);
+  let text = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(text);
 }

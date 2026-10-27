@@ -12,9 +12,15 @@ server. A super admin can switch the whole thing off (Admin → Settings →
 "Match plan workouts to Zwift / MyWhoosh").
 """
 
+import io
+import ipaddress
 import re
+import socket
 import xml.etree.ElementTree as ET
+import zipfile
+from urllib.parse import urlsplit
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
@@ -250,3 +256,79 @@ def add(db: DbSession, platform: str, parsed: dict, admin_id: int) -> str:
     w.steps = parsed["steps"]
     w.features = features(parsed["steps"])
     return result
+
+
+# ---- ZIP files and links ----
+
+MAX_DOWNLOAD_BYTES = 25_000_000
+MAX_ZIP_FILES = 2000
+MAX_ZIP_TOTAL = 60_000_000  # unpacked, so a small "zip bomb" can't fill the disk or memory
+
+
+def zwo_files(name: str, data: bytes) -> list[tuple[str, str]]:
+    """The .zwo files in an upload or download: the file itself, or every .zwo inside a .zip."""
+    if data[:4] != b"PK\x03\x04":
+        try:
+            return [(name, data.decode("utf-8-sig"))]
+        except UnicodeDecodeError:
+            raise ZwoError("Not a .zwo or .zip file") from None
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise ZwoError("Not a valid .zip file") from None
+    out, total = [], 0
+    for info in archive.infolist():
+        base = info.filename.rsplit("/", 1)[-1]
+        if info.is_dir() or not base.lower().endswith(".zwo") or "__MACOSX" in info.filename or base.startswith("."):
+            continue
+        if len(out) >= MAX_ZIP_FILES:
+            raise ZwoError(f"The .zip has more than {MAX_ZIP_FILES} workouts; split it")
+        if info.file_size > MAX_FILE_BYTES:
+            out.append((info.filename, ""))  # reported as too big by parse_zwo
+            continue
+        total += info.file_size
+        if total > MAX_ZIP_TOTAL:
+            raise ZwoError("The .zip is too big once unpacked")
+        raw = archive.read(info)[: MAX_FILE_BYTES + 1]
+        out.append((info.filename, raw.decode("utf-8-sig", errors="replace")))
+    if not out:
+        raise ZwoError("The .zip has no .zwo files")
+    return out
+
+
+def _public_host(host: str) -> None:
+    """Refuse links to this server or the local network (the server would be fetching for the admin)."""
+    try:
+        addresses = {a[4][0] for a in socket.getaddrinfo(host, None)}
+    except (socket.gaierror, UnicodeError):
+        raise ZwoError(f"Can't find {host}") from None
+    for a in addresses:
+        ip = ipaddress.ip_address(a.split("%")[0])
+        if not ip.is_global:
+            raise ZwoError("Links to private or local addresses aren't allowed")
+
+
+def download(url: str) -> tuple[str, bytes]:
+    """Fetch a .zwo or .zip a person linked to: https/http only, public hosts, size-capped."""
+    for _ in range(5):  # follow up to 4 redirects, checking each host
+        parts = urlsplit(url.strip())
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ZwoError("Use an http(s) link to a .zwo or .zip file")
+        _public_host(parts.hostname)
+        with httpx.stream("GET", url, timeout=30, follow_redirects=False, headers={"User-Agent": "CoachQuest"}) as r:
+            if r.is_redirect:
+                url = str(r.url.join(r.headers.get("location", "")))
+                continue
+            if r.status_code != 200:
+                raise ZwoError(f"The link answered {r.status_code}")
+            buf = bytearray()
+            for chunk in r.iter_bytes():
+                buf += chunk
+                if len(buf) > MAX_DOWNLOAD_BYTES:
+                    raise ZwoError("The file is too big (25 MB at most)")
+            data = bytes(buf)
+        name = parts.path.rsplit("/", 1)[-1] or parts.hostname
+        if data[:4] != b"PK\x03\x04" and b"<workout_file" not in data[:5000]:
+            raise ZwoError("That link isn't a .zwo or .zip file (a web page? Use the file's download link)")
+        return name, data
+    raise ZwoError("Too many redirects")

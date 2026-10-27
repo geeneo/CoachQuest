@@ -129,7 +129,11 @@ limit (1 to 4) under Admin → Settings → Workouts → "Sessions per day".
 
 Neither Zwift nor MyWhoosh lets another app search its workouts, so admins
 keep one shared catalog: Admin → Platform workouts, upload .zwo files per
-platform (MyWhoosh workouts download as .zwo too). Each upcoming indoor plan
+platform, a .zip full of them (Zwift's own ZIP of its legacy workouts works),
+or paste a link to a .zwo or .zip for the server to download (public
+addresses only, 25 MB at most). MyWhoosh workouts download as .zwo too.
+CoachQuest doesn't crawl fan sites such as What's on Zwift or mywhooshinfo.com:
+both block automated access. Each upcoming indoor plan
 day then shows the closest catalog workout on the athlete's preferred
 platforms (Connections) with a match score, comparing length, intensity and
 the work efforts. "Use this" swaps the day's workout for it (the calendar and

@@ -1,11 +1,13 @@
 """Admin page: settings, users, version and usage stats."""
 
+import base64
 import logging
 import shutil
 from datetime import date, timedelta
 from pathlib import Path
 
 import anthropic
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, or_, select
@@ -486,7 +488,9 @@ def list_platform_workouts(_: User = Depends(admin_user), db: DbSession = Depend
 
 class ZwoFile(BaseModel):
     name: str = Field(max_length=255)
-    content: str = Field(max_length=platform_catalog.MAX_FILE_BYTES)
+    # A .zwo as text, or (base64=True) a .zwo or .zip as base64.
+    content: str = Field(max_length=34_000_000)
+    base64: bool = False
 
 
 class CatalogUpload(BaseModel):
@@ -494,23 +498,64 @@ class CatalogUpload(BaseModel):
     files: list[ZwoFile] = Field(min_length=1, max_length=200)
 
 
+class CatalogLink(BaseModel):
+    platform: str
+    url: str = Field(min_length=8, max_length=2000)
+
+
+def _platform(platform: str) -> str:
+    if platform not in platform_catalog.PLATFORMS:
+        raise HTTPException(status_code=422, detail="Platform must be zwift or mywhoosh")
+    return platform
+
+
+def _add_files(db: DbSession, platform: str, files: list[tuple[str, bytes]], admin: User) -> dict:
+    """Read every .zwo (also inside .zip files) into the catalog. Same name on that platform = replaced."""
+    counts, errors = {"added": 0, "updated": 0}, []
+    for name, data in files:
+        try:
+            found = platform_catalog.zwo_files(name, data)
+        except platform_catalog.ZwoError as exc:
+            errors.append({"file": name, "error": str(exc)})
+            continue
+        for zwo_name, text in found:
+            try:
+                parsed = platform_catalog.parse_zwo(text)
+            except platform_catalog.ZwoError as exc:
+                errors.append({"file": zwo_name, "error": str(exc)})
+                continue
+            counts[platform_catalog.add(db, platform, parsed, admin.id)] += 1
+            db.flush()  # a second file with the same name in this upload replaces the first
+    db.commit()
+    log.info("Admin %s added %s workouts: %s, %d errors", admin.id, platform, counts, len(errors))
+    return {**counts, "errors": errors[:100], "error_count": len(errors)}
+
+
 @router.post("/platform-workouts")
 def upload_platform_workouts(body: CatalogUpload, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
-    """Add .zwo files to the catalog. A workout with the same name on that platform is replaced."""
-    if body.platform not in platform_catalog.PLATFORMS:
-        raise HTTPException(status_code=422, detail="Platform must be zwift or mywhoosh")
-    counts, errors = {"added": 0, "updated": 0}, []
+    """Add .zwo files, or .zip files full of them, to the catalog."""
+    platform = _platform(body.platform)
+    files = []
     for f in body.files:
         try:
-            parsed = platform_catalog.parse_zwo(f.content)
-        except platform_catalog.ZwoError as exc:
-            errors.append({"file": f.name, "error": str(exc)})
-            continue
-        counts[platform_catalog.add(db, body.platform, parsed, admin.id)] += 1
-        db.flush()  # a second file with the same name in this upload replaces the first
-    db.commit()
-    log.info("Admin %s uploaded platform workouts: %s, %d errors", admin.id, counts, len(errors))
-    return {**counts, "errors": errors}
+            files.append((f.name, base64.b64decode(f.content, validate=True) if f.base64 else f.content.encode()))
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"{f.name}: the upload is damaged; try again") from None
+    return _add_files(db, platform, files, admin)
+
+
+@router.post("/platform-workouts/import-url")
+def import_platform_workouts(body: CatalogLink, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Download a .zwo or .zip from a link the admin chose (e.g. Zwift's legacy-workouts ZIP) into the catalog."""
+    platform = _platform(body.platform)
+    try:
+        name, data = platform_catalog.download(body.url)
+    except platform_catalog.ZwoError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Couldn't download it: {exc.__class__.__name__}") from None
+    log.info("Admin %s imported workouts from %s", admin.id, body.url)
+    return _add_files(db, platform, [(name, data)], admin)
 
 
 @router.delete("/platform-workouts/{workout_id}")

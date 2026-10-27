@@ -142,3 +142,70 @@ def test_super_admin_switch(make_user, planner):  # noqa: F811
     wid = boss.get("/api/admin/platform-workouts").json()["workouts"][0]["id"]
     r = athlete.post(f"{url}/days/{day['date']}/platform-workout", json={"platform_workout_id": wid})
     assert r.status_code == 403
+
+
+def _zip(files: dict[str, str]) -> bytes:
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name, text in files.items():
+            z.writestr(name, text)
+    return buf.getvalue()
+
+
+def test_upload_a_zip(make_user):
+    import base64
+
+    admin = make_user("admin@example.com")
+    data = _zip(
+        {
+            "Workouts/threshold.zwo": THRESHOLD_ZWO,
+            "Workouts/easy.zwo": RECOVERY_ZWO,
+            "Workouts/run.zwo": RUN_ZWO,
+            "__MACOSX/Workouts/._easy.zwo": "junk",
+            "readme.txt": "not a workout",
+        }
+    )
+    r = admin.post(
+        "/api/admin/platform-workouts",
+        json={
+            "platform": "zwift",
+            "files": [{"name": "legacy.zip", "content": base64.b64encode(data).decode(), "base64": True}],
+        },
+    ).json()
+    assert r["added"] == 2 and r["error_count"] == 1 and r["errors"][0]["file"] == "Workouts/run.zwo"
+    bad = {"platform": "zwift", "files": [{"name": "x.zip", "content": "!!!", "base64": True}]}
+    assert admin.post("/api/admin/platform-workouts", json=bad).status_code == 422
+    empty = base64.b64encode(_zip({"a.txt": "x"})).decode()
+    r = admin.post(
+        "/api/admin/platform-workouts",
+        json={"platform": "zwift", "files": [{"name": "e.zip", "content": empty, "base64": True}]},
+    )
+    assert r.json()["errors"] == [{"file": "e.zip", "error": "The .zip has no .zwo files"}]
+
+
+def test_import_from_a_link(make_user, monkeypatch):
+    admin = make_user("admin@example.com")
+    rider = make_user("rider@example.com")
+    asked = []
+
+    def fake_download(url):
+        asked.append(url)
+        return "legacy.zip", _zip({"threshold.zwo": THRESHOLD_ZWO})
+
+    monkeypatch.setattr(platform_catalog, "download", fake_download)
+    body = {"platform": "mywhoosh", "url": "https://example.com/legacy.zip"}
+    r = admin.post("/api/admin/platform-workouts/import-url", json=body).json()
+    assert r["added"] == 1 and asked == ["https://example.com/legacy.zip"]
+    assert admin.get("/api/admin/platform-workouts").json()["workouts"][0]["platform"] == "mywhoosh"
+    assert rider.post("/api/admin/platform-workouts/import-url", json=body).status_code == 403
+
+
+def test_links_must_be_public_web_files():
+    import pytest
+
+    for url in ("ftp://example.com/a.zwo", "file:///etc/passwd", "http://127.0.0.1/a.zwo", "http://10.0.0.5/a.zip"):
+        with pytest.raises(platform_catalog.ZwoError):
+            platform_catalog.download(url)
