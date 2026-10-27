@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from . import assessments, auth_log, backfill, plan_approval, runtime, sync_engine
+from . import accounts, assessments, auth_log, backfill, plan_approval, runtime, sync_engine
 from .config import check_required, settings
 from .db import Connection, SessionLocal, User, init_db
 from .deps import READ_REQUEST
@@ -56,6 +56,7 @@ async def lifespan(app: FastAPI):
     init_db()
     with SessionLocal() as db:
         runtime.load(db)
+        accounts.promote_super_admins(db)
         if settings.enable_scheduler:
             backfill.refresh_outdated(db)  # picked up by the backfill job below
     if settings.enable_scheduler:

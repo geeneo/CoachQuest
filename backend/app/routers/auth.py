@@ -43,6 +43,7 @@ def user_out(user: User) -> dict:
         "email": user.email,
         "display_name": user.display_name,
         "is_admin": user.is_admin,
+        "is_super_admin": user.is_super_admin,
         "ftp_watts": user.ftp_watts,
         "lthr_bpm": user.lthr_bpm,
         "max_hr_bpm": user.max_hr_bpm,
@@ -91,7 +92,9 @@ PENDING_MESSAGE = (
 
 
 async def _tell_admins_about(db: DbSession, user: User) -> None:
-    admins = db.scalars(select(User).where(User.is_admin, User.is_active, User.emails_disabled.is_(False))).all()
+    """Email the admins who can approve: only super admins while "Super admin approves new sign-ups" is on."""
+    who = User.is_super_admin if accounts.super_approval_on() else User.is_admin
+    admins = db.scalars(select(User).where(who, User.is_active, User.emails_disabled.is_(False))).all()
     for admin in admins:
         try:
             await mailer.send(
@@ -107,7 +110,8 @@ async def _tell_admins_about(db: DbSession, user: User) -> None:
 @router.post("/register")
 async def register(body: Registration, request: Request, response: Response, db: DbSession = Depends(get_db)):
     email = body.email.lower()
-    is_admin = email in settings.admin_emails
+    is_super = email in settings.super_admin_emails
+    is_admin = is_super or email in settings.admin_emails
     mode = runtime.get("registration_mode")
     if mode == "closed" and not is_admin:
         raise HTTPException(status_code=403, detail="Registration is closed")
@@ -118,7 +122,8 @@ async def register(body: Registration, request: Request, response: Response, db:
         password_hash=hash_password(body.password),
         display_name=body.display_name.strip(),
         is_admin=is_admin,
-        approved=is_admin or mode != "approval",
+        is_super_admin=is_super,
+        approved=is_admin or (mode != "approval" and not accounts.super_approval_on()),
     )
     db.add(user)
     db.commit()
@@ -193,6 +198,8 @@ def pause_account(
         raise HTTPException(status_code=422, detail="Type your own email address to confirm")
     if user.is_admin and accounts.active_admins(db) <= 1:
         raise HTTPException(status_code=400, detail="You're the only admin: make someone else admin first")
+    if user.is_super_admin and accounts.active_super_admins(db) <= 1:
+        raise HTTPException(status_code=400, detail="You're the only super admin: make someone else super admin first")
     accounts.disable(db, user, "Paused by themselves", by_self=True)
     auth_log.record(db, request, "paused_self", user)
     response.delete_cookie(SESSION_COOKIE, path="/")

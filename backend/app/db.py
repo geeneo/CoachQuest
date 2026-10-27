@@ -40,6 +40,8 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(100))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Approves sign-ups when "Super admin approves new sign-ups" is on; regular admins can't change their account.
+    is_super_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     # False while waiting for an admin (registration mode "approval").
     approved: Mapped[bool] = mapped_column(Boolean, default=True)
     # Email me when someone invites me, accepts, or changes or stops sharing.
@@ -614,6 +616,7 @@ _ADDED_COLUMNS = {
         "ai_settings": "JSON",
         "week_start": "INTEGER NOT NULL DEFAULT 0",
         "approved": "BOOLEAN NOT NULL DEFAULT 1",
+        "is_super_admin": "BOOLEAN NOT NULL DEFAULT 0",
         "notify_sharing": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_comments": "BOOLEAN NOT NULL DEFAULT 1",
         "birth_date": "DATE",

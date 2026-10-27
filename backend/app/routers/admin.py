@@ -107,6 +107,8 @@ def update_settings(body: SettingsUpdate, admin: User = Depends(admin_user), db:
                 runtime.validate(key, value)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if runtime.SUPER_ONLY & body.values.keys() and not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only a super admin can change who approves sign-ups")
     for key, value in body.values.items():
         runtime.save(db, key, value.strip(), admin.id)
     return {"settings": runtime.describe()}
@@ -238,6 +240,7 @@ def user_cancel_backfill(user_id: int, provider: str, _: User = Depends(admin_us
 
 class UserUpdate(BaseModel):
     is_admin: bool | None = None
+    is_super_admin: bool | None = None
     is_active: bool | None = None
     ai_disabled: bool | None = None
     emails_disabled: bool | None = None
@@ -258,6 +261,19 @@ def _other_user(db: DbSession, user_id: int) -> User:
     return user
 
 
+def _manageable(db: DbSession, user_id: int, admin: User) -> User:
+    """A user whose account `admin` may change: a super admin's only another super admin may."""
+    user = _other_user(db, user_id)
+    if user.is_super_admin and not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only a super admin can change a super admin's account")
+    return user
+
+
+def _may_approve(admin: User) -> None:
+    if accounts.super_approval_on() and not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only a super admin can approve or reject sign-ups")
+
+
 @router.post("/users/{user_id}/password")
 def admin_set_password(
     user_id: int,
@@ -267,7 +283,7 @@ def admin_set_password(
     db: DbSession = Depends(get_db),
 ):
     """Set a user's password. They are signed out everywhere."""
-    user = _other_user(db, user_id)
+    user = _manageable(db, user_id, admin)
     accounts.set_password(db, user, body.new_password)
     auth_log.admin_action(db, request, "admin_password_set", admin, user)
     log.info("Admin %s set the password of user %s", admin.id, user.id)
@@ -279,7 +295,7 @@ async def admin_reset_link(
     user_id: int, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
 ):
     """A 24-hour reset link: emailed when email works, and always shown to the admin to pass on."""
-    user = _other_user(db, user_id)
+    user = _manageable(db, user_id, admin)
     link = accounts.create_reset_link(db, user, accounts.ADMIN_LINK_TTL, admin_id=admin.id)
     auth_log.admin_action(db, request, "admin_reset_link", admin, user)
     log.info("Admin %s created a reset link for user %s", admin.id, user.id)
@@ -295,6 +311,7 @@ async def admin_reset_link(
 async def approve_user(
     user_id: int, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
 ):
+    _may_approve(admin)
     user = _other_user(db, user_id)
     if user.approved:
         return {"ok": True, "emailed": None}
@@ -318,6 +335,7 @@ async def approve_user(
 @router.post("/users/{user_id}/reject")
 def reject_user(user_id: int, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
     """Remove a sign-up that is still waiting for approval."""
+    _may_approve(admin)
     user = _other_user(db, user_id)
     if user.approved:
         raise HTTPException(status_code=400, detail="Only accounts waiting for approval can be rejected; use Delete")
@@ -336,7 +354,7 @@ class DeleteUser(BaseModel):
 def admin_delete_user(
     user_id: int, body: DeleteUser, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
 ):
-    user = _other_user(db, user_id)
+    user = _manageable(db, user_id, admin)
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="You can't delete your own account")
     if body.confirm_email.strip().lower() != user.email:
@@ -383,11 +401,21 @@ def storage(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
 def update_user(
     user_id: int, body: UserUpdate, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
 ):
-    user = db.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user.id == admin.id and (body.is_admin is False or body.is_active is False):
+    user = _manageable(db, user_id, admin)
+    if user.id == admin.id and (body.is_admin is False or body.is_active is False or body.is_super_admin is False):
         raise HTTPException(status_code=400, detail="You can't remove your own admin rights or disable yourself")
+    stays_super = user.is_super_admin if body.is_super_admin is None else body.is_super_admin
+    if body.is_admin is False and stays_super:
+        raise HTTPException(status_code=400, detail="Remove their super admin rights first")
+    if body.is_super_admin is not None and body.is_super_admin != user.is_super_admin:
+        if not admin.is_super_admin:
+            raise HTTPException(status_code=403, detail="Only a super admin can make someone super admin")
+        if body.is_super_admin and not user.approved:
+            raise HTTPException(status_code=400, detail="Approve the account first")
+        user.is_super_admin = body.is_super_admin
+        if body.is_super_admin:
+            user.is_admin = True
+        auth_log.admin_action(db, request, "admin_super_on" if body.is_super_admin else "admin_super_off", admin, user)
     if body.is_admin is not None:
         user.is_admin = body.is_admin
     if body.is_active is False and user.is_active and user.is_admin and accounts.active_admins(db) <= 1:

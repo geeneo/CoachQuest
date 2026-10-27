@@ -103,6 +103,19 @@ pages read only. Every look is written to the athlete's "Who looked at my data"
 log, like a coach's. Changing anything for an athlete still needs a sharing
 grant. Check the Strava API Agreement before turning this on (see below).
 
+### Super admins and approving sign-ups
+
+Super admins are admins with one extra job: when Admin → Settings → Accounts →
+"Super admin approves new sign-ups" is on, everyone who signs up waits until a
+super admin approves them under Admin → Users. Only super admins are emailed
+about new sign-ups, and only they can approve or reject them. Off by default;
+with it off, Registration (open / approval / closed) works as before.
+
+The `SUPER_ADMIN_EMAILS` accounts (or, when that's empty, the `ADMIN_EMAILS`
+accounts) are super admins; a super admin can make other admins super admins
+under Admin → Users → Details. Only a super admin can change that setting, or
+change, disable, delete or reset the password of another super admin.
+
 ### AI coach tab
 
 All AI features follow one rule: CoachQuest computes the facts and decisions,
@@ -186,6 +199,8 @@ Fill in `.env` (it is gitignored, never commit it):
   the host of `PUBLIC_BASE_URL`.
 - `ADMIN_EMAILS`: these accounts get the Admin page. Needed for the first
   admin only.
+- `SUPER_ADMIN_EMAILS` (optional): these accounts are super admins. Empty:
+  the `ADMIN_EMAILS` accounts are.
 
 Everything else can be set on the **Admin page** in the web UI instead of
 `.env`:

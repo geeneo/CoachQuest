@@ -7,7 +7,7 @@ from datetime import timedelta
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session as DbSession
 
-from . import mailer
+from . import mailer, runtime
 from .config import settings
 from .db import (
     AccessLog,
@@ -94,6 +94,24 @@ def set_password(db: DbSession, user: User, new_password: str) -> None:
 
 def active_admins(db: DbSession) -> int:
     return len(db.scalars(select(User.id).where(User.is_admin, User.is_active)).all())
+
+
+def active_super_admins(db: DbSession) -> int:
+    return len(db.scalars(select(User.id).where(User.is_super_admin, User.is_active)).all())
+
+
+def promote_super_admins(db: DbSession) -> None:
+    """At start-up: the SUPER_ADMIN_EMAILS accounts are admins and super admins."""
+    if not settings.super_admin_emails:
+        return
+    for user in db.scalars(select(User).where(User.email.in_(settings.super_admin_emails))).all():
+        user.is_admin = user.is_super_admin = True
+    db.commit()
+
+
+def super_approval_on() -> bool:
+    """Admin → Settings → "Super admin approves new sign-ups"."""
+    return runtime.get("signup_approval") == "on"
 
 
 def disable(db: DbSession, user: User, reason: str | None, by_self: bool = False) -> None:

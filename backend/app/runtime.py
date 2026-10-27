@@ -111,6 +111,13 @@ EDITABLE: dict[str, Editable] = {
         'View data. Each look is shown in the athlete\'s "Who looked at my data" log. Check the Strava API '
         "Agreement before showing one user's Strava data to others.",
     ),
+    "signup_approval": Editable(
+        "Super admin approves new sign-ups",
+        "Accounts",
+        choices=("off", "on"),
+        help="On: everyone who signs up waits until a super admin approves them under Admin → Users, whatever "
+        "Registration says (Closed still keeps sign-ups out). Only super admins can change this.",
+    ),
     "anthropic_model_short": Editable(
         "Model for notes, reviews and chat",
         "AI coach",
@@ -153,6 +160,9 @@ EDITABLE: dict[str, Editable] = {
         error="From address must be an email address, optionally with a name in front.",
     ),
 }
+
+# Only super admins may change these.
+SUPER_ONLY = {"signup_approval"}
 
 _overrides: dict[str, str] = {}
 
@@ -219,6 +229,7 @@ def describe() -> list[dict]:
             "help": spec.help,
             "source": source,
             "is_set": bool(value),
+            "super_only": key in SUPER_ONLY,
         }
         if spec.secret:
             item["hint"] = f"…{value[-4:]}" if len(value) >= 8 else ("set" if value else "")

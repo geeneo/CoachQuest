@@ -48,6 +48,7 @@ export default function Admin() {
 }
 
 function Settings() {
+  const { user: me } = useAuth();
   const res = useApi("/api/admin/settings");
   const [draft, setDraft] = useState({});
   const [msg, setMsg] = useState(null);
@@ -121,7 +122,14 @@ function Settings() {
           {items
             .filter((i) => i.group === g)
             .map((i) => (
-              <SettingRow key={i.key} item={i} draft={draft[i.key]} onChange={(v) => set(i.key, v)} onClear={() => save({ [i.key]: "" })} />
+              <SettingRow
+                key={i.key}
+                item={i}
+                locked={i.super_only && !me.is_super_admin}
+                draft={draft[i.key]}
+                onChange={(v) => set(i.key, v)}
+                onClear={() => save({ [i.key]: "" })}
+              />
             ))}
           {g === "AI coach" && (
             <div className="row">
@@ -189,7 +197,7 @@ function Settings() {
   );
 }
 
-function SettingRow({ item, draft, onChange, onClear }) {
+function SettingRow({ item, locked, draft, onChange, onClear }) {
   const status = (
     <span className="muted small">
       {SOURCE[item.source]}
@@ -199,7 +207,7 @@ function SettingRow({ item, draft, onChange, onClear }) {
   let input;
   if (item.choices.length) {
     input = (
-      <select value={draft ?? item.value} onChange={(e) => onChange(e.target.value)}>
+      <select value={draft ?? item.value} disabled={locked} onChange={(e) => onChange(e.target.value)}>
         {!item.value && <option value="">–</option>}
         {item.choices.map((c) => (
           <option key={c}>{c}</option>
@@ -225,8 +233,9 @@ function SettingRow({ item, draft, onChange, onClear }) {
         </span>
         {input}
         {item.help && <span className="hint">{item.help}</span>}
+        {locked && <span className="hint">Only a super admin can change this.</span>}
       </label>
-      {item.source === "web" && (
+      {item.source === "web" && !locked && (
         <button type="button" className="link-btn small" onClick={onClear} title="Use the .env value instead">
           Reset to .env
         </button>
@@ -311,6 +320,7 @@ function Users({ onChange }) {
                   key={u.id}
                   u={u}
                   isMe={u.id === me.id}
+                  canDecide={!u.super_approval || me.is_super_admin}
                   open={open === u.id}
                   toggle={() => setOpen(open === u.id ? null : u.id)}
                   update={update}
@@ -364,7 +374,7 @@ function ConnState({ c }) {
   );
 }
 
-function UserRow({ u, isMe, open, toggle, update, reload }) {
+function UserRow({ u, isMe, canDecide, open, toggle, update, reload }) {
   const decide = (user, action) =>
     api(`/api/admin/users/${user.id}/${action}`, { method: "POST" }).then(
       (r) => {
@@ -380,7 +390,7 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
       <tr className={u.attention >= 3 ? "attention" : ""}>
         <td>
           <strong>{u.display_name}</strong>
-          {isMe && <span className="muted"> (you)</span>} {u.is_admin && <span className="badge">admin</span>}{" "}
+          {isMe && <span className="muted"> (you)</span>} {u.is_admin && <span className="badge">{u.is_super_admin ? "super admin" : "admin"}</span>}{" "}
           {!u.is_active && <span className="badge bad">{u.disabled_by_self ? "paused by user" : "disabled"}</span>}
           {!u.is_active && (u.disabled_reason || u.disabled_at) && (
             <div className="small muted">
@@ -399,7 +409,9 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
               ))}
             </div>
           )}
-          {!u.approved ? (
+          {!u.approved && !canDecide ? (
+            <div className="small muted">Waiting for a super admin to approve.</div>
+          ) : !u.approved ? (
             <span className="row tight">
               <button className="btn primary" onClick={() => decide(u, "approve")}>
                 Approve
@@ -500,6 +512,7 @@ function UserRow({ u, isMe, open, toggle, update, reload }) {
 }
 
 function UserDetail({ u, isMe, update, reload }) {
+  const { user: me } = useAuth();
   const d = useApi(`/api/admin/users/${u.id}/detail`);
   const [msg, setMsg] = useState(null);
   const syncNow = (provider, force = false) => {
@@ -667,12 +680,34 @@ function UserDetail({ u, isMe, update, reload }) {
         )}
       </div>
       {d.data && <AiUse u={u} ai={d.data.ai} update={update} />}
-      {!isMe && (
+      {!isMe && u.is_super_admin && !me.is_super_admin && (
+        <p className="muted small">This is a super admin: only another super admin can change their account.</p>
+      )}
+      {!isMe && (!u.is_super_admin || me.is_super_admin) && (
         <>
           <div className="row wrap">
-            <label className="check">
-              <input type="checkbox" checked={u.is_admin} onChange={(e) => update(u, { is_admin: e.target.checked })} /> Admin
+            <label className="check" title={u.is_super_admin ? "Remove super admin first" : ""}>
+              <input
+                type="checkbox"
+                checked={u.is_admin}
+                disabled={u.is_super_admin}
+                onChange={(e) => update(u, { is_admin: e.target.checked })}
+              />{" "}
+              Admin
             </label>
+            {me.is_super_admin && (
+              <label className="check" title="Super admins approve sign-ups when that setting is on">
+                <input
+                  type="checkbox"
+                  checked={u.is_super_admin}
+                  onChange={(e) =>
+                    (!e.target.checked || confirm(`Make ${u.display_name} a super admin?`)) &&
+                    update(u, { is_super_admin: e.target.checked })
+                  }
+                />{" "}
+                Super admin
+              </label>
+            )}
             <label className="check">
               <input
                 type="checkbox"

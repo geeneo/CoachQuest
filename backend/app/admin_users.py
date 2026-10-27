@@ -170,6 +170,7 @@ def overview(db: DbSession) -> list[dict]:
     storage = _storage(db)
 
     view_data = runtime.get("admin_view_data") == "on"
+    super_approval = runtime.get("signup_approval") == "on"
     rows = []
     for u in users:
         uc = conns.get(u.id, {})
@@ -216,6 +217,7 @@ def overview(db: DbSession) -> list[dict]:
                 "email": u.email,
                 "display_name": u.display_name,
                 "is_admin": u.is_admin,
+                "is_super_admin": u.is_super_admin,
                 "is_active": u.is_active,
                 "approved": u.approved,
                 "created_at": u.created_at,
@@ -244,6 +246,8 @@ def overview(db: DbSession) -> list[dict]:
                 "attention": attention,
                 # Admin → Settings → "Admins can view athletes' data".
                 "can_view_data": view_data,
+                # Admin → Settings → "Super admin approves new sign-ups".
+                "super_approval": super_approval,
             }
         )
     return rows

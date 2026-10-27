@@ -31,6 +31,15 @@ class Settings:
             e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()
         )
     )
+    # Super admins: the only ones who approve sign-ups while Admin → Settings →
+    # "Super admin approves new sign-ups" is on. Empty: the ADMIN_EMAILS accounts.
+    super_admin_emails: frozenset = field(
+        default_factory=lambda: frozenset(
+            e.strip().lower()
+            for e in (os.getenv("SUPER_ADMIN_EMAILS", "") or os.getenv("ADMIN_EMAILS", "")).split(",")
+            if e.strip()
+        )
+    )
     cookie_secure: bool = _bool("COOKIE_SECURE", True)
     session_ttl_hours: int = int(os.getenv("SESSION_TTL_HOURS", "336"))
 
@@ -56,6 +65,8 @@ class Settings:
     access_log_days: str = os.getenv("ACCESS_LOG_DAYS", "")
     # "on": admins can view every athlete's data (read only). Admin → Settings → Accounts.
     admin_view_data: str = os.getenv("ADMIN_VIEW_DATA", "off")
+    # "on": new sign-ups wait until a super admin approves them. Admin → Settings → Accounts.
+    signup_approval: str = os.getenv("SIGNUP_APPROVAL", "off")
 
     smtp_host: str = os.getenv("SMTP_HOST", "")
     smtp_port: str = os.getenv("SMTP_PORT", "587")
