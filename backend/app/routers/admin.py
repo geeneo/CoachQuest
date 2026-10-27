@@ -14,7 +14,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
-from .. import accounts, admin_users, auth_log, backfill, mailer, platform_catalog, runtime
+from .. import accounts, activity_delete, admin_users, auth_log, backfill, mailer, platform_catalog, runtime
 from ..config import settings
 from ..db import (
     AccessLog,
@@ -198,6 +198,15 @@ async def user_sync_now(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return await connections.sync_for(provider, user, db, force)
+
+
+@router.post("/users/{user_id}/remove-duplicates")
+def user_remove_duplicates(user_id: int, _: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """The athlete's "Remove duplicates", run for them (they can undo it under Deleted activities)."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"removed": activity_delete.remove_duplicates(db, user)}
 
 
 def _user_conn(db: DbSession, user_id: int, provider: str):

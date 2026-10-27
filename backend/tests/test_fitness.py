@@ -46,6 +46,41 @@ def test_dedupe_prefers_strava():
     assert kept[1].start_time.hour == 12
 
 
+def _ride(source, start_min, minutes, sport="VirtualRide", power=None, elevation=0):
+    return SimpleNamespace(
+        source=source,
+        start_time=datetime(2026, 10, 27, 6) + timedelta(minutes=start_min),
+        duration_s=minutes * 60,
+        sport=sport,
+        indoor=False,
+        type_override=None,
+        avg_power=power,
+        norm_power=None,
+        elevation_m=elevation,
+    )
+
+
+def test_dedupe_same_source_copies():
+    # Zwift and a Garmin head unit both uploaded the same ride to Strava: shown once, the copy with power.
+    zwift = _ride("strava", 0, 90, power=108, elevation=454)
+    head_unit = _ride("strava", 2, 92)
+    assert dedupe([head_unit, zwift]) == [zwift]
+
+
+def test_dedupe_overlapping_copies_that_start_far_apart():
+    # The watch was started 15 minutes before Zwift; most of the Zwift ride overlaps it.
+    watch = _ride("garmin", 0, 47, sport="Ride")
+    zwift = _ride("strava", 15, 32)
+    assert dedupe([watch, zwift]) == [zwift]
+
+
+def test_dedupe_keeps_separate_sessions():
+    ride = _ride("strava", 0, 60)
+    next_ride = _ride("strava", 55, 60)  # 5 minutes of overlap: a second ride, not a copy
+    strength = _ride("garmin", 10, 40, sport="WeightTraining")  # another kind at the same time
+    assert dedupe([ride, next_ride, strength]) == [ride, next_ride, strength]
+
+
 def test_weekly_volume_buckets_by_monday():
     today = date(2026, 10, 25)  # Sunday
     weeks = weekly_volume([_act("strava", 0)], 2, today)

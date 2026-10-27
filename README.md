@@ -191,8 +191,16 @@ is the default when Garmin is linked after Strava.
   imported from that source. Load numbers and AI plans update straight away.
   You're also offered the option to delete that data.
 - **Switching a type back on** backfills it on the next sync.
-- **Activities on from both sources:** an activity that both sources have,
-  starting within 10 minutes of each other, is shown once, as the Strava copy.
+- **Duplicates are shown once.** Two activities of the same kind (any two
+  rides count as one kind) are one session when they start within 10 minutes
+  of each other or overlap for at least half of the shorter one. That catches
+  a ride from both Strava and Garmin, and a ride uploaded twice to the same
+  source (e.g. by Zwift and a Garmin head unit). The Strava copy is shown, then
+  Garmin, then Intervals.icu; within one source the copy with power, then
+  elevation, then the longer one.
+- **Remove duplicates** (under Recent activities, or Admin → Users → Details)
+  deletes the hidden copies for good. They go to Deleted activities (Undo
+  works) and the next sync doesn't bring them back.
 
 ### AI coach
 

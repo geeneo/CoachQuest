@@ -17,6 +17,7 @@ const RANGES = [
   [36600, "All time"],
 ];
 const INDOOR = new Set(["Virtual", "Treadmill run"]);
+const SOURCES = { strava: "Strava", garmin: "Garmin", intervals_icu: "Intervals.icu" };
 const fmt = (n, digits = 0) => (n == null ? "–" : Number(n).toLocaleString(undefined, { maximumFractionDigits: digits }));
 
 function periodQuery(mode, range, month, year) {
@@ -86,6 +87,27 @@ export default function Activities({ id, editable }) {
       return n;
     });
   const allPicked = shown.length > 0 && shown.every((r) => picked.has(r.id));
+  const [cleaned, setCleaned] = useState(null);
+  // Clean-up: delete the extra copies of sessions recorded twice (they are already hidden from this list).
+  const removeDuplicates = async () => {
+    if (
+      !confirm(
+        "Remove duplicate activities?\n\nWhen a session came in more than once (e.g. from both Strava and Garmin, " +
+          "or uploaded twice), the extra copies are deleted and the best one is kept. They stay on Strava / " +
+          "Garmin and won't come back on the next sync. You can undo this under Deleted activities.",
+      )
+    )
+      return;
+    setError(null);
+    try {
+      const r = await api("/api/activities/remove-duplicates", { method: "POST" });
+      setCleaned(r.removed ? `Removed ${r.removed} duplicate${r.removed === 1 ? "" : "s"}.` : "No duplicates found.");
+      res.reload();
+      deleted.reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
   const remove = async (ids) => {
     const one = ids.length === 1 && rows.find((r) => r.id === ids[0]);
     const what = one ? `"${one.name}" (${shortDate(one.start_time)})` : `${ids.length} activities`;
@@ -188,6 +210,10 @@ export default function Activities({ id, editable }) {
           <button className="btn small danger" disabled={!picked.size} onClick={() => remove([...picked])}>
             <Trash2 size={14} /> Delete selected{picked.size ? ` (${picked.size})` : ""}
           </button>
+          <button className="btn small" onClick={removeDuplicates} title="Delete extra copies of sessions recorded twice">
+            Remove duplicates
+          </button>
+          {cleaned && <span className="small muted">{cleaned}</span>}
           <button className="link-btn small" onClick={() => setShowDeleted(!showDeleted)}>
             {showDeleted ? "Hide deleted activities" : "Deleted activities…"}
           </button>
@@ -281,7 +307,7 @@ export default function Activities({ id, editable }) {
                       a.category
                     )}
                   </td>
-                  <td className="name-cell" title={a.name}>
+                  <td className="name-cell" title={`${a.name} (from ${SOURCES[a.source] || a.source})`}>
                     {a.name}
                   </td>
                   <td className="num">{fmt(a.distance_km, 1)} km</td>

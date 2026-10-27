@@ -204,6 +204,12 @@ def delete_activities(body: ActivityIds, user: User = Depends(current_user), db:
     return {"deleted": activity_delete.delete(db, user, body.ids)}
 
 
+@router.post("/activities/remove-duplicates")
+def remove_duplicate_activities(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Delete the extra copies of sessions recorded or imported more than once."""
+    return {"removed": activity_delete.remove_duplicates(db, user)}
+
+
 @router.get("/activities/deleted")
 def deleted_activities(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     return activity_delete.listing(db, user)

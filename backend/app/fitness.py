@@ -6,9 +6,13 @@ TSS per activity, then the classic Banister/PMC model:
   TSB (form)    = yesterday's CTL - yesterday's ATL
 """
 
+from bisect import bisect_left, insort
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from itertools import islice
+
+from .activity_types import RIDES, category
 
 CTL_DAYS = 42
 ATL_DAYS = 7
@@ -72,24 +76,64 @@ def pmc(tss_by_day: dict[date, float], start: date, end: date) -> list[DayLoad]:
 
 
 SOURCE_RANK = {"strava": 0, "garmin": 1, "intervals_icu": 2}
+SAME_SESSION_S = 600  # copies starting this close together are one session
+SAME_SESSION_OVERLAP = 0.5  # or when they overlap this share of the shorter one
+LONGEST_S = 86400  # no session runs longer than this (bounds the search below)
 
 
-def dedupe(activities: list, window_s: int = 600) -> list:
-    """Show a session once when it came from several sources.
+def _kind(a) -> str:
+    """Rides (road, virtual, MTB, ...) are one kind, so a ride saved as Road on one source and Virtual on another
+    still matches; everything else by its category (a walk and a strength session at the same time are two)."""
+    if not hasattr(a, "sport"):
+        return "?"
+    c = category(a)
+    return "ride" if c in RIDES else c
 
-    Two activities are the same session when they start within `window_s` of
-    each other. Strava wins (the primary activity source), then Garmin, then
-    Intervals.icu.
+
+def same_session(a, b) -> bool:
+    """Two records of one session: same kind, and starting within SAME_SESSION_S of each other or overlapping
+    for at least half of the shorter one. One person can't do two rides at the same time."""
+    if _kind(a) != _kind(b):
+        return False
+    if abs((a.start_time - b.start_time).total_seconds()) <= SAME_SESSION_S:
+        return True
+    a_s, b_s = a.duration_s or 0, b.duration_s or 0
+    shorter = min(a_s, b_s)
+    if shorter <= 0:
+        return False
+    start = max(a.start_time, b.start_time)
+    end = min(a.start_time + timedelta(seconds=a_s), b.start_time + timedelta(seconds=b_s))
+    return (end - start).total_seconds() >= SAME_SESSION_OVERLAP * shorter
+
+
+def _keep_first(a) -> tuple:
+    """Which copy to show: Strava first, then Garmin, then Intervals.icu; within one source the copy with power,
+    then elevation, then the longer one."""
+    has_power = getattr(a, "avg_power", None) is not None or getattr(a, "norm_power", None) is not None
+    return (SOURCE_RANK.get(a.source, 9), not has_power, not getattr(a, "elevation_m", 0), -(a.duration_s or 0))
+
+
+def dedupe(activities: list) -> list:
+    """Show a session once when it was recorded or imported more than once (see same_session).
+
+    That covers one ride from Strava and Garmin, and also two copies from the same source, e.g. Zwift and a
+    Garmin head unit both uploading the same ride to Strava. Keeps the input order.
     """
-    rank = {a.source: SOURCE_RANK.get(a.source, 9) for a in activities}
-    starts = {src: [a.start_time for a in activities if a.source == src] for src in rank}
-    kept = []
-    for a in activities:
-        better = [s for src, r in rank.items() if r < rank[a.source] for s in starts[src]]
-        if any(abs((a.start_time - s).total_seconds()) <= window_s for s in better):
-            continue
-        kept.append(a)
-    return kept
+    kept: list = []  # sorted by start time
+    for a in sorted(activities, key=_keep_first):
+        i = bisect_left(kept, a.start_time - timedelta(seconds=LONGEST_S), key=lambda k: k.start_time)
+        end = a.start_time + timedelta(seconds=max(a.duration_s or 0, SAME_SESSION_S))
+        duplicate = False
+        for k in islice(kept, i, None):
+            if k.start_time > end:
+                break
+            if same_session(a, k):
+                duplicate = True
+                break
+        if not duplicate:
+            insort(kept, a, key=lambda k: k.start_time)
+    keep = {id(a) for a in kept}
+    return [a for a in activities if id(a) in keep]
 
 
 def week_start_of(d: date, week_start: int = 0) -> date:

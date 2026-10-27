@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import completion, localtime
 from .db import Activity, DeletedActivity, ScheduledWorkout, User
-from .fitness import dedupe
+from .fitness import LONGEST_S, SAME_SESSION_S, dedupe, same_session
+from .sync_options import hidden_sources
 
-SAME_SESSION_S = 600  # as fitness.dedupe
 _FIELDS = [c.name for c in Activity.__table__.columns if c.name not in ("id", "user_id")]
 
 
@@ -37,16 +37,15 @@ def is_deleted(db: DbSession, user_id: int, source: str, external_id: str) -> bo
 
 
 def _copies(db: DbSession, act: Activity) -> list[Activity]:
-    window = timedelta(seconds=SAME_SESSION_S)
-    return list(
-        db.scalars(
-            select(Activity).where(
-                Activity.user_id == act.user_id,
-                Activity.start_time >= act.start_time - window,
-                Activity.start_time <= act.start_time + window,
-            )
+    """`act` and its other records of the same session (fitness.same_session)."""
+    near = db.scalars(
+        select(Activity).where(
+            Activity.user_id == act.user_id,
+            Activity.start_time >= act.start_time - timedelta(seconds=LONGEST_S),
+            Activity.start_time <= act.start_time + timedelta(seconds=max(act.duration_s or 0, SAME_SESSION_S)),
         )
     )
+    return [a for a in near if a.id == act.id or same_session(a, act)]
 
 
 def _rematch(db: DbSession, user: User, days: list[date]) -> None:
@@ -63,6 +62,32 @@ def delete(db: DbSession, user: User, ids: list[int]) -> int:
             gone[c.id] = c
     if not gone:
         return 0
+    _remove(db, user, gone)
+    return len(dedupe(list(gone.values())))
+
+
+def remove_duplicates(db: DbSession, user: User) -> int:
+    """Clean-up: delete the extra copies `fitness.dedupe` hides, keeping the copy that is shown.
+
+    They go to the deleted list like any deleted activity (Undo works, the next sync doesn't bring them
+    back). Sources whose activities the user switched off are left alone. Returns copies removed.
+    """
+    hidden = hidden_sources(db, user.id, "activities")
+    acts = list(
+        db.scalars(
+            select(Activity)
+            .where(Activity.user_id == user.id, Activity.source.not_in(hidden))
+            .order_by(Activity.start_time)
+        )
+    )
+    shown = {a.id for a in dedupe(acts)}
+    extra = {a.id: a for a in acts if a.id not in shown}
+    if extra:
+        _remove(db, user, extra)
+    return len(extra)
+
+
+def _remove(db: DbSession, user: User, gone: dict[int, Activity]) -> None:
     tz = localtime.zone(user.timezone)
     days = [localtime.local_date(a.start_time, tz) for a in gone.values()]
     # Workouts done with these rides lose the link; automatic matching runs again below.
@@ -95,7 +120,6 @@ def delete(db: DbSession, user: User, ids: list[int]) -> int:
     db.commit()
     _rematch(db, user, days)
     db.commit()
-    return len(dedupe(list(gone.values())))
 
 
 def listing(db: DbSession, user: User) -> list[dict]:

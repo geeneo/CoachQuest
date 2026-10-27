@@ -615,6 +615,23 @@ function UserDetail({ u, isMe, update, reload }) {
               )}
             </div>
           )}
+          <h3>Duplicates</h3>
+          <button
+            className="btn small"
+            disabled={busy}
+            onClick={() =>
+              confirm(
+                `Remove duplicate activities for ${u.display_name}? The extra copies are deleted; ` +
+                  "they can undo it under Deleted activities.",
+              ) &&
+              run(async () => {
+                const r = await api(`/api/admin/users/${u.id}/remove-duplicates`, { method: "POST" });
+                setMsg({ ok: r.removed ? `Removed ${r.removed} duplicate${r.removed === 1 ? "" : "s"}.` : "No duplicates found." });
+              })
+            }
+          >
+            Remove duplicates
+          </button>
           {linked
             .filter(([k]) => k !== "intervals_icu")
             .map(([k, label]) => (
