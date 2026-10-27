@@ -5,7 +5,7 @@ import { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
-import { dateTime, formatDate } from "../lib/format.js";
+import { dateTime, duration, formatDate } from "../lib/format.js";
 import { AdminSignIns } from "../components/SignInLog.jsx";
 import { Backfill } from "./Connections.jsx";
 
@@ -25,6 +25,7 @@ export default function Admin() {
       </p>
       <Settings />
       <Users onChange={() => setRev((r) => r + 1)} />
+      <PlatformWorkouts />
       <AiUsage rev={rev} />
       <Storage rev={rev} />
       <AdminSignIns />
@@ -1028,6 +1029,114 @@ function AiUsage({ rev }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// The shared Zwift / MyWhoosh catalog that plans' indoor days are matched against.
+function PlatformWorkouts() {
+  const res = useApi("/api/admin/platform-workouts");
+  const [platform, setPlatform] = useState("zwift");
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const upload = async (e) => {
+    const picked = [...e.target.files];
+    e.target.value = "";
+    if (!picked.length) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const files = await Promise.all(picked.map(async (f) => ({ name: f.name, content: await f.text() })));
+      const r = await api("/api/admin/platform-workouts", { method: "POST", body: { platform, files } });
+      setMsg({
+        ok: `${r.added} added, ${r.updated} replaced.`,
+        errors: r.errors,
+      });
+      res.reload();
+    } catch (err) {
+      setMsg({ error: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = (w) =>
+    confirm(`Remove "${w.name}" from the catalog?`) &&
+    api(`/api/admin/platform-workouts/${w.id}`, { method: "DELETE" }).then(res.reload, (e) => setMsg({ error: e.message }));
+  const d = res.data;
+  return (
+    <section className="card">
+      <h2>Platform workouts</h2>
+      <p className="muted small">
+        Zwift and MyWhoosh workouts that indoor plan days are matched against. Upload .zwo files (MyWhoosh workouts
+        download as .zwo too); a workout with the same name is replaced. Athletes see only the name and open it on
+        their platform. Matching shows for athletes who ticked Zwift or MyWhoosh under Connections.
+      </p>
+      {d && !d.enabled && (
+        <div className="error small">
+          Matching is switched off (Settings → Workouts). The catalog is kept; athletes don't see matches.
+        </div>
+      )}
+      <div className="row wrap">
+        <label className="inline">
+          Platform
+          <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
+            {Object.entries(d?.platforms || { zwift: "Zwift", mywhoosh: "MyWhoosh" }).map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="btn">
+          {busy ? "Uploading…" : "Upload .zwo files"}
+          <input type="file" accept=".zwo" multiple hidden disabled={busy} onChange={upload} />
+        </label>
+      </div>
+      {msg?.ok && <div className="ok small">{msg.ok}</div>}
+      {msg?.errors?.length > 0 && (
+        <ul className="error small">
+          {msg.errors.map((e) => (
+            <li key={e.file}>
+              {e.file}: {e.error}
+            </li>
+          ))}
+        </ul>
+      )}
+      {msg?.error && <div className="error">{msg.error}</div>}
+      {res.error && <div className="error">{res.error.message}</div>}
+      {d && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Platform</th>
+                <th>Workout</th>
+                <th>Length</th>
+                <th>IF · TSS</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {d.workouts.map((w) => (
+                <tr key={w.id}>
+                  <td>{d.platforms[w.platform]}</td>
+                  <td title={w.description}>{w.name}</td>
+                  <td>{duration(w.duration_s)}</td>
+                  <td>
+                    {w.intensity_factor ?? "–"} · {w.tss ?? "–"}
+                  </td>
+                  <td>
+                    <button className="link-btn small" onClick={() => remove(w)}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!d.workouts.length && <p className="muted small">No workouts yet.</p>}
         </div>
       )}
     </section>

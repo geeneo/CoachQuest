@@ -12,7 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
-from .. import accounts, admin_users, auth_log, backfill, mailer, runtime
+from .. import accounts, admin_users, auth_log, backfill, mailer, platform_catalog, runtime
 from ..config import settings
 from ..db import (
     AccessLog,
@@ -22,6 +22,7 @@ from ..db import (
     Connection,
     Grant,
     Plan,
+    PlatformWorkout,
     Session,
     User,
     WellnessDay,
@@ -108,7 +109,8 @@ def update_settings(body: SettingsUpdate, admin: User = Depends(admin_user), db:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if runtime.SUPER_ONLY & body.values.keys() and not admin.is_super_admin:
-        raise HTTPException(status_code=403, detail="Only a super admin can change who approves sign-ups")
+        names = ", ".join(runtime.EDITABLE[k].label for k in sorted(runtime.SUPER_ONLY & body.values.keys()))
+        raise HTTPException(status_code=403, detail=f"Only a super admin can change: {names}")
     for key, value in body.values.items():
         runtime.save(db, key, value.strip(), admin.id)
     return {"settings": runtime.describe()}
@@ -467,3 +469,56 @@ def sign_ins(
         "kinds": auth_log.EVENTS,
         "keep_days": runtime.get("auth_log_days"),
     }
+
+
+# ---- Zwift / MyWhoosh workout catalog (platform_catalog.py) ----
+
+
+@router.get("/platform-workouts")
+def list_platform_workouts(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    rows = db.scalars(select(PlatformWorkout).order_by(PlatformWorkout.platform, PlatformWorkout.name)).all()
+    return {
+        "enabled": platform_catalog.enabled(),
+        "platforms": platform_catalog.PLATFORMS,
+        "workouts": [platform_catalog.catalog_out(w) for w in rows],
+    }
+
+
+class ZwoFile(BaseModel):
+    name: str = Field(max_length=255)
+    content: str = Field(max_length=platform_catalog.MAX_FILE_BYTES)
+
+
+class CatalogUpload(BaseModel):
+    platform: str
+    files: list[ZwoFile] = Field(min_length=1, max_length=200)
+
+
+@router.post("/platform-workouts")
+def upload_platform_workouts(body: CatalogUpload, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Add .zwo files to the catalog. A workout with the same name on that platform is replaced."""
+    if body.platform not in platform_catalog.PLATFORMS:
+        raise HTTPException(status_code=422, detail="Platform must be zwift or mywhoosh")
+    counts, errors = {"added": 0, "updated": 0}, []
+    for f in body.files:
+        try:
+            parsed = platform_catalog.parse_zwo(f.content)
+        except platform_catalog.ZwoError as exc:
+            errors.append({"file": f.name, "error": str(exc)})
+            continue
+        counts[platform_catalog.add(db, body.platform, parsed, admin.id)] += 1
+        db.flush()  # a second file with the same name in this upload replaces the first
+    db.commit()
+    log.info("Admin %s uploaded platform workouts: %s, %d errors", admin.id, counts, len(errors))
+    return {**counts, "errors": errors}
+
+
+@router.delete("/platform-workouts/{workout_id}")
+def delete_platform_workout(workout_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Remove from the catalog. Plan days already swapped to it keep their copy of the steps."""
+    w = db.get(PlatformWorkout, workout_id)
+    if w is None:
+        raise HTTPException(status_code=404, detail="Workout not found")
+    db.delete(w)
+    db.commit()
+    return {"ok": True}

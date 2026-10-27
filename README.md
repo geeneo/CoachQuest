@@ -116,6 +116,20 @@ accounts) are super admins; a super admin can make other admins super admins
 under Admin → Users → Details. Only a super admin can change that setting, or
 change, disable, delete or reset the password of another super admin.
 
+### Matching Zwift / MyWhoosh workouts
+
+Neither Zwift nor MyWhoosh lets another app search its workouts, so admins
+keep one shared catalog: Admin → Platform workouts, upload .zwo files per
+platform (MyWhoosh workouts download as .zwo too). Each upcoming indoor plan
+day then shows the closest catalog workout on the athlete's preferred
+platforms (Connections) with a match score, comparing length, intensity and
+the work efforts. "Use this" swaps the day's workout for it (the calendar and
+Intervals.icu follow); "Back to the plan's workout" swaps back. Athletes only
+see the workout's name; the files stay on the server.
+
+A super admin can switch it off under Admin → Settings → Workouts → "Match
+plan workouts to Zwift / MyWhoosh". Days already swapped keep their workout.
+
 ### AI coach tab
 
 All AI features follow one rule: CoachQuest computes the facts and decisions,

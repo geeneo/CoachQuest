@@ -212,6 +212,11 @@
         reaches it.
         - [ ] Still open: Zwift's own Training API, only once Zwift approves
           CoachQuest as a partner (Intervals.icu covers Zwift until then).
+      - [x] **Closest Zwift / MyWhoosh workout per indoor day.** Shared
+        catalog uploaded by admins as .zwo files; each indoor plan day shows
+        the closest one on the athlete's preferred platforms with a match
+        score, and can swap to it and back. A super admin switch turns it
+        off.
       - This replaces the training plan page's "MyWhoosh" and "fits a
         workout" buttons: indoor plan days link to real workouts.
       - Needs from outside: Zwift partner approval; a check of MyWhoosh's

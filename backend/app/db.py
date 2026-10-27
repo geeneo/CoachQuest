@@ -411,6 +411,24 @@ class ScheduledWorkout(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class PlatformWorkout(Base):
+    """A Zwift or MyWhoosh workout in the shared catalog plan days are matched against
+    (see platform_catalog.py). Uploaded by admins as .zwo files."""
+
+    __tablename__ = "platform_workouts"
+    __table_args__ = (UniqueConstraint("platform", "name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    platform: Mapped[str] = mapped_column(String(20), index=True)  # zwift | mywhoosh
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    steps: Mapped[list] = mapped_column(JSON)
+    # platform_catalog.features(steps), kept so matching doesn't recompute them.
+    features: Mapped[dict] = mapped_column(JSON)
+    added_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class ExternalWorkout(Base):
     """What a platform has of a scheduled workout. Our key there is "cq-<scheduled id>", so
     sending the same workout twice updates it instead of creating a duplicate."""

@@ -118,6 +118,14 @@ EDITABLE: dict[str, Editable] = {
         help="On: everyone who signs up waits until a super admin approves them under Admin → Users, whatever "
         "Registration says (Closed still keeps sign-ups out). Only super admins can change this.",
     ),
+    "platform_matching": Editable(
+        "Match plan workouts to Zwift / MyWhoosh",
+        "Workouts",
+        choices=("on", "off"),
+        help="On: indoor plan days show the closest workout from the Zwift / MyWhoosh catalog (Admin → Platform "
+        "workouts) for the athlete's preferred platform, and the athlete can swap to it. Off: hidden everywhere; "
+        "swapped days keep their workout. Only super admins can change this.",
+    ),
     "anthropic_model_short": Editable(
         "Model for notes, reviews and chat",
         "AI coach",
@@ -162,7 +170,7 @@ EDITABLE: dict[str, Editable] = {
 }
 
 # Only super admins may change these.
-SUPER_ONLY = {"signup_approval"}
+SUPER_ONLY = {"signup_approval", "platform_matching"}
 
 _overrides: dict[str, str] = {}
 

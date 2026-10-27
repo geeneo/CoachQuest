@@ -1,5 +1,6 @@
 import { ArrowLeftRight, Lock, MessageSquare, Sparkles, Unlock } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
 import { duration, shortDate } from "../lib/format.js";
@@ -98,7 +99,15 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
     get,
     replanDay,
     isCoach: plan.viewer_role === "coach",
+    usePlatform: (date, m) =>
+      confirm(
+        `Use ${m.platform_name}'s "${m.name}" on ${fmtDate(date)}? It takes ${duration(m.duration_s)}` +
+          (m.tss != null ? ` (training load ${m.tss} TSS)` : "") +
+          `, so the day's load changes. You can swap back to the plan's workout at any time.`,
+      ) && call(`/days/${date}/platform-workout`, "POST", { platform_workout_id: m.id }),
+    restorePlan: (date) => call(`/days/${date}/platform-workout`, "DELETE"),
   };
+  const matching = plan.platform_matching || {};
   return (
     <>
       <div className="row between tracker-bar">
@@ -162,6 +171,12 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
             </button>
           </div>
         </form>
+      )}
+      {matching.enabled && !matching.platforms?.length && plan.weeks.some((w) => w.days.some((d) => d.workout)) && (
+        <p className="muted small">
+          Ride on Zwift or MyWhoosh? Tick it under <Link to="/connections">Connections → preferred platforms</Link> to
+          see the closest workout there for each indoor day.
+        </p>
       )}
       {swapFrom && <div className="ok small">Pick the day to swap with {fmtDate(swapFrom)}, or click ⇄ again to cancel.</div>}
       {notice && <div className="ok small">{notice}</div>}
@@ -328,6 +343,7 @@ function Day({ day, ctx }) {
             {day.route && <span className="badge">🗺 {day.route}</span>}
           </div>
         )}
+        {!editing && <PlatformMatches day={day} ctx={ctx} />}
         <Actual day={day} tags={tags} save={save} />
         {replanning && (
           <form
@@ -373,6 +389,39 @@ function Day({ day, ctx }) {
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+// The closest Zwift / MyWhoosh workouts for an indoor day, and swapping to one (and back).
+function PlatformMatches({ day, ctx }) {
+  const w = day.workout;
+  if (!w) return null;
+  const matches = (day.platform_matches || []).filter((m) => m.id !== w.platform?.id);
+  if (!w.platform && !matches.length) return null;
+  return (
+    <div className="platform-matches small">
+      {w.platform && (
+        <span className="row tight">
+          <span className="muted">
+            Using {w.platform.name}'s workout instead of the plan's "{w.original?.name}".
+          </span>
+          <button type="button" className="link-btn small" onClick={() => ctx.restorePlan(day.date)}>
+            Back to the plan's workout
+          </button>
+        </span>
+      )}
+      {matches.map((m) => (
+        <span key={m.id} className="row tight">
+          <span title={`${duration(m.duration_s)}${m.tss != null ? ` · ${m.tss} TSS` : ""}`}>
+            Closest on {m.platform_name}: <strong>{m.name}</strong>{" "}
+            <span className="muted">({m.score}% match)</span>
+          </span>
+          <button type="button" className="link-btn small" onClick={() => ctx.usePlatform(day.date, m)}>
+            Use this
+          </button>
+        </span>
+      ))}
     </div>
   );
 }

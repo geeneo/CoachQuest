@@ -9,9 +9,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import comments, localtime, plan_approval, plan_tracker, plan_workouts, sync_engine, zwo
+from .. import comments, localtime, plan_approval, plan_tracker, plan_workouts, platform_catalog, sync_engine, zwo
 from ..coach import PHASES, CoachError, build_facts, generate_day, generate_plan, has_data
-from ..db import Comment, Plan, User, get_db
+from ..db import Comment, Plan, PlatformWorkout, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 from ..queries import activities_since
 from .preferences import SESSION_TYPES, preferences_out
@@ -68,7 +68,24 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
             start = datetime.combine(date.fromisoformat(p.weeks[0]["start"]), datetime.min.time()) - timedelta(1)
             acts = activities_since(db, p.athlete_id, start)
             out["weeks"] = plan_tracker.with_actuals(p.weeks, acts, today, localtime.zone(athlete.timezone))
+            out["platform_matching"] = _add_matches(db, athlete, out["weeks"], today)
     return out
+
+
+def _add_matches(db: DbSession, athlete: User, weeks: list[dict], today: date) -> dict:
+    """Put the closest Zwift / MyWhoosh workouts on each indoor day from today on (platform_catalog.py)."""
+    if not platform_catalog.enabled():
+        return {"enabled": False}
+    platforms = platform_catalog.athlete_platforms(athlete)
+    catalog = platform_catalog.load(db, platforms) if platforms else []
+    for week in weeks:
+        for d in week["days"]:
+            w = d.get("workout")
+            if catalog and w and w.get("steps") and date.fromisoformat(d["date"]) >= today:
+                # A day swapped to a platform workout is matched on what the plan asked for.
+                steps = (w.get("original") or w)["steps"]
+                d["platform_matches"] = platform_catalog.best_matches(db, steps, platforms, catalog)
+    return {"enabled": True, "platforms": platforms, "catalog_size": len(catalog)}
 
 
 def _plan(db: DbSession, user: User, athlete: str, plan_id: int) -> Plan:
@@ -598,6 +615,77 @@ def _day_workout(day: dict) -> dict | None:
     if not w or not w.get("steps"):
         return None
     return {"name": w["name"], "description": day.get("description") or "", "instructions": "", "steps": w["steps"]}
+
+
+class UsePlatformWorkout(BaseModel):
+    platform_workout_id: int
+
+
+def _indoor_day(p: Plan, day: date) -> tuple[list[dict], dict]:
+    if not p.weeks:
+        raise HTTPException(status_code=400, detail="This older plan has no day-by-day schedule")
+    weeks = _editable(p)
+    try:
+        wi, di = plan_tracker.find_day(weeks, day.isoformat())
+    except KeyError:
+        raise HTTPException(status_code=404, detail="That day is not in this plan") from None
+    d = weeks[wi]["days"][di]
+    if not (d.get("workout") or {}).get("steps"):
+        raise HTTPException(status_code=400, detail="This day has no structured workout")
+    return weeks, d
+
+
+@router.post("/{plan_id}/days/{day}/platform-workout")
+def use_platform_workout(
+    athlete: str,
+    plan_id: int,
+    day: date,
+    body: UsePlatformWorkout,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Swap the day's workout for a Zwift / MyWhoosh catalog workout. The plan's own one is kept to swap back."""
+    if not platform_catalog.enabled():
+        raise HTTPException(status_code=403, detail="Matching Zwift / MyWhoosh workouts is switched off")
+    p = _plan(db, user, athlete, plan_id)
+    pw = db.get(PlatformWorkout, body.platform_workout_id)
+    if pw is None:
+        raise HTTPException(status_code=404, detail="Workout not found")
+    weeks, d = _indoor_day(p, day)
+    w = d["workout"]
+    # The plan's own workout and length, to swap back to. Swapping again keeps the first one.
+    original = w.get("original") or {"name": w["name"], "steps": w["steps"], "duration_min": d.get("duration_min")}
+    d["workout"] = {
+        "name": pw.name,
+        "steps": pw.steps,
+        "platform": {"id": pw.id, "platform": pw.platform, "name": platform_catalog.PLATFORMS[pw.platform]},
+        "original": original,
+    }
+    d["duration_min"] = round(pw.features["duration_s"] / 60)
+    _save_weeks(db, p, weeks, background)
+    return plan_out(p, db, full=True, viewer=user)
+
+
+@router.delete("/{plan_id}/days/{day}/platform-workout")
+def restore_plan_workout(
+    athlete: str,
+    plan_id: int,
+    day: date,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Swap back to the workout the plan had before. Works even with matching switched off."""
+    p = _plan(db, user, athlete, plan_id)
+    weeks, d = _indoor_day(p, day)
+    original = d["workout"].get("original")
+    if not original:
+        raise HTTPException(status_code=400, detail="This day already has the plan's own workout")
+    d["duration_min"] = original.pop("duration_min", None) or d.get("duration_min")
+    d["workout"] = original
+    _save_weeks(db, p, weeks, background)
+    return plan_out(p, db, full=True, viewer=user)
 
 
 @router.get("/{plan_id}/days/{day}/zwo")

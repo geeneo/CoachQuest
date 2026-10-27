@@ -67,6 +67,8 @@ class Settings:
     admin_view_data: str = os.getenv("ADMIN_VIEW_DATA", "off")
     # "on": new sign-ups wait until a super admin approves them. Admin → Settings → Accounts.
     signup_approval: str = os.getenv("SIGNUP_APPROVAL", "off")
+    # "on": indoor plan days show the closest Zwift / MyWhoosh workout from the catalog.
+    platform_matching: str = os.getenv("PLATFORM_MATCHING", "on")
 
     smtp_host: str = os.getenv("SMTP_HOST", "")
     smtp_port: str = os.getenv("SMTP_PORT", "587")
