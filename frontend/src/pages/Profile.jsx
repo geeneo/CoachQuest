@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import TrainingPreferences from "../components/TrainingPreferences.jsx";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { DATE_FORMATS, dateTime, formatDate } from "../lib/format.js";
-import { getTheme, setTheme } from "../lib/theme.js";
+import { EVENT as THEME_EVENT, getTheme, setTheme } from "../lib/theme.js";
 import { MySignIns } from "../components/SignInLog.jsx";
 
 const NUMBER_FIELDS = [
@@ -218,6 +218,12 @@ function PauseAccount({ email, onPaused }) {
 
 function Appearance() {
   const [theme, setChoice] = useState(getTheme);
+  useEffect(() => {
+    // The header switch changes it too.
+    const update = () => setChoice(getTheme());
+    window.addEventListener(THEME_EVENT, update);
+    return () => window.removeEventListener(THEME_EVENT, update);
+  }, []);
   const choose = (t) => {
     setTheme(t);
     setChoice(t);

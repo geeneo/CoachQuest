@@ -2,7 +2,7 @@
 
 ## Next up
 
-- [ ] **Dark mode switch in the top right.** A light/dark toggle in the
+- [x] **Dark mode switch in the top right.** A light/dark toggle in the
       header (top right, next to the user menu), so it can be changed from
       any page. It should use the same setting as the Light / Dark / System
       switch in Profile and be remembered per browser.

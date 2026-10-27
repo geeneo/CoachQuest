@@ -3,6 +3,7 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth.jsx";
 import Logo from "./Logo.jsx";
+import ThemeToggle from "./ThemeToggle.jsx";
 
 const NAV = [
   { to: "/", label: "My training", icon: LayoutDashboard, end: true },
@@ -29,6 +30,7 @@ export default function Layout() {
         <NavLink to="/" className="brand" aria-label="CoachQuest home">
           <Logo variant="word" />
         </NavLink>
+        <ThemeToggle className="topbar-theme" />
       </header>
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <NavLink to="/" end className="brand sidebar-brand" aria-label="CoachQuest home" onClick={() => setOpen(false)}>
@@ -50,6 +52,7 @@ export default function Layout() {
       </aside>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <main className="content">
+        <ThemeToggle className="content-theme" />
         <Outlet />
       </main>
     </div>
