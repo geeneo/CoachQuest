@@ -2,6 +2,27 @@
 
 ## Next up
 
+- [ ] **First sign-in: make clear what comes from where (no duplicates).**
+      When a new user links Strava, Garmin and Intervals.icu, show a
+      prominent step that says which app brings in what (rides, runs,
+      wellness, weight) and lets them choose, so the same ride isn't
+      imported twice (e.g. a Zwift ride arriving through both Strava and
+      Garmin). Builds on the per-source sync options that already exist.
+      - Show it as soon as a second source is linked, and on Connections
+        until they've confirmed it.
+      - Plain summary: "Rides from Strava, sleep / HRV / weight from Garmin,
+        workouts go to Intervals.icu".
+- [ ] **Strava segments for hill repeats in the plan.** Save Strava segment
+      links (e.g. the local climb used for hill repeats) with a name, and
+      use them in training:
+      - Add a segment by pasting its Strava link; keep a list per athlete
+        (and coaches can add them for their athletes).
+      - The AI coach knows the saved segments and, on hill-repeat days,
+        says which one to ride ("6 x Helshoogte, link") on outdoor days.
+      - Indoor days: the same efforts as an indoor workout, with the
+        segment named for reference.
+      - Show the segment link on the plan day, so it opens in Strava.
+
 - [x] **News and how-to section.** A place in the app for posts about
       CoachQuest, written and edited by admins in the web UI:
       - News: blog updates about the application (what's new, changes).
