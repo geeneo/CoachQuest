@@ -10,7 +10,7 @@ The library is code, not data: it is reviewed like code and the same on every
 server. `LIBRARY` is checked against the steps format when the module loads.
 """
 
-from . import workouts
+from . import platform_catalog, workouts
 
 COLLECTIONS = [
     ("endurance", "Recovery & endurance", "Easy and aerobic riding (Z1–Z2): the base everything else is built on."),
@@ -825,6 +825,28 @@ _check()
 
 def get(slug: str) -> dict | None:
     return BY_SLUG.get(slug)
+
+
+# For matching plan days: what each workout is about (platform_catalog.features), worked out once.
+FEATURES = {w["slug"]: platform_catalog.features(w["steps"]) for w in LIBRARY}
+
+
+def best_match(steps: list[dict]) -> dict | None:
+    """The library workout closest to a plan day's workout, when it is close enough (platform_catalog.score)."""
+    want = platform_catalog.features(steps)
+    s, w = max(((platform_catalog.score(want, FEATURES[w["slug"]]), w) for w in LIBRARY), key=lambda x: x[0])
+    if s < platform_catalog.MIN_SCORE:
+        return None
+    f = FEATURES[w["slug"]]
+    return {
+        "slug": w["slug"],
+        "name": w["name"],
+        "collection": COLLECTION_NAMES[w["collection"]],
+        "score": s,
+        "duration_s": f["duration_s"],
+        "tss": f["tss"],
+        "intensity_factor": f["intensity_factor"],
+    }
 
 
 def out(w: dict, ftp: int | None = None, with_steps: bool = False) -> dict:

@@ -146,6 +146,11 @@ download the .zwo (Zwift: custom workouts folder; MyWhoosh: Workout Builder →
 Upload). Scheduled workouts go to Intervals.icu (and on to Zwift / MyWhoosh)
 like any other.
 
+Plans use it too: an indoor plan day with no close Zwift / MyWhoosh workout
+(or an athlete with no platform picked) shows the closest library workout
+with its match score, and "Use this" swaps it in; "Back to the plan's
+workout" undoes it. Same super admin switch as platform matching.
+
 The library lives in `backend/app/library.py` as code, so it is reviewed like
 code and the same on every server; each workout is checked against the steps
 format when the module loads.

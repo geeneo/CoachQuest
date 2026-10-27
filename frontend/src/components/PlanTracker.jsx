@@ -106,6 +106,12 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
           (m.tss != null ? ` (training load ${m.tss} TSS)` : "") +
           `, so the day's load changes. You can swap back to the plan's workout at any time.`,
       ) && call(`/days/${date}/platform-workout`, "POST", { platform_workout_id: m.id }),
+    useLibrary: (date, m) =>
+      confirm(
+        `Use "${m.name}" from the CoachQuest library on ${fmtDate(date)}? It takes ${duration(m.duration_s)}` +
+          (m.tss != null ? ` (training load ${m.tss} TSS)` : "") +
+          `, so the day's load changes. You can swap back to the plan's workout at any time.`,
+      ) && call(`/days/${date}/library-workout`, "POST", { slug: m.slug }),
     restorePlan: (date) => call(`/days/${date}/platform-workout`, "DELETE"),
     maxSessions: plan.max_sessions_per_day || 1,
   };
@@ -429,7 +435,21 @@ function MatchStatus({ matching }) {
       );
     }
   }
-  return text ? <p className="match-status small">{text}</p> : null;
+  const fromLibrary = matching.library_days > 0 && (
+    <>
+      {" "}
+      {text ? "Meanwhile, " : ""}
+      {matching.library_days} indoor day{matching.library_days === 1 ? "" : "s"} without a{" "}
+      {matching.platforms.length ? "platform" : "Zwift / MyWhoosh"} match show{matching.library_days === 1 ? "s" : ""}{" "}
+      the closest workout from the <Link to="/workouts">CoachQuest library</Link>.
+    </>
+  );
+  return text || fromLibrary ? (
+    <p className="match-status small">
+      {text}
+      {fromLibrary}
+    </p>
+  ) : null;
 }
 
 // The day's other sessions (e.g. Strength after the ride): each its own type, text and time.
@@ -504,18 +524,22 @@ function ExtraSessions({ day, types, max, save }) {
   );
 }
 
-// The closest Zwift / MyWhoosh workouts for an indoor day, and swapping to one (and back).
+// The closest Zwift / MyWhoosh workouts for an indoor day (or, without one, the closest from CoachQuest's
+// library), and swapping to one (and back).
 function PlatformMatches({ day, ctx }) {
   const w = day.workout;
   if (!w) return null;
   const matches = (day.platform_matches || []).filter((m) => m.id !== w.platform?.id);
-  if (!w.platform && !matches.length) return null;
+  const lib = day.library_match && day.library_match.slug !== w.library?.slug ? day.library_match : null;
+  const swapped = w.platform || w.library;
+  if (!swapped && !matches.length && !lib) return null;
   return (
     <div className="platform-matches small">
-      {w.platform && (
+      {swapped && (
         <span className="row tight">
           <span className="muted">
-            Using {w.platform.name}'s workout instead of the plan's "{w.original?.name}".
+            Using {w.platform ? `${w.platform.name}'s workout` : "a CoachQuest library workout"} instead of the plan's
+            "{w.original?.name}".
           </span>
           <button type="button" className="link-btn small" onClick={() => ctx.restorePlan(day.date)}>
             Back to the plan's workout
@@ -534,6 +558,17 @@ function PlatformMatches({ day, ctx }) {
           </button>
         </span>
       ))}
+      {lib && (
+        <span className="row tight">
+          <span title={`${duration(lib.duration_s)}${lib.tss != null ? ` · ${lib.tss} TSS` : ""}`}>
+            From the CoachQuest library: <strong>{lib.name}</strong>
+            <span className="muted"> · {lib.collection}</span> <span className="muted">({lib.score}% match)</span>
+          </span>
+          <button type="button" className="link-btn small" onClick={() => ctx.useLibrary(day.date, lib)}>
+            Use this
+          </button>
+        </span>
+      )}
     </div>
   );
 }
