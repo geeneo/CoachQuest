@@ -1822,3 +1822,18 @@ ul.instructions > li.note.suggestion {
 .catalog-table td.nowrap {
   white-space: nowrap;
 }
+
+/* Workouts → Library */
+.library-group {
+  margin-top: 1.25rem;
+}
+.library-group h2 {
+  margin-bottom: 0.1rem;
+}
+.workout-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.nowrap {
+  white-space: nowrap;
+}

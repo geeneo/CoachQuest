@@ -1,8 +1,9 @@
 import { CalendarPlus, Download, Plus } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import WorkoutBuilder from "../components/WorkoutBuilder.jsx";
 import WorkoutChart from "../components/WorkoutChart.jsx";
+import WorkoutLibrary from "../components/WorkoutLibrary.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
@@ -18,6 +19,12 @@ export default function Workouts() {
   const [scheduling, setScheduling] = useState(null);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") === "mine" ? "mine" : "library";
+  const showTab = (t) => {
+    setEditing(null);
+    setParams(t === "mine" ? { tab: "mine" } : {}, { replace: true });
+  };
 
   const save = async (e) => {
     e.preventDefault();
@@ -47,16 +54,24 @@ export default function Workouts() {
         <div>
           <h1>Workouts</h1>
           <p className="muted small">
-            Build structured bike workouts, keep them as templates, and put them on your own or an athlete's calendar.
-            Download them as Zwift files (.zwo). Automatic sending to Zwift or MyWhoosh isn't available yet: see{" "}
-            <Link to="/connections">Connected platforms</Link>.
+            Pick a workout from the CoachQuest library or build your own, and put it on your own or an athlete's
+            calendar. Download any workout as a .zwo for Zwift or MyWhoosh, or have scheduled workouts sent for you
+            through Intervals.icu: see <Link to="/connections">Connected platforms</Link>.
           </p>
         </div>
-        {!editing && (
+        {!editing && tab === "mine" && (
           <button className="btn primary" onClick={() => setEditing({ ...BLANK, steps: [] })}>
             <Plus size={16} /> New workout
           </button>
         )}
+      </div>
+      <div className="chips">
+        <button type="button" className={`chip ${tab === "library" ? "on" : ""}`} onClick={() => showTab("library")}>
+          Library
+        </button>
+        <button type="button" className={`chip ${tab === "mine" ? "on" : ""}`} onClick={() => showTab("mine")}>
+          My workouts{library.data ? ` (${library.data.length})` : ""}
+        </button>
       </div>
       {notice && <div className="ok small">{notice}</div>}
       {error && <div className="error">{error}</div>}
@@ -96,10 +111,31 @@ export default function Workouts() {
         />
       )}
 
-      {library.loading && <p className="muted">Loading…</p>}
-      {library.data && !library.data.length && !editing && (
-        <div className="card muted">Your library is empty. Click "New workout" to build one, or start from an example.</div>
+      {tab === "library" && (
+        <WorkoutLibrary
+          onSchedule={(w) => {
+            setNotice(null);
+            setScheduling(w);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          onSaved={(msg) => {
+            setNotice(msg);
+            library.reload();
+          }}
+          onError={setError}
+        />
       )}
+      {tab === "mine" && library.loading && <p className="muted">Loading…</p>}
+      {tab === "mine" && library.data && !library.data.length && !editing && (
+        <div className="card muted">
+          You have no workouts of your own yet. Click "New workout" to build one, or save one from the{" "}
+          <button className="link-btn" onClick={() => showTab("library")}>
+            Library
+          </button>
+          .
+        </div>
+      )}
+      {tab === "mine" && (
       <div className="workout-grid">
         {library.data?.map((w) => (
           <section key={w.id} className="card workout-card">
@@ -131,6 +167,7 @@ export default function Workouts() {
           </section>
         ))}
       </div>
+      )}
     </>
   );
 }
@@ -145,7 +182,17 @@ function ScheduleForm({ workout, onDone }) {
   const submit = async (e) => {
     e.preventDefault();
     try {
-      await api(`/api/athletes/${who}/workouts`, { method: "POST", body: { day, template_id: workout.id } });
+      // A library workout brings its steps; one of your own goes by its id.
+      const body = workout.slug
+        ? {
+            day,
+            name: workout.name,
+            description: workout.description,
+            instructions: workout.instructions,
+            steps: workout.steps,
+          }
+        : { day, template_id: workout.id };
+      await api(`/api/athletes/${who}/workouts`, { method: "POST", body });
       const name = who === "me" ? "your" : `${coachable.find((a) => String(a.id) === who)?.display_name}'s`;
       onDone(`"${workout.name}" is on ${name} calendar for ${day}.`);
     } catch (err) {
@@ -173,7 +220,7 @@ function ScheduleForm({ workout, onDone }) {
         </label>
       </div>
       <p className="muted small">
-        Only athletes who share "Training plans" with you are listed. The athlete gets a copy: editing the template later
+        Only athletes who share "Training plans" with you are listed. The athlete gets a copy: editing the workout later
         doesn't change it.
       </p>
       {error && <div className="error">{error}</div>}

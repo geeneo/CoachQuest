@@ -134,6 +134,22 @@ coach plans every one of them that day as its own session: the main one
 which can be edited, removed or added on the plan. A super admin sets the
 limit (1 to 4) under Admin → Settings → Workouts → "Sessions per day".
 
+### Workout library
+
+Workouts → Library: 90 structured bike workouts written for CoachQuest, open to
+every user, in ten collections (recovery & endurance, tempo, sweet spot,
+threshold, over-unders & race efforts, VO2 max, anaerobic & sprints, short &
+sharp, cadence & skills, tests). Power is a share of FTP, so each fits any
+athlete. Search, filter by collection and length, then put a workout on your
+own or an athlete's calendar, save a copy to My workouts to change it, or
+download the .zwo (Zwift: custom workouts folder; MyWhoosh: Workout Builder →
+Upload). Scheduled workouts go to Intervals.icu (and on to Zwift / MyWhoosh)
+like any other.
+
+The library lives in `backend/app/library.py` as code, so it is reviewed like
+code and the same on every server; each workout is checked against the steps
+format when the module loads.
+
 ### Matching Zwift / MyWhoosh workouts
 
 Neither Zwift nor MyWhoosh lets another app search its workouts, so admins
