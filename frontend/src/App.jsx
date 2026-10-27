@@ -9,6 +9,7 @@ import Connections from "./pages/Connections.jsx";
 import PlanView from "./pages/PlanView.jsx";
 import { ForgotPassword, ResetPassword } from "./pages/PasswordReset.jsx";
 import Glossary from "./pages/Glossary.jsx";
+import News, { PostEditor, PostView } from "./pages/News.jsx";
 import Profile from "./pages/Profile.jsx";
 import Races from "./pages/Races.jsx";
 import Sharing from "./pages/Sharing.jsx";
@@ -42,6 +43,10 @@ export default function App() {
         <Route path="races" element={<Races />} />
         <Route path="profile" element={<Profile />} />
         <Route path="glossary" element={<Glossary />} />
+        <Route path="news" element={<News />} />
+        <Route path="news/:postId" element={<PostView />} />
+        {user.is_admin && <Route path="news/new" element={<PostEditor />} />}
+        {user.is_admin && <Route path="news/:postId/edit" element={<PostEditor />} />}
         {user.is_admin && <Route path="admin" element={<Admin />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

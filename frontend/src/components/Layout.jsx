@@ -1,4 +1,17 @@
-import { BookOpen, Dumbbell, Flag, LayoutDashboard, Link2, LogOut, Menu, Settings, Share2, Shield, Users } from "lucide-react";
+import {
+  BookOpen,
+  Dumbbell,
+  Flag,
+  LayoutDashboard,
+  Link2,
+  LogOut,
+  Menu,
+  Newspaper,
+  Settings,
+  Share2,
+  Shield,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth.jsx";
@@ -13,6 +26,7 @@ const NAV = [
   { to: "/sharing", label: "Sharing", icon: Share2 },
   { to: "/athletes", label: "My athletes", icon: Users },
   { to: "/profile", label: "Profile", icon: Settings },
+  { to: "/news", label: "News & guides", icon: Newspaper },
   { to: "/glossary", label: "Glossary", icon: BookOpen },
 ];
 

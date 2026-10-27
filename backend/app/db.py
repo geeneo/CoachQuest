@@ -581,6 +581,25 @@ class PasswordReset(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class Post(Base):
+    """A news item or how-to guide in the app, written by admins (see routers/posts.py)."""
+
+    __tablename__ = "posts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(10), default="news")  # news | guide
+    title: Mapped[str] = mapped_column(String(200))
+    summary: Mapped[str] = mapped_column(String(300), default="")
+    body_md: Mapped[str] = mapped_column(Text, default="")
+    published: Mapped[bool] = mapped_column(Boolean, default=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Guides are listed by this (lowest first); news newest first.
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class AppSetting(Base):
     """Settings an admin changed in the web UI. Values are Fernet-encrypted."""
 

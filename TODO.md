@@ -2,6 +2,26 @@
 
 ## Next up
 
+- [x] **News and how-to section.** A place in the app for posts about
+      CoachQuest, written and edited by admins in the web UI:
+      - News: blog updates about the application (what's new, changes).
+      - How-to guides, e.g. connecting MyWhoosh, the training calendar,
+        Intervals.icu (and from there Zwift / MyWhoosh), Strava and Garmin.
+      - Admins create, edit, publish / unpublish and delete posts (Markdown);
+        every signed-in user can read the published ones.
+      - Start with draft guides for MyWhoosh, the calendar and Intervals.icu,
+        written from how the app works today, for the admin to edit.
+- [ ] **Share your data with friends (view only).** Besides sharing with a
+      coach, an athlete can let other CoachQuest users look at their data:
+      - Pick what to share (activities, fitness, wellness, …) per person,
+        like with a coach; the other person accepts.
+      - View only: they can't edit plans, approve plans, comment as a coach
+        or get coach emails, and they don't count as the athlete's coach
+        (plan approval, "athlete may decide" and so on stay as they are).
+      - Shown separately from coaches on Sharing, and their looks go in the
+        athlete's "Who looked at my data" log like a coach's.
+      - Either side can end it at any time.
+
 - [x] **Dark mode switch in the top right.** A light/dark toggle in the
       header (top right, next to the user menu), so it can be changed from
       any page. It should use the same setting as the Light / Dark / System

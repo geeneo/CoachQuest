@@ -145,6 +145,15 @@ see the workout's name; the files stay on the server.
 A super admin can switch it off under Admin → Settings → Workouts → "Match
 plan workouts to Zwift / MyWhoosh". Days already swapped keep their workout.
 
+### News & guides
+
+A **News & guides** page for posts about CoachQuest: news (what's new) and
+how-to guides (connecting Strava / Garmin, Intervals.icu to Zwift and
+MyWhoosh, MyWhoosh, the training calendar). Admins write them in Markdown
+with a live preview, publish or unpublish them, and set the order of guides;
+everyone signed in reads the published ones. A fresh install starts with
+those guides and a "What's new" post as drafts, to check and publish.
+
 ### AI coach tab
 
 All AI features follow one rule: CoachQuest computes the facts and decisions,

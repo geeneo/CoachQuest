@@ -1770,3 +1770,51 @@ ul.instructions > li.note.suggestion {
   padding: 0.5rem 0.75rem;
   color: var(--muted);
 }
+
+/* ---- News & guides ---- */
+.page-head {
+  padding-right: 2.5rem; /* room for the light / dark switch in the corner */
+}
+.post-list {
+  display: grid;
+  gap: 0.25rem;
+}
+.post-card {
+  display: block;
+  text-decoration: none;
+  margin: 0.5rem 0;
+}
+.post-card:hover {
+  border-color: var(--accent);
+}
+.post-card p {
+  margin: 0.3rem 0 0;
+}
+.post {
+  max-width: 860px;
+}
+.post h1 {
+  margin: 0;
+}
+.post-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.post-edit-grid textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+.post-preview {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.25rem 1rem;
+  max-height: 34rem;
+  overflow: auto;
+}
+@media (max-width: 768px) {
+  .post-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}

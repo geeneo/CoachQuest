@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from . import accounts, assessments, auth_log, backfill, plan_approval, runtime, sync_engine
+from . import accounts, assessments, auth_log, backfill, plan_approval, posts_seed, runtime, sync_engine
 from .config import check_required, settings
 from .db import Connection, SessionLocal, User, init_db
 from .deps import READ_REQUEST
@@ -23,6 +23,7 @@ from .routers import (
     grants,
     instructions,
     plans,
+    posts,
     preferences,
     races,
     workouts,
@@ -57,6 +58,7 @@ async def lifespan(app: FastAPI):
     with SessionLocal() as db:
         runtime.load(db)
         accounts.promote_super_admins(db)
+        posts_seed.seed(db)
         if settings.enable_scheduler:
             backfill.refresh_outdated(db)  # picked up by the backfill job below
     if settings.enable_scheduler:
@@ -113,6 +115,7 @@ for r in (
     comments.router,
     instructions.router,
     athlete_notes.router,
+    posts.router,
 ):
     app.include_router(r)
 
