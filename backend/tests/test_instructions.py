@@ -44,7 +44,9 @@ def test_the_ai_gets_the_current_ones(people):
     athlete.post(url, json={"body": "I can't train on Fridays"})
     paused = cobus.post(url, json={"body": "Paused one"}).json()[-1]["id"]
     cobus.request("PATCH", f"{url}/{paused}", json={"active": False})
-    cobus.post(url, json={"body": "Old one", "until": (date.today() - timedelta(days=1)).isoformat()})
+    monday = date.today() - timedelta(days=date.today().weekday() + 7)
+    # Ended before last week, so neither today's facts nor last week's include it.
+    cobus.post(url, json={"body": "Old one", "until": (monday - timedelta(days=1)).isoformat()})
     with SessionLocal() as db:
         ann = db.get(User, aid)
         expected = [
@@ -59,7 +61,6 @@ def test_the_ai_gets_the_current_ones(people):
         assert coach.build_facts(db, ann, {"plans"}, {})["coach_instructions"] == expected
         assert "coach_instructions" not in coach.build_facts(db, ann, {"activities"}, {})
         assert assessments.readiness_facts(db, ann, {"plans"}, date.today())["coach_instructions"] == expected
-        monday = date.today() - timedelta(days=date.today().weekday() + 7)
         assert assessments.weekly_facts(db, ann, {"plans"}, monday)["coach_instructions"] == expected
     for prompt in (coach.SYSTEM_PROMPT, assessments.READINESS_PROMPT, assessments.WEEKLY_PROMPT):
         assert "`coach_instructions`" in prompt and "rank above your own judgement" in prompt
