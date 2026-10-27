@@ -95,6 +95,15 @@ app that is no longer set up). Usage shows how many users are on the shared app.
 A user on the shared app with no sign-in for 30 days is flagged "idle on shared
 Strava app": ask them to disconnect or move to their own app to free the slot.
 
+### Alpha notice for new users
+
+Off by default; only super admins can switch it (Admin → Settings → Accounts →
+"Alpha notice for new users", or `ALPHA_NOTICE=on`). When on, the sign-up page
+says CoachQuest is an alpha version and access is subject to approval, and
+everyone who signs up gets a welcome email saying the same (needs Email set up).
+It only informs: whether sign-ups wait for approval is still decided by
+Registration and "Super admin approves new sign-ups".
+
 ### Admin access to athletes' data
 
 Off by default. Admin → Settings → Accounts → "Admins can view athletes' data"

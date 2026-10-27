@@ -98,3 +98,36 @@ def test_super_admin_emails_promoted_at_start(make_user):
         accounts.promote_super_admins(db)
         db.refresh(u)
         assert u.is_admin and u.is_super_admin
+
+
+def test_alpha_notice_on_sign_up(client, make_user, fake_smtp):  # noqa: F811
+    boss = make_user("admin@example.com", "Boss")
+    _configure(boss)
+    helper = make_user("helper@example.com", "Helper")
+    _make_admin(boss, helper)
+    assert client.get("/api/auth/notice").json() == {"message": None}  # off by default
+    fake_smtp.clear()
+    _register(client, "quiet@example.com")
+    assert fake_smtp == []
+
+    alpha = {"values": {"alpha_notice": "on"}}
+    assert helper.request("PUT", "/api/admin/settings", json=alpha).status_code == 403  # super admins only
+    assert boss.request("PUT", "/api/admin/settings", json=alpha).status_code == 200
+    msg = client.get("/api/auth/notice").json()["message"]
+    assert "alpha version" in msg and "subject to approval" in msg
+
+    fake_smtp.clear()
+    _register(client, "new@example.com")
+    sent = [c for msgs in fake_smtp for c in msgs if c[0] == "send"]
+    assert sent == [("send", "new@example.com", "Welcome to CoachQuest (alpha version)", sent[0][3])]
+
+    # With approval on too, the new user gets the notice and the super admin is told.
+    boss.request("PUT", "/api/admin/settings", json=SUPER)
+    fake_smtp.clear()
+    assert _register(client, "waiting@example.com").json()["pending"] is True
+    told = {(c[1], c[2]) for msgs in fake_smtp for c in msgs if c[0] == "send"}
+    assert ("waiting@example.com", "Welcome to CoachQuest (alpha version)") in told
+    assert any(to == "admin@example.com" for to, _ in told)
+
+    boss.request("PUT", "/api/admin/settings", json={"values": {"alpha_notice": "off"}})
+    assert client.get("/api/auth/notice").json() == {"message": None}

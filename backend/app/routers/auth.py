@@ -91,6 +91,42 @@ PENDING_MESSAGE = (
 )
 
 
+ALPHA_NOTICE = "CoachQuest is an alpha version: things can change or break. Access is subject to approval."
+
+
+def alpha_notice_on() -> bool:
+    """Admin → Settings → "Alpha notice for new users" (super admins only)."""
+    return runtime.get("alpha_notice") == "on"
+
+
+async def _send_alpha_notice(user: User) -> None:
+    """Welcome email for a new sign-up while the alpha notice is on."""
+    status = (
+        "Your account is waiting for approval. You'll get another email when it's ready."
+        if not user.approved
+        else "Your account is active, but it can be paused or removed while CoachQuest is in alpha."
+    )
+    try:
+        await mailer.send(
+            user.email,
+            "Welcome to CoachQuest (alpha version)",
+            f"Hi {user.display_name},\n\n"
+            "Thanks for signing up to CoachQuest.\n\n"
+            "Please note:\n"
+            "- CoachQuest is an alpha version. Features can change and things may break.\n"
+            "- Your access is subject to approval.\n\n"
+            f"{status}\n\n{settings.public_base_url}\n",
+        )
+    except mailer.MailError as exc:
+        log.warning("Could not send the alpha notice to new user %s: %s", user.id, exc)
+
+
+@router.get("/notice")
+def sign_up_notice():
+    """Public: what the sign-up page shows above the form."""
+    return {"message": ALPHA_NOTICE if alpha_notice_on() else None}
+
+
 async def _tell_admins_about(db: DbSession, user: User) -> None:
     """Email the admins who can approve: only super admins while "Super admin approves new sign-ups" is on."""
     who = User.is_super_admin if accounts.super_approval_on() else User.is_admin
@@ -128,6 +164,8 @@ async def register(body: Registration, request: Request, response: Response, db:
     db.add(user)
     db.commit()
     auth_log.record(db, request, "registered", user, detail="" if user.approved else "waiting for approval")
+    if alpha_notice_on():
+        await _send_alpha_notice(user)
     if not user.approved:
         await _tell_admins_about(db, user)
         return {"pending": True, "message": PENDING_MESSAGE}

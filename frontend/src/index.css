@@ -453,6 +453,13 @@ textarea:focus {
   background: color-mix(in srgb, var(--ok) 14%, transparent);
   color: var(--ok);
 }
+.notice {
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  margin: 0.5rem 0;
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border: 1px solid var(--warn);
+}
 .flags {
   border-color: var(--warn);
 }
