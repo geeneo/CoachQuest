@@ -11,6 +11,7 @@ import VolumeStats from "../components/VolumeStats.jsx";
 import WellnessPanel, { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { dateTime, formLabel } from "../lib/format.js";
+import Segments from "../components/Segments.jsx";
 import PlansPanel from "./PlansPanel.jsx";
 
 const TABS = [
@@ -87,6 +88,7 @@ export default function AthleteView({ self }) {
         <>
           <CoachInstructions id={id} isMe={!!self} />
           <AthleteNotes id={id} isMe={!!self} />
+          <Segments id={id} readOnly={s.view_only || s.admin_view} />
           <PlansPanel id={id} athlete={s} />
         </>
       )}

@@ -26,6 +26,7 @@ from .routers import (
     posts,
     preferences,
     races,
+    segments,
     workouts,
 )
 from .routers.connections import run_sync
@@ -116,6 +117,7 @@ for r in (
     instructions.router,
     athlete_notes.router,
     posts.router,
+    segments.router,
 ):
     app.include_router(r)
 

@@ -1834,3 +1834,15 @@ ul.instructions > li.note.suggestion {
   min-width: 16rem;
   font-weight: 600;
 }
+
+/* Saved Strava segments. */
+.badge.segment {
+  text-decoration: none;
+  border-color: var(--accent);
+}
+ul.segments li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}

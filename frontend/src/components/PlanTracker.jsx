@@ -14,6 +14,7 @@ const fmtDate = shortDate;
 
 export default function PlanTracker({ plan, athleteId, setPlan }) {
   const prefs = useApi(`/api/athletes/${athleteId}/preferences`);
+  const segments = useApi(`/api/athletes/${athleteId}/segments`);
   const [swapFrom, setSwapFrom] = useState(null);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -108,6 +109,7 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
       ) && call(`/days/${date}/platform-workout`, "POST", { platform_workout_id: m.id }),
     restorePlan: (date) => call(`/days/${date}/platform-workout`, "DELETE"),
     maxSessions: plan.max_sessions_per_day || 1,
+    segments: segments.data || [],
   };
   const matching = plan.platform_matching || {};
   return (
@@ -312,14 +314,18 @@ function Day({ day, ctx }) {
       </div>
       <div className="day-body">
         {editing ? (
-          <DayEditor day={day} onDone={(body) => (setEditing(false), body && save(body))} />
+          <DayEditor
+            day={day}
+            segments={ctx.segments}
+            onDone={(body) => (setEditing(false), body && save(body))}
+          />
         ) : (
           <button className="day-desc" onClick={() => setEditing(true)} title="Click to edit">
             {day.description || (day.type === "Rest" ? "Recovery day." : <span className="muted">Add a description…</span>)}
             {day.duration_min > 0 && <span className="muted"> ~{duration(day.duration_min * 60)}</span>}
           </button>
         )}
-        {!editing && (day.intensity.length > 0 || day.gear || day.route || day.workout) && (
+        {!editing && (day.intensity.length > 0 || day.gear || day.route || day.workout || day.segment) && (
           <div className="chips tight">
             {day.intensity.map((c) => (
               <span key={c} className="badge intensity">
@@ -336,6 +342,7 @@ function Day({ day, ctx }) {
                 ⬇ {day.workout.name}
               </button>
             )}
+            {day.segment && <SegmentLink segment={day.segment} />}
             {day.gear && <span className="badge">🚲 {day.gear}</span>}
             {day.route && <span className="badge">🗺 {day.route}</span>}
           </div>
@@ -432,6 +439,15 @@ function MatchStatus({ matching }) {
   return text ? <p className="match-status small">{text}</p> : null;
 }
 
+// A saved Strava segment on a session: opens it in Strava.
+function SegmentLink({ segment }) {
+  return (
+    <a className="badge segment" href={segment.url} target="_blank" rel="noreferrer" title="Open the segment in Strava">
+      ⛰ {segment.name}
+    </a>
+  );
+}
+
 // The day's other sessions (e.g. Strength after the ride): each its own type, text and time.
 function ExtraSessions({ day, types, max, save }) {
   const extras = day.extra_sessions || [];
@@ -484,6 +500,7 @@ function ExtraSessions({ day, types, max, save }) {
               {c}
             </span>
           ))}
+          {e.segment && <SegmentLink segment={e.segment} />}
           <button
             type="button"
             className="icon-btn"
@@ -576,13 +593,14 @@ function Actual({ day, tags, save }) {
   }
 }
 
-function DayEditor({ day, onDone }) {
+function DayEditor({ day, segments, onDone }) {
   const [form, setForm] = useState({
     description: day.description,
     duration_min: day.duration_min,
     intensity: day.intensity.join(", "),
     gear: day.gear || "",
     route: day.route || "",
+    segment_id: day.segment ? String(day.segment.id) : "",
   });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const submit = (e) => {
@@ -593,6 +611,7 @@ function DayEditor({ day, onDone }) {
       intensity: form.intensity.split(",").map((s) => s.trim()).filter(Boolean),
       gear: form.gear || null,
       route: form.route || null,
+      segment_id: form.segment_id ? Number(form.segment_id) : null,
     });
   };
   return (
@@ -611,6 +630,19 @@ function DayEditor({ day, onDone }) {
         <label className="inline grow">
           Route <input value={form.route} onChange={set("route")} placeholder="Stellies / Devon loop or link" />
         </label>
+        {segments.length > 0 && (
+          <label className="inline">
+            Strava segment
+            <select value={form.segment_id} onChange={set("segment_id")}>
+              <option value="">–</option>
+              {segments.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       <div className="row tight">
         <button className="btn primary">Save</button>

@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -584,6 +585,27 @@ class PasswordReset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Segment(Base):
+    """A Strava segment an athlete trains on (e.g. the climb for hill repeats); see segments.py."""
+
+    __tablename__ = "segments"
+    __table_args__ = (UniqueConstraint("athlete_id", "strava_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    strava_id: Mapped[int] = mapped_column(BigInteger)
+    name: Mapped[str] = mapped_column(String(120))
+    # From Strava when the athlete's Strava is linked; otherwise empty.
+    distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_grade: Mapped[float | None] = mapped_column(Float, nullable=True)
+    elevation_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    city: Mapped[str] = mapped_column(String(80), default="")
+    # How it's used, for the AI coach ("hill repeats, 4-8 times, ride back down easy").
+    notes: Mapped[str] = mapped_column(String(300), default="")
+    added_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class Post(Base):

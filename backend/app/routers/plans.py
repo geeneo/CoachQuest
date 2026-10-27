@@ -17,6 +17,7 @@ from .. import (
     plan_workouts,
     platform_catalog,
     runtime,
+    segments,
     sync_engine,
     zwo,
 )
@@ -80,8 +81,21 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
             acts = activities_since(db, p.athlete_id, start)
             out["weeks"] = plan_tracker.with_actuals(p.weeks, acts, today, localtime.zone(athlete.timezone))
             out["platform_matching"] = _add_matches(db, athlete, out["weeks"], today)
+            _add_segments(db, p.athlete_id, out["weeks"])
             out["max_sessions_per_day"] = runtime.max_sessions_per_day()
     return out
+
+
+def _add_segments(db: DbSession, athlete_id: int, weeks: list[dict]) -> None:
+    """Put the saved Strava segment (name and link) on each session that names one."""
+    saved = {s.id: segments.segment_out(s) for s in segments.for_athlete(db, athlete_id)}
+    if not saved:
+        return
+    for week in weeks:
+        for d in week["days"]:
+            for session in (d, *plan_tracker.extras(d)):
+                if session.get("segment_id") in saved:
+                    session["segment"] = saved[session["segment_id"]]
 
 
 def _add_matches(db: DbSession, athlete: User, weeks: list[dict], today: date) -> dict:
@@ -288,6 +302,8 @@ class DayEdit(BaseModel):
     missed_reason: str | None = Field(default=None, max_length=40)
     # The day's other sessions, all of them (see plan_tracker.extras).
     extra_sessions: list[dict] | None = Field(default=None, max_length=3)
+    # One of the athlete's saved Strava segments (segments.py), or null to clear it.
+    segment_id: int | None = None
 
 
 @router.patch("/{plan_id}/days/{day}")
@@ -324,6 +340,10 @@ def edit_day(
         changes["extra_sessions"] = cleaned
     if changes.get("type") == "Rest":
         changes["extra_sessions"] = []  # a rest day has no sessions
+    mine = {s.id for s in segments.for_athlete(db, p.athlete_id)}
+    picked = [changes.get("segment_id")] + [s.get("segment_id") for s in changes.get("extra_sessions") or []]
+    if any(sid is not None and sid not in mine for sid in picked):
+        raise HTTPException(status_code=422, detail="That segment isn't one of the athlete's saved segments")
     weeks[wi]["days"][di].update(changes)
     _save_weeks(db, p, weeks, background)
     return plan_out(p, db, full=True, viewer=user)
@@ -381,7 +401,17 @@ def swap_days(
     day_a, day_b = weeks[wa]["days"][da], weeks[wb]["days"][db_]
     if day_a["locked"] or day_b["locked"]:
         raise HTTPException(status_code=409, detail="Unlock both days first")
-    fields = ("type", "description", "duration_min", "intensity", "gear", "route", "workout", "extra_sessions")
+    fields = (
+        "type",
+        "description",
+        "duration_min",
+        "intensity",
+        "gear",
+        "route",
+        "workout",
+        "segment_id",
+        "extra_sessions",
+    )
     moved_a, moved_b = {k: day_a.get(k) for k in fields}, {k: day_b.get(k) for k in fields}
     day_a.update(moved_b)
     day_b.update(moved_a)

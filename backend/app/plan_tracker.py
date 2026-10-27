@@ -42,6 +42,7 @@ def _blank_day(d: date) -> dict:
         "locked": False,
         "missed_reason": None,
         "workout": None,  # {"name", "steps"} for indoor sessions; see plan_workouts.py
+        "segment_id": None,  # a saved Strava segment (segments.py) to ride, or name indoors
         # More sessions the same day (e.g. Strength after a Zwift ride): [{type, description,
         # duration_min, intensity}]. The day's own fields are its main session. Older plans lack it.
         "extra_sessions": [],
@@ -81,6 +82,7 @@ def clean_session(raw: dict) -> dict | None:
         "description": str(raw.get("description") or "").strip()[:2000],
         "duration_min": max(0, min(1440, int(raw.get("duration_min") or 0))),
         "intensity": [str(x)[:30] for x in raw.get("intensity") or []][:6],
+        "segment_id": _segment_id(raw.get("segment_id")),
     }
 
 
@@ -101,6 +103,11 @@ def _workout(raw) -> dict | None:
     return {"name": (str(raw.get("name") or "Workout").strip() or "Workout")[:120], "steps": steps}
 
 
+def _segment_id(raw) -> int | None:
+    """A segment id as written; plan_out shows it only when it's one of the athlete's saved segments."""
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0 else None
+
+
 def ai_day(src_day: dict) -> dict:
     """The session fields of a day as Claude wrote it, checked the same way as in build_weeks."""
     return {
@@ -109,6 +116,7 @@ def ai_day(src_day: dict) -> dict:
         "duration_min": max(0, int(src_day.get("duration_min") or 0)),
         "intensity": [str(x) for x in src_day.get("intensity") or []][:6],
         "workout": _workout(src_day.get("workout")),
+        "segment_id": _segment_id(src_day.get("segment_id")),
         "extra_sessions": [] if src_day.get("type") == "Rest" else clean_sessions(src_day.get("extra_sessions")),
     }
 
@@ -301,8 +309,8 @@ def merge_replan(old: list[dict], new: list[dict], today: date) -> int:
             if kept(d, today):
                 continue
             n = fresh["days"][i]
-            fields = ("type", "description", "duration_min", "intensity", "workout", "extra_sessions")
-            if any(d.get(k) != n[k] for k in fields):  # older plans have no "workout" or "extra_sessions"
+            fields = ("type", "description", "duration_min", "intensity", "workout", "segment_id", "extra_sessions")
+            if any(d.get(k) != n[k] for k in fields):  # older plans lack "workout", "segment_id", "extra_sessions"
                 changed += 1
             d.update({k: n[k] for k in fields}, gear=None, route=None, missed_reason=None)
         if any(not kept(d, today) for d in week["days"]):

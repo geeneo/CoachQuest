@@ -12,7 +12,7 @@
         until they've confirmed it.
       - Plain summary: "Rides from Strava, sleep / HRV / weight from Garmin,
         workouts go to Intervals.icu".
-- [ ] **Strava segments for hill repeats in the plan.** Save Strava segment
+- [x] **Strava segments for hill repeats in the plan.** Save Strava segment
       links (e.g. the local climb used for hill repeats) with a name, and
       use them in training:
       - Add a segment by pasting its Strava link; keep a list per athlete

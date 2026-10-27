@@ -21,7 +21,7 @@ def test_ai_answer_keeps_extra_sessions(make_user, planner):  # noqa: F811
     tue = _tuesday(plan)
     # Rest is dropped; Strength and Walk stay (3 sessions a day by default).
     assert [e["type"] for e in tue["extra_sessions"]] == ["Strength", "Walk"]
-    assert tue["extra_sessions"][0] == STRENGTH
+    assert tue["extra_sessions"][0] == {**STRENGTH, "segment_id": None}
     assert plan["max_sessions_per_day"] == 3
     assert plan["weeks"][0]["summary"]["planned_minutes"] == 60 + 30 + 0 + 60 + 180
     assert "| + | Strength | Core and legs | 30 | easy |" in plan_tracker.markdown(plan["weeks"])

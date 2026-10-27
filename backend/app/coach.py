@@ -15,7 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, datefmt, instructions, runtime
+from . import athlete_notes, datefmt, instructions, runtime, segments
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import activities_since, load_curve, profile_out, wellness_since
@@ -40,6 +40,12 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 - If a data category is missing because it was not shared, say once what that limits and move on.
 - Fit the plan inside the requested weekly hours and available days. Where `request.available_days` and \
 `weekday_preferences` disagree, the weekday preferences win.
+- `saved_segments` are Strava segments the athlete trains on (e.g. the local climb for hill repeats), \
+with their `notes` on how they're used. When a day's session suits one (hill repeats, climbing efforts, \
+a fixed effort), put its `id` in that session's `segment_id` and name it in the description: on an \
+outdoor day, ride it ("6 x Helshoogte, easy back down"); on an indoor day, give the matching indoor \
+efforts (same duration and power) and name the segment for reference. Use only ids from \
+`saved_segments`; otherwise `segment_id` is null.
 - When `weekday_preferences` is given, it lists the session types the athlete does on each weekday, and \
 the athlete does ALL of them that day. Plan one session per type: the day's own fields (`type`, \
 `description`, `duration_min`, `intensity`, `workout`) are the main session and every other type goes in \
@@ -142,6 +148,9 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
         prefs = preferences_out(athlete)
         # {day: [types]}: every type is a session on that day (see SYSTEM_PROMPT).
         facts["weekday_preferences"] = {d: t for d, t in prefs["weekday_prefs"].items() if t}
+        saved = segments.for_ai(db, athlete.id)
+        if saved:
+            facts["saved_segments"] = saved
         facts["upcoming_races"] = [
             {k: v for k, v in race_out(r, today).items() if k not in ("id", "active", "ctl_advice")}
             for r in upcoming(db, athlete.id, today)
@@ -356,14 +365,17 @@ STEP_SCHEMA = {
 }
 WORKOUT_SCHEMA = _obj({"name": {"type": "string"}, "steps": {"type": "array", "items": STEP_SCHEMA}}, ["name", "steps"])
 # A day's other sessions (plan_tracker.extras): no structured workout, never Rest.
+# A saved Strava segment for the session (segments.py), or null.
+SEGMENT_ID = {"anyOf": [{"type": "null"}, {"type": "integer"}]}
 EXTRA_SESSION_SCHEMA = _obj(
     {
         "type": {"type": "string", "enum": [t for t in SESSION_TYPES if t != "Rest"]},
         "description": {"type": "string"},
         "duration_min": {"type": "integer"},
         "intensity": {"type": "array", "items": {"type": "string"}},
+        "segment_id": SEGMENT_ID,
     },
-    ["type", "description", "duration_min", "intensity"],
+    ["type", "description", "duration_min", "intensity", "segment_id"],
 )
 
 
@@ -393,6 +405,7 @@ def plan_schema() -> dict:
                                         "duration_min": {"type": "integer"},
                                         "intensity": {"type": "array", "items": {"type": "string"}},
                                         "workout": {"anyOf": [{"type": "null"}, WORKOUT_SCHEMA]},
+                                        "segment_id": SEGMENT_ID,
                                         "extra_sessions": {"type": "array", "items": EXTRA_SESSION_SCHEMA},
                                     },
                                     "required": [
@@ -402,6 +415,7 @@ def plan_schema() -> dict:
                                         "duration_min",
                                         "intensity",
                                         "workout",
+                                        "segment_id",
                                         "extra_sessions",
                                     ],
                                     "additionalProperties": False,

@@ -348,3 +348,21 @@ async def deauthorize(conn: Connection) -> None:
             await client.post("https://www.strava.com/oauth/deauthorize", data={"access_token": token})
     except Exception as exc:  # best effort; the local tokens are deleted anyway
         log.info("Strava deauthorize failed: %s", exc)
+
+
+async def segment(db: DbSession, conn: Connection, segment_id: int) -> dict:
+    """A segment's public details (name, length, gradient) from Strava, read with the athlete's own link."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        token = await _access_token(db, conn, client)
+        resp = await client.get(f"{API}/segments/{segment_id}", headers={"Authorization": f"Bearer {token}"})
+    if resp.status_code == 404:
+        raise LookupError("Strava doesn't know that segment (or it's private)")
+    resp.raise_for_status()
+    s = resp.json()
+    return {
+        "name": (s.get("name") or "").strip()[:120],
+        "distance_m": round(s.get("distance") or 0),
+        "avg_grade": s.get("average_grade"),
+        "elevation_m": round((s.get("elevation_high") or 0) - (s.get("elevation_low") or 0)) or None,
+        "city": (s.get("city") or "")[:80],
+    }
