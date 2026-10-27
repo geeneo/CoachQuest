@@ -235,6 +235,7 @@ def _plan_days(db: DbSession, athlete_id: int, start: date, end: date) -> dict[s
                         "plan_title": p.title,
                         "phase": week["phase"],
                         **{k: d[k] for k in ("type", "description", "duration_min", "intensity", "locked")},
+                        "extra_sessions": d.get("extra_sessions") or [],
                     }
     return out
 

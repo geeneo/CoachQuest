@@ -106,6 +106,7 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
           `, so the day's load changes. You can swap back to the plan's workout at any time.`,
       ) && call(`/days/${date}/platform-workout`, "POST", { platform_workout_id: m.id }),
     restorePlan: (date) => call(`/days/${date}/platform-workout`, "DELETE"),
+    maxSessions: plan.max_sessions_per_day || 1,
   };
   const matching = plan.platform_matching || {};
   return (
@@ -344,6 +345,7 @@ function Day({ day, ctx }) {
           </div>
         )}
         {!editing && <PlatformMatches day={day} ctx={ctx} />}
+        {!editing && <ExtraSessions day={day} types={types} max={ctx.maxSessions} save={save} />}
         <Actual day={day} tags={tags} save={save} />
         {replanning && (
           <form
@@ -389,6 +391,78 @@ function Day({ day, ctx }) {
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+// The day's other sessions (e.g. Strength after the ride): each its own type, text and time.
+function ExtraSessions({ day, types, max, save }) {
+  const extras = day.extra_sessions || [];
+  const choices = types.filter((t) => t !== "Rest");
+  const canAdd = day.type !== "Rest" && extras.length + 1 < max;
+  if (!extras.length && !canAdd) return null;
+  const put = (i, patch) => save({ extra_sessions: extras.map((e, j) => (j === i ? { ...e, ...patch } : e)) });
+  const add = () => {
+    const used = new Set([day.type, ...extras.map((e) => e.type)]);
+    const type = choices.find((t) => !used.has(t)) || choices[0];
+    save({ extra_sessions: [...extras, { type, description: "", duration_min: 0, intensity: [] }] });
+  };
+  return (
+    <div className="extra-sessions">
+      {extras.map((e, i) => (
+        <div key={i} className="extra-session">
+          <span className="muted">+</span>
+          <select
+            aria-label="Session type"
+            className="type-pick"
+            value={e.type}
+            onChange={(ev) => put(i, { type: ev.target.value })}
+          >
+            {[...new Set([e.type, ...choices])].map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+          <EditableText
+            className="extra-desc"
+            value={e.description}
+            placeholder="What to do…"
+            onSave={(description) => put(i, { description })}
+          />
+          <label className="inline small muted" title="Minutes">
+            <input
+              type="number"
+              min={0}
+              max={1440}
+              className="minutes"
+              defaultValue={e.duration_min}
+              key={`${day.date}-${i}-${e.duration_min}`}
+              onBlur={(ev) =>
+                Number(ev.target.value) !== e.duration_min && put(i, { duration_min: Number(ev.target.value) || 0 })
+              }
+            />{" "}
+            min
+          </label>
+          {e.intensity.map((c) => (
+            <span key={c} className="badge intensity">
+              {c}
+            </span>
+          ))}
+          <button
+            type="button"
+            className="icon-btn"
+            title="Remove this session"
+            aria-label="Remove session"
+            onClick={() => save({ extra_sessions: extras.filter((_, j) => j !== i) })}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      {canAdd && (
+        <button type="button" className="link-btn small add-session" onClick={add}>
+          + Add a session this day
+        </button>
+      )}
     </div>
   );
 }

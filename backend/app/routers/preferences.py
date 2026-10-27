@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import update
 from sqlalchemy.orm import Session as DbSession
 
+from .. import runtime
 from ..db import Activity, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
 
@@ -32,7 +33,6 @@ SESSION_TYPES = (
     "Yoga / mobility",
     "Race",
 )
-MAX_TYPES_PER_DAY = 4
 DEFAULT_NOTE_TAGS = [
     "illness",
     "mechanical",
@@ -49,8 +49,9 @@ DEFAULT_NOTE_TAGS = [
 
 def preferences_out(user: User) -> dict:
     return {
-        # One or more types per day: the AI coach picks one of them for that day. Rest stands alone.
-        "weekday_prefs": {d: (user.weekday_prefs or {}).get(d, []) for d in WEEKDAYS},
+        # Up to "Sessions per day" types a day, each a session the AI coach plans that day. Rest stands alone.
+        "weekday_prefs": {d: (user.weekday_prefs or {}).get(d, [])[: runtime.max_sessions_per_day()] for d in WEEKDAYS},
+        "max_per_day": runtime.max_sessions_per_day(),
         "note_tags": user.note_tags if user.note_tags is not None else list(DEFAULT_NOTE_TAGS),
         "session_types": list(SESSION_TYPES),
         "week_start": user.week_start or 0,
@@ -79,8 +80,9 @@ class PreferencesIn(BaseModel):
             raise ValueError(f"Unknown {'days' if bad_days else 'session types'}: {sorted(bad_days or bad_types)}")
         if any("Rest" in types and len(set(types)) > 1 for types in v.values()):
             raise ValueError("A Rest day can't have other session types too")
-        if any(len(set(types)) > MAX_TYPES_PER_DAY for types in v.values()):
-            raise ValueError(f"Pick at most {MAX_TYPES_PER_DAY} session types per day")
+        limit = runtime.max_sessions_per_day()
+        if any(len(set(types)) > limit for types in v.values()):
+            raise ValueError(f"Pick at most {limit} session type{'s' if limit > 1 else ''} per day")
         return {d: list(dict.fromkeys(v.get(d, []))) for d in WEEKDAYS}
 
     @field_validator("note_tags")

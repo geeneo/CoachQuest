@@ -138,18 +138,32 @@ def log(p: Plan, user: User, event: str, **extra) -> None:
     p.history = [*(p.history or []), {**entry, "event": event, **{k: v for k, v in extra.items() if v}}]
 
 
+FIELDS = ("type", "description", "duration_min", "extra_sessions")
+
+
+def _shown(d: dict) -> dict:
+    """A day as the coach reviews it: all its sessions in one line ("Zwift / indoor + Strength")."""
+    sessions = [d, *plan_tracker.extras(d)]
+    return {
+        "type": " + ".join(s.get("type") or "" for s in sessions),
+        "description": " · ".join(s.get("description") or "" for s in sessions if s.get("description")),
+        "duration_min": plan_tracker.day_minutes(d),
+    }
+
+
+def _differs(a: dict, b: dict) -> bool:
+    return any((a.get(k) or None) != (b.get(k) or None) for k in FIELDS)
+
+
 def changes(current: list[dict], proposed: list[dict]) -> list[dict]:
     """Days a proposal changes, for the coach to review."""
     by_date = {d["date"]: d for w in proposed for d in w["days"]}
-    fields = ("type", "description", "duration_min")
     out = []
     for w in current:
         for d in w["days"]:
             n = by_date.get(d["date"])
-            if n and any(d.get(k) != n.get(k) for k in fields):
-                out.append(
-                    {"date": d["date"], "before": {k: d.get(k) for k in fields}, "after": {k: n.get(k) for k in fields}}
-                )
+            if n and _differs(d, n):
+                out.append({"date": d["date"], "before": _shown(d), "after": _shown(n)})
     return out
 
 
@@ -173,7 +187,6 @@ def propose(p: Plan, user: User, fresh: list[dict], summary: str, model: str, to
 
 def propose_day(p: Plan, user: User, date_iso: str, new: dict, why: str, model: str, **reasons) -> dict:
     """A one-day re-plan, shown next to the current day; applied when approved (see plans.approve)."""
-    fields = ("type", "description", "duration_min")
     current = next(d for w in p.weeks for d in w["days"] if d["date"] == date_iso)
     p.pending = {
         "day_patch": {"date": date_iso, **new},
@@ -182,9 +195,7 @@ def propose_day(p: Plan, user: User, date_iso: str, new: dict, why: str, model: 
         "by": user.display_name,
         "at": utcnow().isoformat(timespec="seconds"),
         "changed": 1,
-        "changes": [
-            {"date": date_iso, "before": {k: current.get(k) for k in fields}, "after": {k: new.get(k) for k in fields}}
-        ],
+        "changes": [{"date": date_iso, "before": _shown(current), "after": _shown(new)}],
         **{k: v for k, v in reasons.items() if v},
     }
     log(p, user, "day_proposed", day=date_iso, **reasons)

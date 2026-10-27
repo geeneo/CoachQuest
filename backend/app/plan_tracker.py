@@ -14,7 +14,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
-from . import workouts
+from . import runtime, workouts
 from .activity_types import category
 from .localtime import local_date
 
@@ -42,7 +42,52 @@ def _blank_day(d: date) -> dict:
         "locked": False,
         "missed_reason": None,
         "workout": None,  # {"name", "steps"} for indoor sessions; see plan_workouts.py
+        # More sessions the same day (e.g. Strength after a Zwift ride): [{type, description,
+        # duration_min, intensity}]. The day's own fields are its main session. Older plans lack it.
+        "extra_sessions": [],
     }
+
+
+SESSION_KEYS = ("type", "description", "duration_min", "intensity")
+
+
+def extras(day: dict) -> list[dict]:
+    """The day's sessions after the main one (none on older plans)."""
+    return day.get("extra_sessions") or []
+
+
+def day_minutes(day: dict) -> int:
+    """Planned minutes of all the day's sessions."""
+    return (day.get("duration_min") or 0) + sum(e.get("duration_min") or 0 for e in extras(day))
+
+
+def blank_session(session_type: str) -> dict:
+    return {
+        "type": session_type,
+        "description": NOT_PLANNED.format(type=session_type),
+        "duration_min": 0,
+        "intensity": [],
+    }
+
+
+def clean_session(raw: dict) -> dict | None:
+    """One extra session as Claude or a person wrote it; None when it isn't a real session."""
+    from .routers.preferences import SESSION_TYPES  # the list lives with the preferences
+
+    if not isinstance(raw, dict) or raw.get("type") not in SESSION_TYPES or raw.get("type") == "Rest":
+        return None
+    return {
+        "type": raw["type"],
+        "description": str(raw.get("description") or "").strip()[:2000],
+        "duration_min": max(0, min(1440, int(raw.get("duration_min") or 0))),
+        "intensity": [str(x)[:30] for x in raw.get("intensity") or []][:6],
+    }
+
+
+def clean_sessions(raw) -> list[dict]:
+    """Extra sessions, at most "Sessions per day" minus the main one."""
+    out = [s for s in (clean_session(x) for x in raw or []) if s]
+    return out[: runtime.max_sessions_per_day() - 1]
 
 
 def _workout(raw) -> dict | None:
@@ -64,6 +109,7 @@ def ai_day(src_day: dict) -> dict:
         "duration_min": max(0, int(src_day.get("duration_min") or 0)),
         "intensity": [str(x) for x in src_day.get("intensity") or []][:6],
         "workout": _workout(src_day.get("workout")),
+        "extra_sessions": [] if src_day.get("type") == "Rest" else clean_sessions(src_day.get("extra_sessions")),
     }
 
 
@@ -136,7 +182,7 @@ def with_actuals(weeks: list[dict], activities: list, today: date, tz: ZoneInfo 
                 <= today
                 < date.fromisoformat(week["start"]) + timedelta(7),
                 "summary": {
-                    "planned_minutes": sum(d["duration_min"] for d in days),
+                    "planned_minutes": sum(day_minutes(d) for d in days),
                     "logged_minutes": sum(d["actual"]["minutes"] for d in days if d["actual"]),
                     "sessions_done": len(done),
                     "sessions_due": len(planned),
@@ -151,7 +197,7 @@ def _status(day: dict, acts: list, day_date: date, today: date) -> str:
         return "extra" if acts else ("rest" if day_date <= today else "planned")
     if acts:
         logged = sum(a.duration_s for a in acts) / 60
-        if not day["duration_min"] or logged >= GOAL_SHARE * day["duration_min"]:
+        if not day_minutes(day) or logged >= GOAL_SHARE * day_minutes(day):
             return "goal_met"
         return "partial"
     if day_date < today:
@@ -166,10 +212,10 @@ def markdown(weeks: list[dict]) -> str:
         lines.append(f"### Week {i} · {w['phase']} · {w['start']}\n\n{w['focus']}\n")
         lines.append("| Day | Type | Session | Min | Intensity |\n|---|---|---|---|---|")
         for d in w["days"]:
-            desc = d["description"].replace("|", "/")
-            lines.append(
-                f"| {d['weekday'].title()} | {d['type']} | {desc} | {d['duration_min']} | {', '.join(d['intensity'])} |"
-            )
+            for i, s in enumerate([d, *extras(d)]):
+                desc = s["description"].replace("|", "/")
+                day = d["weekday"].title() if i == 0 else "+"
+                lines.append(f"| {day} | {s['type']} | {desc} | {s['duration_min']} | {', '.join(s['intensity'])} |")
         lines.append("")
     return "\n".join(lines)
 
@@ -183,30 +229,45 @@ def find_day(weeks: list[dict], day: str) -> tuple[int, int]:
 
 
 NOT_PLANNED = "{type} session, not planned yet: re-plan from this week to fill it in, or edit it."
+INDOOR = "Zwift / indoor"
 
 
 def apply_preferences(weeks: list[dict], prefs: dict[str, list[str]], today: date) -> tuple[int, int]:
-    """Set future, unlocked days to one of the athlete's preferred types for that weekday.
+    """Give future, unlocked days the athlete's preferred session types for that weekday, all of them.
 
-    A day whose type is already one of them stays; otherwise it gets the first one listed.
-    Only the type changes, so a rest day that becomes a training day has no session yet: it says so
-    (and is counted) instead of keeping "Rest.". A structured indoor workout stays only on indoor
-    days. Returns (days changed, training days left to plan)."""
+    The main session keeps its type when it is one of them (an indoor one is preferred, since only the
+    main session carries a structured workout); the other types become extra sessions, keeping any
+    already planned. A session that is new has nothing planned yet: it says so (and is counted)
+    instead of keeping "Rest.". Returns (days changed, sessions left to plan)."""
     changed = empty = 0
     for week in weeks:
         for d in week["days"]:
             wanted = prefs.get(d["weekday"]) or []
-            if d["locked"] or date.fromisoformat(d["date"]) <= today or not wanted or d["type"] in wanted:
+            if d["locked"] or date.fromisoformat(d["date"]) <= today or not wanted:
                 continue
-            was_rest = d["type"] == "Rest" or not d.get("duration_min")
-            d["type"] = wanted[0]
-            if wanted[0] == "Rest":
-                d.update(description="Rest day.", duration_min=0, intensity=[], workout=None)
-            elif was_rest:
-                d.update(description=NOT_PLANNED.format(type=wanted[0]), duration_min=0, intensity=[], workout=None)
-                empty += 1
-            elif wanted[0] != "Zwift / indoor":
-                d["workout"] = None  # an indoor workout doesn't belong on a road or run day
+            have = [d["type"], *(e["type"] for e in extras(d))]
+            if d["type"] in wanted and sorted(have) == sorted(wanted):
+                continue  # already has exactly these sessions
+            if d["type"] in wanted:
+                main = d["type"]
+            else:
+                main = INDOOR if INDOOR in wanted else wanted[0]
+                was_rest = d["type"] == "Rest" or not d.get("duration_min")
+                d["type"] = main
+                if main == "Rest":
+                    d.update(description="Rest day.", duration_min=0, intensity=[], workout=None)
+                elif was_rest:
+                    d.update(description=NOT_PLANNED.format(type=main), duration_min=0, intensity=[], workout=None)
+                    empty += 1
+                elif main != INDOOR:
+                    d["workout"] = None  # an indoor workout doesn't belong on a road or run day
+            kept = {e["type"]: e for e in extras(d)}
+            new = []
+            for t in (t for t in wanted if t not in (main, "Rest")):
+                if t not in kept:
+                    empty += 1
+                new.append(kept.get(t) or blank_session(t))
+            d["extra_sessions"] = new
             changed += 1
     return changed, empty
 
@@ -240,8 +301,8 @@ def merge_replan(old: list[dict], new: list[dict], today: date) -> int:
             if kept(d, today):
                 continue
             n = fresh["days"][i]
-            fields = ("type", "description", "duration_min", "intensity", "workout")
-            if any(d.get(k) != n[k] for k in fields):  # older plans have no "workout"
+            fields = ("type", "description", "duration_min", "intensity", "workout", "extra_sessions")
+            if any(d.get(k) != n[k] for k in fields):  # older plans have no "workout" or "extra_sessions"
                 changed += 1
             d.update({k: n[k] for k in fields}, gear=None, route=None, missed_reason=None)
         if any(not kept(d, today) for d in week["days"]):

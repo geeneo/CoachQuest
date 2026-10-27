@@ -55,8 +55,8 @@ def test_ai_coach_gets_weekday_preferences(make_user, monkeypatch):
     prefs = {"mon": ["Rest"], "tue": ["Zwift / indoor"], "sat": ["Road", "Gravel", "MTB"]}
     p.request("PUT", "/api/me/preferences", json={"weekday_prefs": prefs})
     p.post("/api/athletes/me/plans", json={"without_data": True, "title": "t", "goal": "g"})
-    assert seen["weekday_preferences"] == prefs  # several types: the AI coach picks one
-    assert "With several, plan exactly one of them" in coach.SYSTEM_PROMPT
+    assert seen["weekday_preferences"] == prefs  # several types: the AI coach plans them all
+    assert "does ALL of them that day" in coach.SYSTEM_PROMPT
 
 
 def test_coach_needs_plans_scope(make_user):
@@ -84,14 +84,26 @@ def test_several_types_per_day(make_user):
     assert p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"sun": five}}).status_code == 422
 
 
-def test_apply_preferences_keeps_a_day_that_is_one_of_the_choices():
+def test_apply_preferences_gives_each_day_all_its_sessions():
     from datetime import date
 
     weeks = plan_tracker.build_weeks([], date(2030, 1, 7), 1)  # a Monday, well after "today"
-    sat = next(d for d in weeks[0]["days"] if d["weekday"] == "sat")
-    sun = next(d for d in weeks[0]["days"] if d["weekday"] == "sun")
-    sat.update(type="Gravel", duration_min=120)
-    sun.update(type="Swim", duration_min=60)
-    prefs = {"sat": ["Road", "Gravel"], "sun": ["Road", "MTB"]}
-    changed, _ = plan_tracker.apply_preferences(weeks, prefs, date(2030, 1, 1))
-    assert sat["type"] == "Gravel" and sun["type"] == "Road" and changed == 1
+    day = {d["weekday"]: d for d in weeks[0]["days"]}
+    day["sat"].update(type="Gravel", duration_min=120, description="Gravel loop")
+    day["sun"].update(type="Swim", duration_min=60)
+    day["tue"].update(type="Zwift / indoor", duration_min=60, description="Sweet spot")
+    day["tue"]["extra_sessions"] = [{"type": "Strength", "description": "Core", "duration_min": 30, "intensity": []}]
+    prefs = {"sat": ["Road", "Gravel"], "sun": ["Walk", "Strength"], "tue": ["Strength", "Zwift / indoor"]}
+    changed, empty = plan_tracker.apply_preferences(weeks, prefs, date(2030, 1, 1))
+    # Saturday keeps its gravel ride and gets a Road session to plan.
+    assert day["sat"]["type"] == "Gravel" and day["sat"]["description"] == "Gravel loop"
+    assert [e["type"] for e in day["sat"]["extra_sessions"]] == ["Road"]
+    # Sunday becomes a walk plus strength, both still to plan.
+    assert day["sun"]["type"] == "Walk" and [e["type"] for e in day["sun"]["extra_sessions"]] == ["Strength"]
+    # Tuesday already has both: untouched.
+    assert day["tue"]["extra_sessions"][0]["description"] == "Core"
+    assert changed == 2 and empty == 2
+    assert plan_tracker.day_minutes(day["tue"]) == 90
+    # Rest clears the extra sessions.
+    plan_tracker.apply_preferences(weeks, {"tue": ["Rest"]}, date(2030, 1, 1))
+    assert day["tue"]["type"] == "Rest" and day["tue"]["extra_sessions"] == []

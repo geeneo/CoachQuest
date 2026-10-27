@@ -4,7 +4,6 @@ import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 
-const MAX_PER_DAY = 4;
 const DAYS = [
   ["mon", "Mon"],
   ["tue", "Tue"],
@@ -44,15 +43,20 @@ export default function TrainingPreferences() {
 
 function WeekdayPrefs({ prefs, setPrefs, save }) {
   const weekStart = useAuth().user.week_start || 0; // follows Profile at once, before prefs reload
+  const max = prefs.max_per_day || 1;
+  const [full, setFull] = useState(null); // the day that hit the limit, for the hint
   const toggle = (day, type) => {
-    // Several types per day (the AI coach picks one); clicking a chosen type removes it.
+    // Every type picked is a session that day; clicking a chosen type removes it.
     // Rest stands alone: picking it clears the others, picking another type clears Rest.
     const current = prefs.weekday_prefs[day];
-    const next = current.includes(type)
-      ? current.filter((t) => t !== type)
-      : type === "Rest"
-        ? ["Rest"]
-        : [...current.filter((t) => t !== "Rest"), type].slice(-MAX_PER_DAY);
+    const others = current.filter((t) => t !== "Rest");
+    let next;
+    if (current.includes(type)) next = current.filter((t) => t !== type);
+    else if (type === "Rest") next = ["Rest"];
+    else if (max === 1) next = [type];
+    else if (others.length >= max) return setFull(day);
+    else next = [...others, type];
+    setFull(null);
     const weekday_prefs = { ...prefs.weekday_prefs, [day]: next };
     setPrefs({ ...prefs, weekday_prefs });
     save({ weekday_prefs });
@@ -61,9 +65,10 @@ function WeekdayPrefs({ prefs, setPrefs, save }) {
     <section className="card">
       <h2>Weekday preferences</h2>
       <p className="muted small">
-        What you do on each day of the week: pick one or more types per day (up to {MAX_PER_DAY}; click one again to
-        remove it). With several, the AI coach picks the one that fits the week best. Rest days stay free. Saved as you
-        click.
+        {max > 1
+          ? `What you do on each day of the week: pick up to ${max} types a day, e.g. Zwift / indoor + Strength. The AI coach plans every one of them that day, as separate sessions. `
+          : "What you do on each day of the week: pick one type per day. The AI coach plans that type on that day. "}
+        Click a type again to remove it. Rest clears the day's other types and stays free. Saved as you click.
       </p>
       <div className="weekday-grid">
         {[...DAYS.slice(weekStart), ...DAYS.slice(0, weekStart)].map(([day, label]) => (
@@ -88,6 +93,12 @@ function WeekdayPrefs({ prefs, setPrefs, save }) {
           </div>
         ))}
       </div>
+      {full && (
+        <p className="hint">
+          {full.charAt(0).toUpperCase() + full.slice(1)} already has {max} sessions, the most a day can have. Remove one
+          first.
+        </p>
+      )}
     </section>
   );
 }

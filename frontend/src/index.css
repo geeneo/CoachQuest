@@ -1729,3 +1729,35 @@ ul.instructions > li.note.suggestion {
   gap: 2px;
   margin-top: 4px;
 }
+
+/* A plan day's other sessions, under the main one. */
+.extra-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.extra-session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.extra-session .type-pick {
+  width: auto;
+  padding: 2px 6px;
+}
+.extra-session .minutes {
+  width: 4.5rem;
+  padding: 2px 6px;
+}
+.extra-desc {
+  flex: 1 1 14rem;
+  text-align: left;
+}
+/* "+ Add a session" only on the day under the mouse; touch screens always show it. */
+@media (hover: hover) {
+  .day:not(:hover):not(:focus-within) .add-session {
+    opacity: 0;
+  }
+}

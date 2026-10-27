@@ -116,6 +116,15 @@ accounts) are super admins; a super admin can make other admins super admins
 under Admin → Users → Details. Only a super admin can change that setting, or
 change, disable, delete or reset the password of another super admin.
 
+### Several sessions a day
+
+Profile → Weekday preferences takes up to three session types a day (e.g.
+Zwift / indoor + Strength, or Walk + Strength); Rest stands alone. The AI
+coach plans every one of them that day as its own session: the main one
+(which carries the structured indoor workout) and extra sessions under it,
+which can be edited, removed or added on the plan. A super admin sets the
+limit (1 to 4) under Admin → Settings → Workouts → "Sessions per day".
+
 ### Matching Zwift / MyWhoosh workouts
 
 Neither Zwift nor MyWhoosh lets another app search its workouts, so admins

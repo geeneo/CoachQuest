@@ -40,10 +40,14 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 - If a data category is missing because it was not shared, say once what that limits and move on.
 - Fit the plan inside the requested weekly hours and available days. Where `request.available_days` and \
 `weekday_preferences` disagree, the weekday preferences win.
-- When `weekday_preferences` is given, it lists the session types the athlete does on each weekday. With \
-one type, plan that type on that day. With several, plan exactly one of them on that day: pick the one \
-that best fits the week's goal, phase and the athlete's recovery, and vary the choice across weeks \
-where that helps. Keep "Rest" days as rest unless the request says otherwise.
+- When `weekday_preferences` is given, it lists the session types the athlete does on each weekday, and \
+the athlete does ALL of them that day. Plan one session per type: the day's own fields (`type`, \
+`description`, `duration_min`, `intensity`, `workout`) are the main session and every other type goes in \
+`extra_sessions`, in the order listed. When "Zwift / indoor" is one of them, make it the main session \
+(only the main session carries a structured `workout`). Make the sessions work together (e.g. strength \
+after an easy ride, not before intervals) and keep the whole day's time inside the weekly hours. Keep \
+"Rest" days as rest unless the request says otherwise, with no extra sessions. On days without \
+preferences, or with one type, leave `extra_sessions` empty.
 - An activity with a `note` (e.g. illness, travel, mechanical) explains itself: treat a light or missed
   week with such notes as disclosed, not as lost fitness to chase.
 - Give intensities as zones (Z1-Z5) and, when FTP or LTHR is known, as watts or bpm ranges.
@@ -136,7 +140,7 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
         }
     if "plans" in scopes:
         prefs = preferences_out(athlete)
-        # {day: [types]}: one type means that type; several mean "one of these, your choice".
+        # {day: [types]}: every type is a session on that day (see SYSTEM_PROMPT).
         facts["weekday_preferences"] = {d: t for d, t in prefs["weekday_prefs"].items() if t}
         facts["upcoming_races"] = [
             {k: v for k, v in race_out(r, today).items() if k not in ("id", "active", "ctl_advice")}
@@ -351,6 +355,16 @@ STEP_SCHEMA = {
     ]
 }
 WORKOUT_SCHEMA = _obj({"name": {"type": "string"}, "steps": {"type": "array", "items": STEP_SCHEMA}}, ["name", "steps"])
+# A day's other sessions (plan_tracker.extras): no structured workout, never Rest.
+EXTRA_SESSION_SCHEMA = _obj(
+    {
+        "type": {"type": "string", "enum": [t for t in SESSION_TYPES if t != "Rest"]},
+        "description": {"type": "string"},
+        "duration_min": {"type": "integer"},
+        "intensity": {"type": "array", "items": {"type": "string"}},
+    },
+    ["type", "description", "duration_min", "intensity"],
+)
 
 
 def plan_schema() -> dict:
@@ -379,6 +393,7 @@ def plan_schema() -> dict:
                                         "duration_min": {"type": "integer"},
                                         "intensity": {"type": "array", "items": {"type": "string"}},
                                         "workout": {"anyOf": [{"type": "null"}, WORKOUT_SCHEMA]},
+                                        "extra_sessions": {"type": "array", "items": EXTRA_SESSION_SCHEMA},
                                     },
                                     "required": [
                                         "weekday",
@@ -387,6 +402,7 @@ def plan_schema() -> dict:
                                         "duration_min",
                                         "intensity",
                                         "workout",
+                                        "extra_sessions",
                                     ],
                                     "additionalProperties": False,
                                 },

@@ -69,6 +69,8 @@ class Settings:
     signup_approval: str = os.getenv("SIGNUP_APPROVAL", "off")
     # "on": indoor plan days show the closest Zwift / MyWhoosh workout from the catalog.
     platform_matching: str = os.getenv("PLATFORM_MATCHING", "on")
+    # Most sessions an athlete can plan on one day (weekday preferences; the AI coach plans them all).
+    max_sessions_per_day: str = os.getenv("MAX_SESSIONS_PER_DAY", "3")
 
     smtp_host: str = os.getenv("SMTP_HOST", "")
     smtp_port: str = os.getenv("SMTP_PORT", "587")

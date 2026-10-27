@@ -9,7 +9,17 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import comments, localtime, plan_approval, plan_tracker, plan_workouts, platform_catalog, sync_engine, zwo
+from .. import (
+    comments,
+    localtime,
+    plan_approval,
+    plan_tracker,
+    plan_workouts,
+    platform_catalog,
+    runtime,
+    sync_engine,
+    zwo,
+)
 from ..coach import PHASES, CoachError, build_facts, generate_day, generate_plan, has_data
 from ..db import Comment, Plan, PlatformWorkout, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -69,6 +79,7 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
             acts = activities_since(db, p.athlete_id, start)
             out["weeks"] = plan_tracker.with_actuals(p.weeks, acts, today, localtime.zone(athlete.timezone))
             out["platform_matching"] = _add_matches(db, athlete, out["weeks"], today)
+            out["max_sessions_per_day"] = runtime.max_sessions_per_day()
     return out
 
 
@@ -260,6 +271,8 @@ class DayEdit(BaseModel):
     route: str | None = Field(default=None, max_length=300)
     locked: bool | None = None
     missed_reason: str | None = Field(default=None, max_length=40)
+    # The day's other sessions, all of them (see plan_tracker.extras).
+    extra_sessions: list[dict] | None = Field(default=None, max_length=3)
 
 
 @router.patch("/{plan_id}/days/{day}")
@@ -286,6 +299,16 @@ def edit_day(
         raise HTTPException(status_code=404, detail="That day is not in this plan") from None
     if changes.get("intensity") is not None:
         changes["intensity"] = [c.strip()[:30] for c in changes["intensity"] if c.strip()]
+    if changes.get("extra_sessions") is not None:
+        cleaned = [plan_tracker.clean_session(s) for s in changes["extra_sessions"]]
+        if None in cleaned:
+            raise HTTPException(status_code=422, detail="An extra session needs a session type other than Rest")
+        limit = runtime.max_sessions_per_day()
+        if len(cleaned) + 1 > limit:
+            raise HTTPException(status_code=422, detail=f"At most {limit} session{'s' if limit > 1 else ''} a day")
+        changes["extra_sessions"] = cleaned
+    if changes.get("type") == "Rest":
+        changes["extra_sessions"] = []  # a rest day has no sessions
     weeks[wi]["days"][di].update(changes)
     _save_weeks(db, p, weeks, background)
     return plan_out(p, db, full=True, viewer=user)
@@ -343,7 +366,7 @@ def swap_days(
     day_a, day_b = weeks[wa]["days"][da], weeks[wb]["days"][db_]
     if day_a["locked"] or day_b["locked"]:
         raise HTTPException(status_code=409, detail="Unlock both days first")
-    fields = ("type", "description", "duration_min", "intensity", "gear", "route", "workout")
+    fields = ("type", "description", "duration_min", "intensity", "gear", "route", "workout", "extra_sessions")
     moved_a, moved_b = {k: day_a.get(k) for k in fields}, {k: day_b.get(k) for k in fields}
     day_a.update(moved_b)
     day_b.update(moved_a)
@@ -410,7 +433,10 @@ async def replan(
         raise HTTPException(status_code=409, detail="This plan is over. Create a new plan instead.")
     tracked = plan_out(p, db, full=True, today=today)["weeks"]
     keep = [
-        {k: d[k] for k in ("date", "weekday", "type", "description", "duration_min", "status")}
+        {
+            **{k: d[k] for k in ("date", "weekday", "type", "description", "duration_min", "status")},
+            "extra_sessions": plan_tracker.extras(d),
+        }
         for w in tracked[first:]
         for d in w["days"]
         if plan_tracker.kept(d, today)
@@ -498,7 +524,7 @@ async def replan_day(
         raise HTTPException(status_code=409, detail="That day is locked 🔒: unlock it first")
     if not has_data(db, p.athlete_id):
         raise HTTPException(status_code=409, detail="No activities or wellness synced yet: connect Strava or Garmin")
-    keys = ("weekday", "type", "description", "duration_min", "intensity")
+    keys = ("weekday", "type", "description", "duration_min", "intensity", "extra_sessions")
     day_comments = [
         c for c in comments.for_plan(db, p, limit=40) if c["day"] == day.isoformat() or day.isoformat() in c["about"]
     ]

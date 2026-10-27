@@ -199,7 +199,10 @@ def _current_plan_day(db: DbSession, athlete_id: int, day: date) -> dict | None:
         except KeyError:
             continue
         d = p.weeks[wi]["days"][di]
-        return {k: d[k] for k in ("type", "description", "duration_min", "intensity")}
+        out = {k: d[k] for k in ("type", "description", "duration_min", "intensity")}
+        if plan_tracker.extras(d):
+            out["extra_sessions"] = plan_tracker.extras(d)
+        return out
     return None
 
 
@@ -279,7 +282,7 @@ def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: dat
                     "days": [
                         {
                             "date": d["date"],
-                            "planned": d["type"],
+                            "planned": " + ".join([d["type"], *(e["type"] for e in plan_tracker.extras(d))]),
                             "status": d["status"],
                             **({"why_missed": d["missed_reason"]} if d.get("missed_reason") else {}),
                         }

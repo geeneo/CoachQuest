@@ -126,6 +126,14 @@ EDITABLE: dict[str, Editable] = {
         "workouts) for the athlete's preferred platform, and the athlete can swap to it. Off: hidden everywhere; "
         "swapped days keep their workout. Only super admins can change this.",
     ),
+    "max_sessions_per_day": Editable(
+        "Sessions per day",
+        "Workouts",
+        choices=("1", "2", "3", "4"),
+        help="How many session types an athlete can pick for one weekday (e.g. Zwift + Strength). The AI coach "
+        "plans every one of them on that day. Lowering it keeps the first ones picked. Only super admins can "
+        "change this.",
+    ),
     "anthropic_model_short": Editable(
         "Model for notes, reviews and chat",
         "AI coach",
@@ -170,7 +178,7 @@ EDITABLE: dict[str, Editable] = {
 }
 
 # Only super admins may change these.
-SUPER_ONLY = {"signup_approval", "platform_matching"}
+SUPER_ONLY = {"signup_approval", "platform_matching", "max_sessions_per_day"}
 
 _overrides: dict[str, str] = {}
 
@@ -189,6 +197,14 @@ def get(key: str) -> str:
     if key in _overrides:
         return _overrides[key]
     return str(getattr(settings, key) or "")
+
+
+def max_sessions_per_day() -> int:
+    """Admin → Settings → "Sessions per day" (1 to 4)."""
+    try:
+        return max(1, min(4, int(get("max_sessions_per_day") or 3)))
+    except ValueError:
+        return 3
 
 
 def validate(key: str, value: str) -> str:
