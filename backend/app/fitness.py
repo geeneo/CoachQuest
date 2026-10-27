@@ -106,21 +106,27 @@ def same_session(a, b) -> bool:
     return (end - start).total_seconds() >= SAME_SESSION_OVERLAP * shorter
 
 
-def _keep_first(a) -> tuple:
-    """Which copy to show: Strava first, then Garmin, then Intervals.icu; within one source the copy with power,
-    then elevation, then the longer one."""
-    has_power = getattr(a, "avg_power", None) is not None or getattr(a, "norm_power", None) is not None
-    return (SOURCE_RANK.get(a.source, 9), not has_power, not getattr(a, "elevation_m", 0), -(a.duration_s or 0))
+def _keep_first(primary: str | None):
+    """Which copy to show: the athlete's main activity source, then Strava, Garmin, Intervals.icu; within one
+    source the copy with power, then elevation, then the longer one."""
+
+    def key(a) -> tuple:
+        rank = -1 if a.source == primary else SOURCE_RANK.get(a.source, 9)
+        has_power = getattr(a, "avg_power", None) is not None or getattr(a, "norm_power", None) is not None
+        return (rank, not has_power, not getattr(a, "elevation_m", 0), -(a.duration_s or 0))
+
+    return key
 
 
-def dedupe(activities: list) -> list:
+def dedupe(activities: list, primary: str | None = None) -> list:
     """Show a session once when it was recorded or imported more than once (see same_session).
 
     That covers one ride from Strava and Garmin, and also two copies from the same source, e.g. Zwift and a
-    Garmin head unit both uploading the same ride to Strava. Keeps the input order.
+    Garmin head unit both uploading the same ride to Strava. `primary` is the athlete's main activity source
+    (sync_options.primary_source), whose copy wins. Keeps the input order.
     """
     kept: list = []  # sorted by start time
-    for a in sorted(activities, key=_keep_first):
+    for a in sorted(activities, key=_keep_first(primary)):
         i = bisect_left(kept, a.start_time - timedelta(seconds=LONGEST_S), key=lambda k: k.start_time)
         end = a.start_time + timedelta(seconds=max(a.duration_s or 0, SAME_SESSION_S))
         duplicate = False

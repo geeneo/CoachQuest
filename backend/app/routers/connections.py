@@ -64,6 +64,8 @@ def list_connections(user: User = Depends(current_user), db: DbSession = Depends
     own = strava.own_app(db, user.id)
     return {
         "connections": [conn_out(c) for c in conns],
+        # The main activity source the athlete picked; None until they pick one.
+        "activity_primary": sync_options.primary_source(db, user.id),
         "strava_configured": strava.app_for(db, user.id) is not None,
         "strava_app": {
             "own": own is not None,
@@ -341,7 +343,7 @@ def set_options(
     if not changes:
         raise HTTPException(status_code=422, detail=f"{provider} supports: {', '.join(current)}")
     turned_on = any(v and not current[k] for k, v in changes.items())
-    conn.options = {**current, **changes}
+    conn.options = {**(conn.options or {}), **current, **changes}
     if turned_on:
         # Start the next sync from scratch so the newly enabled data is backfilled.
         conn.last_sync_at = None
@@ -349,6 +351,33 @@ def set_options(
     if turned_on:
         background.add_task(run_sync, conn.id)
     return conn_out(conn)
+
+
+class ActivitySource(BaseModel):
+    provider: str
+
+
+@router.put("/activity-source")
+def set_activity_source(
+    body: ActivitySource,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Choose the main activity source. Other sources keep their own "also import activities" choice."""
+    conn = _conn(db, user, body.provider, SOURCES)
+    if conn.provider == "intervals_icu" and "ACTIVITY:READ" not in (decrypt_json(conn.token_enc).get("scope") or ""):
+        raise HTTPException(
+            status_code=409, detail="Intervals.icu wasn't allowed to share activities. Reconnect it and allow that."
+        )
+    was_on = sync_options.options(conn)["activities"]
+    sync_options.set_primary(db, conn)
+    if not was_on:
+        conn.last_sync_at = None  # backfill its activities on the next sync
+    db.commit()
+    if not was_on:
+        background.add_task(run_sync, conn.id)
+    return {"activity_primary": conn.provider}
 
 
 class BackfillIn(BaseModel):

@@ -9,7 +9,7 @@ from . import profile_sync
 from .activity_types import category, is_outdoor, is_ride
 from .db import Activity, WellnessDay
 from .fitness import daily_tss, dedupe, pmc, week_start_of
-from .sync_options import hidden_sources
+from .sync_options import hidden_sources, primary_source
 
 
 def activities_since(db: DbSession, athlete_id: int, since: datetime) -> list[Activity]:
@@ -22,7 +22,7 @@ def activities_since(db: DbSession, athlete_id: int, since: datetime) -> list[Ac
         )
         .order_by(Activity.start_time)
     ).all()
-    return dedupe(list(rows))
+    return dedupe(list(rows), primary_source(db, athlete_id))
 
 
 def wellness_since(db: DbSession, athlete_id: int, since: date) -> list[WellnessDay]:

@@ -36,12 +36,11 @@ class GarminLinkError(Exception):
 def _save_tokens(db: DbSession, user: User, api: garminconnect.Garmin) -> Connection:
     conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "garmin"))
     if conn is None:
-        # With Strava already bringing in activities, start Garmin on wellness only
-        # so the same ride isn't imported twice. The user can change this.
-        strava = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "strava"))
-        uses_strava = strava is not None and sync_options.options(strava)["activities"]
+        # With another source already bringing in activities, start Garmin on wellness only
+        # so the same ride isn't imported twice. The user picks the activity source on Connections.
+        activities = sync_options.first_activities(db, user.id, "garmin")
         conn = Connection(
-            user_id=user.id, provider="garmin", token_enc="", options={"activities": not uses_strava, "wellness": True}
+            user_id=user.id, provider="garmin", token_enc="", options={"activities": activities, "wellness": True}
         )
         db.add(conn)
     conn.token_enc = encrypt_json({"tokens": api.client.dumps()})

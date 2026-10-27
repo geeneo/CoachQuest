@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session as DbSession
 from . import completion, localtime
 from .db import Activity, DeletedActivity, ScheduledWorkout, User
 from .fitness import LONGEST_S, SAME_SESSION_S, dedupe, same_session
-from .sync_options import hidden_sources
+from .sync_options import hidden_sources, primary_source
 
 _FIELDS = [c.name for c in Activity.__table__.columns if c.name not in ("id", "user_id")]
 
@@ -80,7 +80,7 @@ def remove_duplicates(db: DbSession, user: User) -> int:
             .order_by(Activity.start_time)
         )
     )
-    shown = {a.id for a in dedupe(acts)}
+    shown = {a.id for a in dedupe(acts, primary_source(db, user.id))}
     extra = {a.id: a for a in acts if a.id not in shown}
     if extra:
         _remove(db, user, extra)
