@@ -48,6 +48,9 @@ def admin_user(user: User = Depends(current_user)) -> User:
     return user
 
 
+COACH, FRIEND = "coach", "friend"
+
+
 def active_grant(db: DbSession, athlete_id: int, coach_id: int) -> Grant | None:
     return db.scalar(
         select(Grant).where(
@@ -83,12 +86,22 @@ def allowed_scopes(db: DbSession, viewer: User, athlete_id: int) -> set[str]:
     athlete = db.get(User, athlete_id) if grant else None
     if athlete is None or not athlete.is_active:
         return set()  # a paused or disabled athlete's data isn't shown to coaches
+    if grant.role == FRIEND and not READ_REQUEST.get():
+        return set()  # friends only look
     return set(grant.scopes) & set(SCOPES)
+
+
+def is_friend(db: DbSession, viewer: User, athlete_id: int) -> bool:
+    """Does `viewer` see this athlete's data as a friend (view only), not as their coach?"""
+    grant = active_grant(db, athlete_id, viewer.id) if viewer.id != athlete_id else None
+    return grant is not None and grant.role == FRIEND
 
 
 def require_scope(db: DbSession, viewer: User, athlete_id: int, scope: str) -> None:
     """Raise 404 (not 403) so a coach can't probe which user ids exist."""
     if scope not in allowed_scopes(db, viewer, athlete_id):
+        if not READ_REQUEST.get() and is_friend(db, viewer, athlete_id):
+            raise HTTPException(status_code=403, detail="View only: you can look at this, not change it")
         raise HTTPException(status_code=404, detail="Athlete not found or not shared with you")
     if viewer.id != athlete_id:
         db.add(AccessLog(athlete_id=athlete_id, viewer_id=viewer.id, resource=scope))

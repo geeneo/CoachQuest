@@ -100,7 +100,9 @@ def counts(db: DbSession, target: str, ids: list[int]) -> dict[int, int]:
 def _recipients(db: DbSession, athlete_id: int, author: User) -> list[User]:
     ids = {athlete_id} | {
         g.coach_id
-        for g in db.scalars(select(Grant).where(Grant.athlete_id == athlete_id, Grant.status == "active"))
+        for g in db.scalars(
+            select(Grant).where(Grant.athlete_id == athlete_id, Grant.status == "active", Grant.role == "coach")
+        )
         if "plans" in (g.scopes or [])
     }
     ids.discard(author.id)

@@ -31,7 +31,9 @@ def coaches(db: DbSession, athlete_id: int) -> list[User]:
     """Coaches who may approve: active shares with the plans scope."""
     ids = {
         g.coach_id
-        for g in db.scalars(select(Grant).where(Grant.athlete_id == athlete_id, Grant.status == "active"))
+        for g in db.scalars(
+            select(Grant).where(Grant.athlete_id == athlete_id, Grant.status == "active", Grant.role == "coach")
+        )
         if "plans" in (g.scopes or [])
     }
     return list(db.scalars(select(User).where(User.id.in_(ids), User.is_active.is_(True)))) if ids else []

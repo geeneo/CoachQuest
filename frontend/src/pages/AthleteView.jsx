@@ -51,7 +51,12 @@ export default function AthleteView({ self }) {
               Admin view, read only. Your looks are shown in this athlete's "Who looked at my data" log.
             </p>
           ) : (
-            !self && <p className="small muted">Shared with you: {s.scopes.join(", ")}</p>
+            !self && (
+              <p className="small muted">
+                {s.view_only ? "Shared with you as a friend, view only: " : "Shared with you: "}
+                {s.scopes.join(", ")}
+              </p>
+            )
           )}
         </div>
       </div>

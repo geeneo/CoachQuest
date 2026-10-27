@@ -136,7 +136,9 @@ def athlete_row(db: DbSession, coach: User, athlete: User, scopes: set[str]) -> 
 def coach_dashboard(db: DbSession, coach: User, include_self: bool = False) -> list[dict]:
     """Athletes sharing with `coach` (and the coach's own row if asked), most in need of attention first."""
     rows = []
-    grants = db.scalars(select(Grant).where(Grant.coach_id == coach.id, Grant.status == "active")).all()
+    grants = db.scalars(
+        select(Grant).where(Grant.coach_id == coach.id, Grant.status == "active", Grant.role == "coach")
+    ).all()
     for g in grants:
         athlete = db.get(User, g.athlete_id)
         if athlete is None:

@@ -15,7 +15,7 @@ from .. import activity_delete, dashboard, localtime, profile_sync, runtime
 from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
-from ..deps import active_grant, allowed_scopes, current_user, require_scope, resolve_athlete_id
+from ..deps import active_grant, allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
 from ..providers import garmin
 from ..queries import (
     activities_since,
@@ -93,12 +93,18 @@ async def pull_profile_from_garmin(user: User = Depends(current_user), db: DbSes
 
 @router.get("/athletes")
 def my_athletes(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    """Athletes who share data with the current user (coach view)."""
+    """Athletes who share data with the current user: as their coach, or as a friend (view only)."""
     grants = db.scalars(select(Grant).where(Grant.coach_id == user.id, Grant.status == "active")).all()
     out = []
     for g in grants:
         athlete = db.get(User, g.athlete_id)
-        row = {"id": athlete.id, "display_name": athlete.display_name, "scopes": g.scopes, "grant_id": g.id}
+        row = {
+            "id": athlete.id,
+            "display_name": athlete.display_name,
+            "scopes": g.scopes,
+            "grant_id": g.id,
+            "role": g.role,
+        }
         if not athlete.is_active:
             out.append({**row, "disabled": True})
             continue
@@ -124,6 +130,7 @@ def athlete_summary(athlete: str, user: User = Depends(current_user), db: DbSess
     a = db.get(User, athlete_id)
     out = {"id": a.id, "display_name": a.display_name, "scopes": sorted(scopes), "is_me": a.id == user.id}
     # An admin looking without a grant: the page says it is read only.
+    out["view_only"] = is_friend(db, user, a.id)
     out["admin_view"] = (
         user.is_admin
         and a.id != user.id

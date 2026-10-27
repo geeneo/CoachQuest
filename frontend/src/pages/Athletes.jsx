@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
-import { dateTime, duration, formLabel } from "../lib/format.js";
+import { SCOPE_LABELS, dateTime, duration, formLabel } from "../lib/format.js";
 
 const SORTS = {
   attention: ["Needs attention", (a, b) => b.attention - a.attention || a.name.localeCompare(b.name)],
@@ -57,7 +57,7 @@ export default function Athletes() {
       </div>
       {res.error && <div className="error">{res.error.message}</div>}
       {res.loading && !res.data && <p className="muted">Loading…</p>}
-      {res.data?.length === 0 && <p className="muted">Nobody has shared with you yet.</p>}
+      {res.data?.length === 0 && <p className="muted">No athletes have you as their coach yet.</p>}
       {rows.length > 0 && (
         <div className="table-wrap card dash">
           <table className="dashboard">
@@ -185,6 +185,7 @@ export default function Athletes() {
       <p className="muted small">
         "New" comments are from the last 7 days, not counting yours. Click a row to open the athlete.
       </p>
+      <FriendsSharing />
     </>
   );
 }
@@ -214,4 +215,28 @@ function Week({ w }) {
 
 function NotShared() {
   return <span className="muted small" title="Not shared with you">—</span>;
+}
+
+// Friends who let me look at their data (view only), apart from the athletes I coach.
+function FriendsSharing() {
+  const res = useApi("/api/athletes");
+  const friends = (res.data || []).filter((a) => a.role === "friend");
+  if (!friends.length) return null;
+  return (
+    <section className="card">
+      <h2>Friends sharing with me (view only)</h2>
+      <ul className="list">
+        {friends.map((f) => (
+          <li key={f.id}>
+            {f.disabled ? (
+              <span className="muted">{f.display_name} (account paused)</span>
+            ) : (
+              <Link to={`/athletes/${f.id}`}>{f.display_name}</Link>
+            )}
+            <span className="muted small">{f.scopes.map((s) => SCOPE_LABELS[s] || s).join(", ")}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }

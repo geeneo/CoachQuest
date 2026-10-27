@@ -150,8 +150,8 @@ def overview(db: DbSession) -> list[dict]:
         db.execute(select(Session.user_id, func.max(Session.last_seen_at)).group_by(Session.user_id)).all()
     )
     failed = _counts(db, AuthEvent.user_id, AuthEvent.event == "login_failed", AuthEvent.at >= now - timedelta(days=7))
-    coaches = _counts(db, Grant.athlete_id, Grant.status == "active")
-    athletes = _counts(db, Grant.coach_id, Grant.status == "active")
+    coaches = _counts(db, Grant.athlete_id, Grant.status == "active", Grant.role == "coach")
+    athletes = _counts(db, Grant.coach_id, Grant.status == "active", Grant.role == "coach")
     wellness = _counts(db, WellnessDay.user_id)
     plans = _counts(db, Plan.athlete_id)
     races = _counts(db, Race.user_id, Race.active.is_(True))
@@ -287,10 +287,14 @@ def detail(db: DbSession, user: User) -> dict:
             for r in deliveries
         ],
         "coaches": [
-            {"name": names.get(g.coach_id, "?"), "scopes": g.scopes} for g in grants if g.athlete_id == user.id
+            {"name": names.get(g.coach_id, "?"), "scopes": g.scopes, "role": g.role}
+            for g in grants
+            if g.athlete_id == user.id
         ],
         "athletes": [
-            {"name": names.get(g.athlete_id, "?"), "scopes": g.scopes} for g in grants if g.coach_id == user.id
+            {"name": names.get(g.athlete_id, "?"), "scopes": g.scopes, "role": g.role}
+            for g in grants
+            if g.coach_id == user.id
         ],
         "ai": ai_detail(db, user),
     }

@@ -228,9 +228,11 @@ class WellnessDay(Base):
 
 
 class Grant(Base):
-    """An athlete lets a coach see selected data.
+    """An athlete lets a coach (or a friend) see selected data.
 
     pending -> active (coach accepts) -> revoked (either side ends it).
+    `coach_id` is whoever was invited, also when `role` is "friend": friends only look
+    (deps.allowed_scopes) and are never treated as the athlete's coach.
     """
 
     __tablename__ = "grants"
@@ -239,6 +241,7 @@ class Grant(Base):
     athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     coach_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     scopes: Mapped[list] = mapped_column(JSON, default=list)
+    role: Mapped[str] = mapped_column(String(10), default="coach")  # coach | friend (view only)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -674,6 +677,7 @@ _ADDED_COLUMNS = {
     },
     "races": {"target_seconds": "INTEGER", "ctl_advice": "JSON"},
     "platform_workouts": {"collection": "VARCHAR(160) NOT NULL DEFAULT ''"},
+    "grants": {"role": "VARCHAR(10) NOT NULL DEFAULT 'coach'"},
     "ai_calls": {
         "kind": "VARCHAR(12) NOT NULL DEFAULT ''",
         "cache_read_tokens": "INTEGER NOT NULL DEFAULT 0",

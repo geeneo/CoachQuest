@@ -72,6 +72,16 @@ Athletes grant a coach any combination of these scopes (Sharing page):
 - Every read by someone other than the athlete is written to an access log,
   which the athlete sees on the Sharing page.
 
+### Sharing with friends (view only)
+
+Besides a coach, an athlete can share with a friend: Sharing → Share my data
+→ "A friend (view only)", picking what to share like for a coach. The friend
+accepts and finds the athlete under My athletes → Friends sharing with me.
+Friends only look: every change is refused ("View only"), they can't approve
+plans or comment, get no coach emails, and don't count as the athlete's
+coach (so the athlete's plans don't wait for approval because of them).
+Their looks go in the athlete's "Who looked at my data" log.
+
 ### Strava API app: shared or per user
 
 Strava needs an API app (Client ID + Client Secret). There are two ways to set

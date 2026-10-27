@@ -22,7 +22,7 @@ from .. import (
 )
 from ..coach import PHASES, CoachError, build_facts, generate_day, generate_plan, has_data
 from ..db import Comment, Plan, PlatformWorkout, User, get_db
-from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
+from ..deps import allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
 from ..queries import activities_since
 from .preferences import SESSION_TYPES, preferences_out
 
@@ -67,7 +67,8 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
         if p.pending:
             out["pending"] = {k: v for k, v in p.pending.items() if k != "fresh"}
         if viewer is not None:
-            out["viewer_role"] = plan_approval.role(viewer, p.athlete_id)
+            friend = is_friend(db, viewer, p.athlete_id)
+            out["viewer_role"] = "friend" if friend else plan_approval.role(viewer, p.athlete_id)
             waiting = p.approval != plan_approval.APPROVED or bool(p.pending)
             out["can_approve"] = waiting and plan_approval.can_approve(db, viewer, p.athlete_id, p)
             if waiting and viewer.id == p.athlete_id and plan_approval.required(db, viewer):

@@ -11,7 +11,7 @@
         every signed-in user can read the published ones.
       - Start with draft guides for MyWhoosh, the calendar and Intervals.icu,
         written from how the app works today, for the admin to edit.
-- [ ] **Share your data with friends (view only).** Besides sharing with a
+- [x] **Share your data with friends (view only).** Besides sharing with a
       coach, an athlete can let other CoachQuest users look at their data:
       - Pick what to share (activities, fitness, wellness, …) per person,
         like with a coach; the other person accepts.
