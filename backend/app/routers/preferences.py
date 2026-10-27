@@ -32,6 +32,7 @@ SESSION_TYPES = (
     "Yoga / mobility",
     "Race",
 )
+MAX_TYPES_PER_DAY = 4
 DEFAULT_NOTE_TAGS = [
     "illness",
     "mechanical",
@@ -48,8 +49,8 @@ DEFAULT_NOTE_TAGS = [
 
 def preferences_out(user: User) -> dict:
     return {
-        # One type per day (older saves could hold several: the first counts).
-        "weekday_prefs": {d: (user.weekday_prefs or {}).get(d, [])[:1] for d in WEEKDAYS},
+        # One or more types per day: the AI coach picks one of them for that day. Rest stands alone.
+        "weekday_prefs": {d: (user.weekday_prefs or {}).get(d, []) for d in WEEKDAYS},
         "note_tags": user.note_tags if user.note_tags is not None else list(DEFAULT_NOTE_TAGS),
         "session_types": list(SESSION_TYPES),
         "week_start": user.week_start or 0,
@@ -76,8 +77,10 @@ class PreferencesIn(BaseModel):
         bad_types = {t for types in v.values() for t in types} - set(SESSION_TYPES)
         if bad_days or bad_types:
             raise ValueError(f"Unknown {'days' if bad_days else 'session types'}: {sorted(bad_days or bad_types)}")
-        if any(len(set(types)) > 1 for types in v.values()):
-            raise ValueError("Pick one session type per day")
+        if any("Rest" in types and len(set(types)) > 1 for types in v.values()):
+            raise ValueError("A Rest day can't have other session types too")
+        if any(len(set(types)) > MAX_TYPES_PER_DAY for types in v.values()):
+            raise ValueError(f"Pick at most {MAX_TYPES_PER_DAY} session types per day")
         return {d: list(dict.fromkeys(v.get(d, []))) for d in WEEKDAYS}
 
     @field_validator("note_tags")

@@ -186,8 +186,9 @@ NOT_PLANNED = "{type} session, not planned yet: re-plan from this week to fill i
 
 
 def apply_preferences(weeks: list[dict], prefs: dict[str, list[str]], today: date) -> tuple[int, int]:
-    """Set future, unlocked days to the athlete's first preferred type for that weekday.
+    """Set future, unlocked days to one of the athlete's preferred types for that weekday.
 
+    A day whose type is already one of them stays; otherwise it gets the first one listed.
     Only the type changes, so a rest day that becomes a training day has no session yet: it says so
     (and is counted) instead of keeping "Rest.". A structured indoor workout stays only on indoor
     days. Returns (days changed, training days left to plan)."""

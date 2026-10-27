@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from app import coach, plan_tracker
 from app.db import Activity, SessionLocal
 
 
@@ -51,9 +52,11 @@ def test_ai_coach_gets_weekday_preferences(make_user, monkeypatch):
 
     monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
     p = make_user("a@example.com")
-    p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"mon": ["Rest"], "tue": ["Zwift / indoor"]}})
+    prefs = {"mon": ["Rest"], "tue": ["Zwift / indoor"], "sat": ["Road", "Gravel", "MTB"]}
+    p.request("PUT", "/api/me/preferences", json={"weekday_prefs": prefs})
     p.post("/api/athletes/me/plans", json={"without_data": True, "title": "t", "goal": "g"})
-    assert seen["weekday_preferences"] == {"mon": "Rest", "tue": "Zwift / indoor"}
+    assert seen["weekday_preferences"] == prefs  # several types: the AI coach picks one
+    assert "With several, plan exactly one of them" in coach.SYSTEM_PROMPT
 
 
 def test_coach_needs_plans_scope(make_user):
@@ -71,14 +74,24 @@ def test_walk_and_hike_are_session_types(make_user):
     assert r.status_code == 200 and r.json()["weekday_prefs"]["sun"] == ["Hike"]
 
 
-def test_one_type_per_day(make_user):
-    from app.db import SessionLocal, User
+def test_several_types_per_day(make_user):
+    p = make_user("a@example.com")
+    r = p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"sat": ["Road", "Gravel", "Road"]}})
+    assert r.status_code == 200 and r.json()["weekday_prefs"]["sat"] == ["Road", "Gravel"]
+    # Rest stands alone, and at most four types a day.
+    assert p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"sun": ["Rest", "Walk"]}}).status_code == 422
+    five = ["Road", "Gravel", "MTB", "E-MTB", "Walk"]
+    assert p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"sun": five}}).status_code == 422
 
-    p = make_user("one@example.com")
-    r = p.request("PUT", "/api/me/preferences", json={"weekday_prefs": {"sun": ["Walk", "Hike"]}})
-    assert r.status_code == 422 and "one session type per day" in r.text
-    uid = p.get("/api/auth/me").json()["id"]
-    with SessionLocal() as db:  # saved before the rule: the first counts
-        db.get(User, uid).weekday_prefs = {"wed": ["Road", "Zwift / indoor"]}
-        db.commit()
-    assert p.get("/api/athletes/me/preferences").json()["weekday_prefs"]["wed"] == ["Road"]
+
+def test_apply_preferences_keeps_a_day_that_is_one_of_the_choices():
+    from datetime import date
+
+    weeks = plan_tracker.build_weeks([], date(2030, 1, 7), 1)  # a Monday, well after "today"
+    sat = next(d for d in weeks[0]["days"] if d["weekday"] == "sat")
+    sun = next(d for d in weeks[0]["days"] if d["weekday"] == "sun")
+    sat.update(type="Gravel", duration_min=120)
+    sun.update(type="Swim", duration_min=60)
+    prefs = {"sat": ["Road", "Gravel"], "sun": ["Road", "MTB"]}
+    changed, _ = plan_tracker.apply_preferences(weeks, prefs, date(2030, 1, 1))
+    assert sat["type"] == "Gravel" and sun["type"] == "Road" and changed == 1

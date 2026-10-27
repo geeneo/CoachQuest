@@ -4,6 +4,7 @@ import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 
+const MAX_PER_DAY = 4;
 const DAYS = [
   ["mon", "Mon"],
   ["tue", "Tue"],
@@ -44,8 +45,14 @@ export default function TrainingPreferences() {
 function WeekdayPrefs({ prefs, setPrefs, save }) {
   const weekStart = useAuth().user.week_start || 0; // follows Profile at once, before prefs reload
   const toggle = (day, type) => {
-    // One type per day: picking another replaces it, clicking the chosen one clears the day.
-    const next = prefs.weekday_prefs[day].includes(type) ? [] : [type];
+    // Several types per day (the AI coach picks one); clicking a chosen type removes it.
+    // Rest stands alone: picking it clears the others, picking another type clears Rest.
+    const current = prefs.weekday_prefs[day];
+    const next = current.includes(type)
+      ? current.filter((t) => t !== type)
+      : type === "Rest"
+        ? ["Rest"]
+        : [...current.filter((t) => t !== "Rest"), type].slice(-MAX_PER_DAY);
     const weekday_prefs = { ...prefs.weekday_prefs, [day]: next };
     setPrefs({ ...prefs, weekday_prefs });
     save({ weekday_prefs });
@@ -54,22 +61,22 @@ function WeekdayPrefs({ prefs, setPrefs, save }) {
     <section className="card">
       <h2>Weekday preferences</h2>
       <p className="muted small">
-        What you do on each day of the week: pick one type per day (click it again to clear the day). The AI coach plans
-        that type on that day and keeps Rest days free. Saved as you click.
+        What you do on each day of the week: pick one or more types per day (up to {MAX_PER_DAY}; click one again to
+        remove it). With several, the AI coach picks the one that fits the week best. Rest days stay free. Saved as you
+        click.
       </p>
       <div className="weekday-grid">
         {[...DAYS.slice(weekStart), ...DAYS.slice(0, weekStart)].map(([day, label]) => (
           <div key={day} className="weekday-row">
             <span className="weekday-label">{label}</span>
-            <div className="chips" role="radiogroup" aria-label={label}>
+            <div className="chips" role="group" aria-label={label}>
               {prefs.session_types.map((type) => {
                 const on = prefs.weekday_prefs[day].includes(type);
                 return (
                   <button
                     key={type}
                     type="button"
-                    role="radio"
-                    aria-checked={on}
+                    aria-pressed={on}
                     className={`chip ${on ? "on" : ""}`}
                     onClick={() => toggle(day, type)}
                   >

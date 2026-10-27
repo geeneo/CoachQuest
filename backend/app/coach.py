@@ -40,8 +40,10 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 - If a data category is missing because it was not shared, say once what that limits and move on.
 - Fit the plan inside the requested weekly hours and available days. Where `request.available_days` and \
 `weekday_preferences` disagree, the weekday preferences win.
-- When `weekday_preferences` is given (one session type per day), plan that type on that day, and keep
-  "Rest" days as rest unless the request says otherwise.
+- When `weekday_preferences` is given, it lists the session types the athlete does on each weekday. With \
+one type, plan that type on that day. With several, plan exactly one of them on that day: pick the one \
+that best fits the week's goal, phase and the athlete's recovery, and vary the choice across weeks \
+where that helps. Keep "Rest" days as rest unless the request says otherwise.
 - An activity with a `note` (e.g. illness, travel, mechanical) explains itself: treat a light or missed
   week with such notes as disclosed, not as lost fitness to chase.
 - Give intensities as zones (Z1-Z5) and, when FTP or LTHR is known, as watts or bpm ranges.
@@ -134,7 +136,8 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
         }
     if "plans" in scopes:
         prefs = preferences_out(athlete)
-        facts["weekday_preferences"] = {d: t[0] for d, t in prefs["weekday_prefs"].items() if t}
+        # {day: [types]}: one type means that type; several mean "one of these, your choice".
+        facts["weekday_preferences"] = {d: t for d, t in prefs["weekday_prefs"].items() if t}
         facts["upcoming_races"] = [
             {k: v for k, v in race_out(r, today).items() if k not in ("id", "active", "ctl_advice")}
             for r in upcoming(db, athlete.id, today)
