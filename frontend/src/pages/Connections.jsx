@@ -67,12 +67,12 @@ export default function Connections() {
         </div>
       )}
       {conns.error && <div className="error">{conns.error.message}</div>}
-      {byProvider.strava?.options.activities && byProvider.garmin?.options.activities && (
-        <div className="card flags small">
-          Activities come from both Strava and Garmin. CoachQuest hides an activity when both sources have one starting
-          within 10 minutes of each other, keeping the Strava copy. To avoid duplicates entirely, untick{" "}
-          <strong>Activities</strong> under Garmin and keep Garmin for wellness only.
-        </div>
+      {conns.data?.sources?.linked.length >= 2 && (
+        <DataSources
+          sources={conns.data.sources}
+          intervals={platforms.data?.find((p) => p.id === "intervals_icu")}
+          reload={reloadAll}
+        />
       )}
       <StravaCard
         conn={byProvider.strava}
@@ -89,6 +89,103 @@ export default function Connections() {
       />
       <ConnectedPlatforms platforms={platforms} />
     </>
+  );
+}
+
+const APP_NAMES = { strava: "Strava", garmin: "Garmin", intervals_icu: "Intervals.icu" };
+const SOURCE_KINDS = [
+  ["activities", "Rides, runs and other activities"],
+  ["wellness", "Sleep, HRV and resting heart rate"],
+];
+
+// "Where your data comes from": one app per kind, so the same ride or night isn't counted twice.
+// Open and highlighted until confirmed, and again whenever another app is linked.
+function DataSources({ sources, intervals, reload }) {
+  const initial = Object.fromEntries(SOURCE_KINDS.map(([k]) => [k, sources.from[k][0] ?? null]));
+  const [picks, setPicks] = useState(initial);
+  const [open, setOpen] = useState(sources.needs_confirm);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const twice = SOURCE_KINDS.filter(([k]) => sources.from[k].length > 1);
+  const confirm = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/api/connections/sources", { method: "PUT", body: picks });
+      setOpen(false);
+      reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const said = (k) => (sources.from[k].length ? sources.from[k].map((p) => APP_NAMES[p]).join(" + ") : "none");
+  if (!open) {
+    return (
+      <section className={`card data-sources small ${twice.length ? "flags" : ""}`}>
+        <span>
+          <strong>Where your data comes from:</strong> activities from {said("activities")}, sleep and HRV from{" "}
+          {said("wellness")}
+          {twice.length ? " (twice, so some may be counted double)" : ""}.
+        </span>{" "}
+        <button className="link-btn small" onClick={() => setOpen(true)}>
+          Change
+        </button>
+      </section>
+    );
+  }
+  return (
+    <section className="card data-sources prominent">
+      <h2>Where your data comes from</h2>
+      <p>
+        You've linked {sources.linked.map((p) => APP_NAMES[p]).join(", ")}. Pick <strong>one app</strong> for each kind
+        of data, so the same ride or night's sleep isn't counted twice.
+      </p>
+      {SOURCE_KINDS.map(([kind, label]) => (
+        <div key={kind} className="source-row">
+          <span className="source-label">{label}</span>
+          <div className="chips" role="radiogroup" aria-label={label}>
+            {[...sources.choices[kind], null].map((p) => (
+              <button
+                key={p ?? "none"}
+                type="button"
+                role="radio"
+                aria-checked={picks[kind] === p}
+                className={`chip ${picks[kind] === p ? "on" : ""}`}
+                onClick={() => setPicks({ ...picks, [kind]: p })}
+              >
+                {p ? APP_NAMES[p] : "None"}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="source-row">
+        <span className="source-label">Workouts you schedule go to</span>
+        <span>
+          {intervals?.auto_sync
+            ? "Intervals.icu, and from there to Zwift / MyWhoosh"
+            : "nowhere yet: tick Auto-send workouts for Intervals.icu below, or download them as files"}
+        </span>
+      </div>
+      <p className="hint">
+        Zwift and MyWhoosh rides reach CoachQuest through Strava or Garmin, so you don't need a third copy. Weight and
+        FTP from Garmin are set on the Garmin card. Turning a source off hides what it already imported; turning one on
+        imports it.
+      </p>
+      {error && <div className="error">{error}</div>}
+      <div className="row">
+        <button className="btn primary" disabled={busy} onClick={confirm}>
+          {busy ? "Saving…" : "Confirm"}
+        </button>
+        {!sources.needs_confirm && (
+          <button className="btn" onClick={() => setOpen(false)}>
+            Cancel
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -64,6 +64,7 @@ def list_connections(user: User = Depends(current_user), db: DbSession = Depends
     own = strava.own_app(db, user.id)
     return {
         "connections": [conn_out(c) for c in conns],
+        "sources": sync_options.summary(user, conns),
         "strava_configured": strava.app_for(db, user.id) is not None,
         "strava_app": {
             "own": own is not None,
@@ -349,6 +350,34 @@ def set_options(
     if turned_on:
         background.add_task(run_sync, conn.id)
     return conn_out(conn)
+
+
+class SourcePicks(BaseModel):
+    # The app each kind comes from, or null for none of them.
+    activities: str | None = None
+    wellness: str | None = None
+
+
+@router.put("/sources")
+def confirm_sources(
+    body: SourcePicks,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """ "Where your data comes from": one app per kind, so nothing is imported twice. Confirms the choice."""
+    conns = db.scalars(select(Connection).where(Connection.user_id == user.id, Connection.provider.in_(SOURCES))).all()
+    choices = sync_options.summary(user, conns)["choices"]
+    picks = body.model_dump()
+    for kind, provider in picks.items():
+        if provider is not None and provider not in choices[kind]:
+            raise HTTPException(status_code=422, detail=f"{kind.capitalize()} can't come from {provider} (not linked?)")
+    for conn in sync_options.choose(conns, picks):
+        conn.last_sync_at = None  # start over, so the newly chosen data is imported
+        background.add_task(run_sync, conn.id)
+    user.sources_confirmed = [c.provider for c in conns]
+    db.commit()
+    return list_connections(user, db)
 
 
 class BackfillIn(BaseModel):

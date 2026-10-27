@@ -1818,3 +1818,19 @@ ul.instructions > li.note.suggestion {
     grid-template-columns: 1fr;
   }
 }
+
+/* Connections: "Where your data comes from". */
+.data-sources.prominent {
+  border: 2px solid var(--accent);
+}
+.source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.6rem 0;
+}
+.source-label {
+  min-width: 16rem;
+  font-weight: 600;
+}

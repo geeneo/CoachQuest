@@ -30,3 +30,42 @@ def hidden_sources(db: DbSession, user_id: int, kind: str) -> set[str]:
     """Providers whose `kind` data the user switched off."""
     conns = db.scalars(select(Connection).where(Connection.user_id == user_id)).all()
     return {c.provider for c in conns if kind in KINDS.get(c.provider, ()) and not options(c)[kind]}
+
+
+# ---- "Where your data comes from" (Connections): one source per kind, confirmed by the user ----
+
+# The kinds a user picks one source for, so the same ride or night isn't imported twice.
+CHOOSE = ("activities", "wellness")
+LINKED = ("strava", "garmin", "intervals_icu")
+
+
+def summary(user, conns: list[Connection]) -> dict:
+    """Which linked app supplies each kind today, and whether the user still has to confirm it.
+
+    Asked again whenever an app is linked that wasn't there when they last confirmed."""
+    conns = sorted((c for c in conns if c.provider in LINKED), key=lambda c: LINKED.index(c.provider))
+    linked = [c.provider for c in conns]
+    by_kind = {kind: [c.provider for c in conns if kind in KINDS[c.provider] and options(c)[kind]] for kind in CHOOSE}
+    choices = {kind: [p for p in linked if kind in KINDS[p]] for kind in CHOOSE}
+    new = set(linked) - set(user.sources_confirmed or [])
+    return {
+        "linked": linked,
+        "from": by_kind,
+        "choices": choices,
+        "needs_confirm": len(linked) >= 2 and bool(new),
+        "confirmed": bool(user.sources_confirmed),
+    }
+
+
+def choose(conns: list[Connection], picks: dict[str, str | None]) -> list[Connection]:
+    """Turn each kind on for the picked app only (None: from none). Returns connections that got data turned on."""
+    turned_on = []
+    for c in conns:
+        current = options(c) if c.provider in KINDS else {}
+        changes = {k: c.provider == picks[k] for k in picks if k in current}
+        if not changes:
+            continue
+        if any(v and not current[k] for k, v in changes.items()):
+            turned_on.append(c)
+        c.options = {**(c.options or {}), **current, **changes}
+    return turned_on

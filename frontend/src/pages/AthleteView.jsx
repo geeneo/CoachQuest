@@ -60,6 +60,12 @@ export default function AthleteView({ self }) {
           )}
         </div>
       </div>
+      {self && s.sources_need_confirm && (
+        <div className="card flags">
+          You've linked more than one app. <Link to="/connections">Choose where each kind of data comes from</Link>, so
+          the same ride isn't counted twice.
+        </div>
+      )}
       <div className="tabs">
         {tabs.map((t) => (
           <button key={t.id} className={current === t.id ? "active" : ""} onClick={() => setTab(t.id)}>

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import activity_delete, dashboard, localtime, profile_sync, runtime
+from .. import activity_delete, dashboard, localtime, profile_sync, runtime, sync_options
 from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
@@ -131,6 +131,9 @@ def athlete_summary(athlete: str, user: User = Depends(current_user), db: DbSess
     out = {"id": a.id, "display_name": a.display_name, "scopes": sorted(scopes), "is_me": a.id == user.id}
     # An admin looking without a grant: the page says it is read only.
     out["view_only"] = is_friend(db, user, a.id)
+    if a.id == user.id:  # My training points to "Where your data comes from" until it's confirmed
+        mine = db.scalars(select(Connection).where(Connection.user_id == a.id)).all()
+        out["sources_need_confirm"] = sync_options.summary(a, mine)["needs_confirm"]
     out["admin_view"] = (
         user.is_admin
         and a.id != user.id

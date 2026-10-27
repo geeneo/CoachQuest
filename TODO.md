@@ -2,7 +2,7 @@
 
 ## Next up
 
-- [ ] **First sign-in: make clear what comes from where (no duplicates).**
+- [x] **First sign-in: make clear what comes from where (no duplicates).**
       When a new user links Strava, Garmin and Intervals.icu, show a
       prominent step that says which app brings in what (rides, runs,
       wellness, weight) and lets them choose, so the same ride isn't
