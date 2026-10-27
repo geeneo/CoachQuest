@@ -74,6 +74,19 @@ def test_upload_list_and_delete(make_user):
     assert len(admin.get("/api/admin/platform-workouts").json()["workouts"]) == 1
 
 
+def test_bulk_delete(make_user):
+    admin = make_user("admin@example.com")
+    rider = make_user("rider@example.com")
+    _upload(admin, "zwift", THRESHOLD_ZWO, RECOVERY_ZWO)
+    _upload(admin, "mywhoosh", RECOVERY_ZWO)
+    ids = [w["id"] for w in admin.get("/api/admin/platform-workouts").json()["workouts"] if w["platform"] == "zwift"]
+    assert rider.post("/api/admin/platform-workouts/delete", json={"ids": ids}).status_code == 403
+    assert admin.post("/api/admin/platform-workouts/delete", json={"ids": [*ids, 9999]}).json() == {"deleted": 2}
+    left = admin.get("/api/admin/platform-workouts").json()["workouts"]
+    assert [(w["platform"], w["name"]) for w in left] == [("mywhoosh", "Easy spin")]
+    assert admin.post("/api/admin/platform-workouts/delete", json={"ids": []}).status_code == 422
+
+
 def _thursday(plan):
     return next(d for d in plan["weeks"][0]["days"] if d["workout"] and d["workout"]["name"] == "4x5 threshold")
 

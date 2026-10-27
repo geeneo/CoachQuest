@@ -154,6 +154,12 @@ see the workout's name; the files stay on the server.
 A super admin can switch it off under Admin → Settings → Workouts → "Match
 plan workouts to Zwift / MyWhoosh". Days already swapped keep their workout.
 
+
+The catalog list on Admin → Platform workouts is grouped by collection
+(collapsed), with search, platform and length filters, and bulk delete: tick
+workouts or whole collections, then "Delete selected", or "Delete collection".
+Uploading and importing are under "Add workouts".
+
 ### AI coach tab
 
 All AI features follow one rule: CoachQuest computes the facts and decisions,

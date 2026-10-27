@@ -567,6 +567,21 @@ def import_platform_workouts(body: CatalogLink, admin: User = Depends(admin_user
     return _add_files(db, platform, [(name, data)], admin)
 
 
+class CatalogDelete(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=5000)
+
+
+@router.post("/platform-workouts/delete")
+def delete_platform_workouts(body: CatalogDelete, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Remove several workouts at once (ticked rows or whole collections). Swapped plan days keep their copy."""
+    rows = db.scalars(select(PlatformWorkout).where(PlatformWorkout.id.in_(body.ids))).all()
+    for w in rows:
+        db.delete(w)
+    db.commit()
+    log.info("Admin %s removed %d catalog workouts", admin.id, len(rows))
+    return {"deleted": len(rows)}
+
+
 @router.delete("/platform-workouts/{workout_id}")
 def delete_platform_workout(workout_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
     """Remove from the catalog. Plan days already swapped to it keep their copy of the steps."""
