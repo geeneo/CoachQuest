@@ -89,14 +89,28 @@ def _add_matches(db: DbSession, athlete: User, weeks: list[dict], today: date) -
         return {"enabled": False}
     platforms = platform_catalog.athlete_platforms(athlete)
     catalog = platform_catalog.load(db, platforms) if platforms else []
+    days = matched = 0
     for week in weeks:
         for d in week["days"]:
             w = d.get("workout")
-            if catalog and w and w.get("steps") and date.fromisoformat(d["date"]) >= today:
-                # A day swapped to a platform workout is matched on what the plan asked for.
-                steps = (w.get("original") or w)["steps"]
-                d["platform_matches"] = platform_catalog.best_matches(db, steps, platforms, catalog)
-    return {"enabled": True, "platforms": platforms, "catalog_size": len(catalog)}
+            if w and w.get("steps") and date.fromisoformat(d["date"]) >= today:
+                days += 1
+                if catalog:
+                    # A day swapped to a platform workout is matched on what the plan asked for.
+                    steps = (w.get("original") or w)["steps"]
+                    d["platform_matches"] = platform_catalog.best_matches(db, steps, platforms, catalog)
+                    matched += bool(d["platform_matches"])
+    # Enough for the plan page to say why a day shows no match (no platform, empty catalog, none close).
+    return {
+        "enabled": True,
+        "platforms": platforms,
+        "platform_names": {p: platform_catalog.PLATFORMS[p] for p in platforms},
+        "catalog_size": len(catalog),
+        "catalog": {p: sum(w.platform == p for w in catalog) for p in platforms},
+        "indoor_days": days,
+        "matched_days": matched,
+        "min_score": platform_catalog.MIN_SCORE,
+    }
 
 
 def _plan(db: DbSession, user: User, athlete: str, plan_id: int) -> Plan:

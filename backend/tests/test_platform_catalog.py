@@ -86,11 +86,15 @@ def test_plan_days_show_matches_and_swap(make_user, planner):  # noqa: F811
     url = f"/api/athletes/me/plans/{plan['id']}"
     # No platform chosen yet: nothing to match against.
     plan = athlete.get(url).json()
-    assert plan["platform_matching"] == {"enabled": True, "platforms": [], "catalog_size": 0}
+    pm = plan["platform_matching"]
+    assert pm["enabled"] and pm["platforms"] == [] and pm["catalog_size"] == 0 and pm["indoor_days"] == 4
     assert "platform_matches" not in _thursday(plan)
 
     assert athlete.request("PUT", "/api/me/platforms", json={"preferred": ["zwift"], "auto": {}}).status_code == 200
     plan = athlete.get(url).json()
+    pm = plan["platform_matching"]
+    assert pm["catalog"] == {"zwift": 2} and pm["platform_names"] == {"zwift": "Zwift"}
+    assert pm["matched_days"] == 2  # both threshold days; the tempo days have no close match
     match = _thursday(plan)["platform_matches"][0]
     assert match["name"] == "Threshold 4x5" and match["platform"] == "zwift" and match["score"] >= 90
 

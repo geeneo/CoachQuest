@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
 import { duration, shortDate } from "../lib/format.js";
 import Markdown from "./Markdown.jsx";
 import PlanComments from "./PlanComments.jsx";
@@ -173,12 +174,7 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
           </div>
         </form>
       )}
-      {matching.enabled && !matching.platforms?.length && plan.weeks.some((w) => w.days.some((d) => d.workout)) && (
-        <p className="muted small">
-          Ride on Zwift or MyWhoosh? Tick it under <Link to="/connections">Connections → preferred platforms</Link> to
-          see the closest workout there for each indoor day.
-        </p>
-      )}
+      <MatchStatus matching={matching} />
       {swapFrom && <div className="ok small">Pick the day to swap with {fmtDate(swapFrom)}, or click ⇄ again to cancel.</div>}
       {notice && <div className="ok small">{notice}</div>}
       {error && <div className="error">{error}</div>}
@@ -393,6 +389,47 @@ function Day({ day, ctx }) {
       </div>
     </div>
   );
+}
+
+// Why indoor days show no Zwift / MyWhoosh match: no platform picked, an empty catalog, or nothing close.
+function MatchStatus({ matching }) {
+  const { user } = useAuth();
+  if (!matching.enabled || !matching.indoor_days) return null;
+  const fix = user.is_admin ? (
+    <>
+      Add some under <Link to="/admin">Admin → Platform workouts</Link>.
+    </>
+  ) : (
+    "Ask your CoachQuest administrator to add some."
+  );
+  let text;
+  if (!matching.platforms.length) {
+    text = (
+      <>
+        Ride on Zwift or MyWhoosh? Tick it under <Link to="/connections">Connections → preferred platforms</Link> to see
+        the closest workout there for each indoor day.
+      </>
+    );
+  } else {
+    const empty = matching.platforms.filter((p) => !matching.catalog[p]).map((p) => matching.platform_names[p]);
+    const names = matching.platforms.map((p) => matching.platform_names[p]).join(" or ");
+    if (empty.length) {
+      text = (
+        <>
+          No {empty.join(" or ")} workouts in the catalog yet, so indoor days can't show the closest{" "}
+          {empty.join(" or ")} workout. {fix}
+        </>
+      );
+    } else if (!matching.matched_days) {
+      text = (
+        <>
+          None of the {matching.indoor_days} upcoming indoor days has a close {names} workout in the catalog (a{" "}
+          {matching.min_score}% match or better). {fix}
+        </>
+      );
+    }
+  }
+  return text ? <p className="match-status small">{text}</p> : null;
 }
 
 // The day's other sessions (e.g. Strength after the ride): each its own type, text and time.

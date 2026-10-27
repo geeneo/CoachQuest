@@ -1761,3 +1761,12 @@ ul.instructions > li.note.suggestion {
     opacity: 0;
   }
 }
+
+/* Why a plan's indoor days show no Zwift / MyWhoosh match. */
+.match-status {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent, var(--border));
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  color: var(--muted);
+}
