@@ -2,6 +2,29 @@
 
 ## Next up
 
+- [ ] **Guide (News & guides): link Intervals.icu with Zwift so plan workouts show in Zwift.**
+      A how-to post (posts_seed.py, like the routes & segments guide):
+      CoachQuest → Intervals.icu calendar → Zwift.
+      1. CoachQuest: connect Intervals.icu on Connections; plan workouts are
+         sent to its calendar automatically.
+      2. Intervals.icu: Settings → Zwift box → Connect, log in to the right
+         Zwift account, accept, and tick which workouts to upload (Rides).
+      3. Zwift: today's workout is on the home screen; the coming week is
+         under Workouts → Custom → "Intervals.icu".
+      Tips: only the next 7 days are sent (rolls daily); FTP must match in
+      CoachQuest, Intervals.icu and Zwift (targets are % FTP); HR targets
+      aren't supported; not syncing → check the workout is % FTP (not HR),
+      wait a day, or disconnect and reconnect Zwift in Intervals.icu.
+      Also check: CoachQuest sends workouts as type "Ride"; forum replies
+      say Zwift wants them marked indoor (VirtualRide) — test and fix.
+      Videos: youtube.com/shorts/T207hvyiQ74 (Nina Nygaard, create a Zwift
+      workout on intervals.icu), youtube.com/watch?v=Qkqgb51NIHY (syncing
+      Intervals.icu to Zwift and others).
+      Docs: forum.intervals.icu/t/intervals-icu-and-zwift-integration-is-live/81764,
+      zwiftinsider.com/intervals-integration/,
+      forum.intervals.icu/t/solved-planned-workouts-not-syncing-to-zwift/97528,
+      intervals.icu/features/training-calendar/.
+
 - [x] **Indoor sessions: no Strava segments, only workouts.**
       An indoor day (Zwift / indoor) can be planned with a favourite
       segment linked, e.g. Thu "Zwift / indoor 40′" shows "⛰ Kendal climb A"
