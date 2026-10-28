@@ -1,14 +1,17 @@
-"""Draft how-to guides and a first news post, added once to an empty News & guides section.
+"""How-to guides and news posts that ship with CoachQuest, added once each to News & guides.
 
-They are drafts (unpublished): an admin checks them, edits them to taste and
-publishes them from News & guides. Written from how the app works; screen
-names in **bold** match the app.
+Each post has a key. At start-up the ones not added before are added; the keys
+already added are remembered (app_settings "posts_seeded"), so a post an admin
+edited or deleted is never added again. The first batch went in as drafts for
+the admin to check; later ones are published at once (`published`). Written
+from how the app works; screen names in **bold** match the app.
 """
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from .db import Post
+from .db import AppSetting, Post, utcnow
+from .security import decrypt_json, encrypt_json
 
 GUIDES = [
     (
@@ -144,12 +147,115 @@ NEWS = (
 )
 
 
+ROUTES_GUIDE = (
+    "Plan your rides on your favourite routes and segments",
+    "Save the loops and climbs you ride, and the AI coach plans your rides on them.",
+    """CoachQuest can plan your rides on the roads you actually ride: your long-ride loop, your easy
+spin, the climb you use for hill repeats.
+
+- A **route** is a whole ride (e.g. the Saturday loop over Hells).
+- A **segment** is a climb or stretch for efforts (e.g. Kendal climb for hill repeats).
+
+## 1. Save your favourites
+
+Open **My training → Plans → Favourite routes & segments**. Then either:
+
+- **Paste a Strava link** and click **Add favourite**. All three work:
+  - a route: `strava.com/routes/…`
+  - a segment: `strava.com/segments/…`
+  - a ride you did: `strava.com/activities/…` (saved as a route, "from a ride")
+- Or click **From my Strava** to pick from your starred segments and your routes on Strava, and
+  click **Add**. Private routes on Strava don't show up there; paste their link instead.
+
+With Strava connected, the length, climbing, gradient and time are filled in for you.
+
+## 2. Say what each one is for
+
+Tick what each favourite is for: **hill repeats**, **intervals**, **sprints**, **tempo**,
+**endurance**, **long ride**, **recovery** or **race simulation**. Add a note for the coach if it
+helps, e.g. "4-8 repeats, easy back down".
+
+The AI coach goes by these ticks: a route ticked **long ride** is used for your long rides, a
+segment ticked **hill repeats** for hill repeats.
+
+## 3. Let the AI coach plan on them
+
+Make a new plan, or click **Re-plan from this week** on your plan. The AI coach then:
+
+- plans outdoor rides on a route whose length and ticks fit, and takes the ride's time from it;
+- plans hill repeats and efforts on a segment ("6 x Kendal climb at 95-105% FTP, easy back down");
+- on indoor days, gives the same efforts and names the climb for reference.
+
+## 4. Or put a route on a day yourself
+
+On your training plan, click the **map** button next to swap / lock / comment on a day, and pick
+the route or segment. Pick **– no route –** to take it off. (Clicking the day's description and
+using **Route / segment** in the editor works too.)
+
+## Where you see them
+
+- On the training plan, each day shows 🗺 (route) or ⛰ (segment) as a link that opens it in Strava.
+- On **My training → Calendar**, the day shows the same link under the plan.
+""",
+)
+
+ROUTES_NEWS = (
+    "New: plan your rides on your favourite routes and segments",
+    "Save your loops and climbs from Strava; the AI coach plans your long rides and hill repeats on them.",
+    """- **Favourite routes & segments** on the Plans tab: paste a Strava route, segment or ride link,
+  or pick from your starred segments and routes with **From my Strava**.
+- Tick what each is for (long ride, hill repeats, recovery…). The AI coach plans your rides on
+  them when you make a plan or re-plan.
+- A **map** button on each plan day puts a route on that day in one click.
+- Plan days and the **Calendar** link straight to the route or segment in Strava.
+
+See the guide *Plan your rides on your favourite routes and segments* for the steps.
+""",
+)
+
+# Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
+POSTS = [
+    *(
+        {"key": key, "kind": "guide", "position": (i + 1) * 10, "published": False, "post": g}
+        for i, (key, g) in enumerate(zip(("strava-garmin", "intervals", "mywhoosh", "calendar"), GUIDES, strict=True))
+    ),
+    {"key": "whats-new-1", "kind": "news", "position": 0, "published": False, "post": NEWS},
+    {"key": "routes", "kind": "guide", "position": 25, "published": True, "post": ROUTES_GUIDE},
+    {"key": "routes-news", "kind": "news", "position": 0, "published": True, "post": ROUTES_NEWS},
+]
+FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
+SEEDED = "posts_seeded"
+
+
+def _seeded(db: DbSession) -> set[str]:
+    row = db.get(AppSetting, SEEDED)
+    if row is not None:
+        return set(decrypt_json(row.value_enc)["v"])
+    # Before keys were remembered, the first batch went in whenever there were posts at all.
+    return set(FIRST_BATCH) if db.scalar(select(func.count()).select_from(Post)) else set()
+
+
 def seed(db: DbSession) -> None:
-    """Add the drafts when there are no posts at all (a fresh install, or every post deleted)."""
-    if db.scalar(select(func.count()).select_from(Post)):
+    """Add the shipped posts not added before (a fresh install gets them all)."""
+    done = _seeded(db)
+    new = [p for p in POSTS if p["key"] not in done]
+    if not new:
         return
-    for i, (title, summary, body) in enumerate(GUIDES):
-        db.add(Post(kind="guide", title=title, summary=summary, body_md=body, position=(i + 1) * 10))
-    title, summary, body = NEWS
-    db.add(Post(kind="news", title=title, summary=summary, body_md=body))
+    for p in new:
+        title, summary, body = p["post"]
+        db.add(
+            Post(
+                kind=p["kind"],
+                title=title,
+                summary=summary,
+                body_md=body,
+                position=p["position"],
+                published=p["published"],
+                published_at=utcnow() if p["published"] else None,
+            )
+        )
+    row = db.get(AppSetting, SEEDED) or AppSetting(key=SEEDED, value_enc="")
+    row.value_enc = encrypt_json({"v": sorted(done | {p["key"] for p in new})})
+    row.updated_at = utcnow()
+    db.merge(row)
     db.commit()
