@@ -2,7 +2,7 @@
 
 ## Next up
 
-- [ ] **Indoor sessions: no Strava segments, only workouts.**
+- [x] **Indoor sessions: no Strava segments, only workouts.**
       An indoor day (Zwift / indoor) can be planned with a favourite
       segment linked, e.g. Thu "Zwift / indoor 40′" shows "⛰ Kendal climb A"
       next to the "Kendal A 5x2" workout. Indoor days should only get a

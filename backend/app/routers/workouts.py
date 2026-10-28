@@ -28,7 +28,7 @@ from .. import (
 from ..activity_types import category
 from ..db import Activity, Comment, Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
-from ..plan_tracker import GOAL_SHARE
+from ..plan_tracker import GOAL_SHARE, takes_route
 from ..queries import activities_since
 
 router = APIRouter(prefix="/api", tags=["workouts"])
@@ -274,7 +274,7 @@ def _plan_days(db: DbSession, athlete_id: int, start: date, end: date) -> dict[s
             for d in week["days"]:
                 if start.isoformat() <= d["date"] <= end.isoformat():
                     extras = [
-                        {**e, **({"segment": favourites[e["segment_id"]]} if e.get("segment_id") in favourites else {})}
+                        {**e, **({"segment": favourites[e["segment_id"]]} if _rides_route(e, favourites) else {})}
                         for e in d.get("extra_sessions") or []
                     ]
                     out[d["date"]] = {
@@ -284,9 +284,14 @@ def _plan_days(db: DbSession, athlete_id: int, start: date, end: date) -> dict[s
                         **{k: d[k] for k in ("type", "description", "duration_min", "intensity", "locked")},
                         "extra_sessions": extras,
                         # The favourite route or segment the day rides (segments.py), when it's still saved.
-                        "segment": favourites.get(d.get("segment_id")),
+                        "segment": favourites[d["segment_id"]] if _rides_route(d, favourites) else None,
                     }
     return out
+
+
+def _rides_route(session: dict, favourites: dict) -> bool:
+    """The session rides one of the saved routes or segments (never indoors, also on older plans)."""
+    return session.get("segment_id") in favourites and takes_route(session.get("type"))
 
 
 def _rides(sw: ScheduledWorkout, briefs: dict[int, dict]) -> list[dict]:

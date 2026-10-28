@@ -50,8 +50,10 @@ description ("Long ride on the Franschhoek loop, Z2").
   - A `segment` is a climb or stretch for efforts: use it for hill repeats, climbing intervals or fixed \
 efforts, sized from its `distance_km`, `avg_grade_pct` and `climb_m` ("6 x Helshoogte at 95-105% FTP, \
 easy back down").
-  - Follow their `uses` and `notes`. On indoor days, give the matching indoor efforts (same duration and \
-power) and name the segment or route for reference. Vary them across weeks when several fit.
+  - Follow their `uses` and `notes`. Vary them across weeks when several fit.
+  - Only outdoor sessions ride them. Indoor sessions ("Zwift / indoor", "Treadmill run") and Strength, \
+Swim, Yoga / mobility and Rest always have `segment_id` 0 and don't name a route or segment: an indoor \
+day is its structured workout only.
 - Every "Strength" session (main or extra) gets a structured `strength` session; other sessions have \
 `strength` with an empty `focus` and no `exercises`. Use only exercise `id`s from `strength.exercises` \
 (they fit the athlete's equipment and level) and follow `strength.options`: their `sports`, `minutes` per session, \

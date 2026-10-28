@@ -189,14 +189,34 @@ def test_plan_days_show_the_favourite(make_user, planner):  # noqa: F811
     assert days["tue"]["extra_sessions"][0]["segment"]["name"] == "Helshoogte"
     assert "segment" not in days["tue"]["extra_sessions"][1]  # 999 isn't a favourite: not shown
     url = f"/api/athletes/me/plans/{plan['id']}/days/{days['thu']['date']}"
-    assert (
-        athlete.patch(url, json={"segment_id": seg["id"]}).json()["weeks"][0]["days"][3]["segment"]["id"] == seg["id"]
-    )
+    # Thursday is indoors: a workout only, no route or segment.
+    assert "segment" not in athlete.patch(url, json={"segment_id": seg["id"]}).json()["weeks"][0]["days"][3]
+    thu = athlete.patch(url, json={"type": "Hill repeats", "segment_id": seg["id"]}).json()["weeks"][0]["days"][3]
+    assert thu["segment"]["id"] == seg["id"]
+    # Switched to indoors, the day loses it.
+    thu = athlete.patch(url, json={"type": "Zwift / indoor"}).json()["weeks"][0]["days"][3]
+    assert "segment" not in thu and thu["segment_id"] is None
     assert athlete.patch(url, json={"segment_id": 999}).status_code == 422
     assert "segment" not in athlete.patch(url, json={"segment_id": None}).json()["weeks"][0]["days"][3]
     day = coach.plan_schema()["schema"]["properties"]["weeks"]["items"]["properties"]["days"]["items"]
     assert "segment_id" in day["required"] and "segment_id" in day["properties"]["extra_sessions"]["items"]["required"]
     assert "`favourites`" in coach.SYSTEM_PROMPT and "A `route`" in coach.SYSTEM_PROMPT
+    assert "an indoor day is its structured workout only" in coach.SYSTEM_PROMPT
+
+
+def test_indoor_sessions_get_no_route_from_the_ai(make_user, planner):  # noqa: F811
+    athlete = make_user("rider@example.com")
+    seg = athlete.post("/api/athletes/me/segments", json={"link": LINK, "name": "Kendal climb A"}).json()
+    week = _week()
+    week["days"][1]["segment_id"] = seg["id"]  # Thursday, Zwift / indoor
+    week["days"][1]["extra_sessions"] = [
+        {"type": "Treadmill run", "description": "x", "duration_min": 20, "intensity": [], "segment_id": seg["id"]}
+    ]
+    planner["value"] = [week, week]
+    plan = athlete.get(f"/api/athletes/me/plans/{_create(athlete)['id']}").json()
+    thu = next(d for d in plan["weeks"][0]["days"] if d["weekday"] == "thu")
+    assert thu["segment_id"] is None and "segment" not in thu
+    assert thu["extra_sessions"][0]["segment_id"] is None
 
 
 def test_friends_cannot_add_favourites(make_user):

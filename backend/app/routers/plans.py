@@ -101,7 +101,8 @@ def _add_segments(db: DbSession, athlete_id: int, weeks: list[dict]) -> None:
     for week in weeks:
         for d in week["days"]:
             for session in (d, *plan_tracker.extras(d)):
-                if session.get("segment_id") in saved:
+                # Not on indoor days, also on plans written before they lost their segment.
+                if session.get("segment_id") in saved and plan_tracker.takes_route(session.get("type")):
                     session["segment"] = saved[session["segment_id"]]
 
 
@@ -357,6 +358,8 @@ def edit_day(
     if any(sid is not None and sid not in mine for sid in picked):
         raise HTTPException(status_code=422, detail="That segment isn't one of the athlete's saved segments")
     weeks[wi]["days"][di].update(changes)
+    if not plan_tracker.takes_route(weeks[wi]["days"][di].get("type")):
+        weeks[wi]["days"][di]["segment_id"] = None  # indoor days get a workout, not a route or segment
     _save_weeks(db, p, weeks, background)
     return plan_out(p, db, full=True, viewer=user)
 

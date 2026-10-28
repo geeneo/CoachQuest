@@ -282,7 +282,7 @@ function Day({ day, ctx }) {
   const [editing, setEditing] = useState(false);
   const [replanning, setReplanning] = useState(null); // null = closed, else {note, coach_notes, busy}
   const [pickRoute, setPickRoute] = useState(false);
-  const canRoute = !ctx.ro && day.type !== "Rest" && ctx.segments.length > 0;
+  const canRoute = !ctx.ro && takesRoute(day.type) && ctx.segments.length > 0;
   const save = (body) => ctx.editDay(day.date, body);
   const canReplan = !ctx.ro && !day.locked && day.date >= new Date().toISOString().slice(0, 10);
   return (
@@ -813,6 +813,11 @@ function Actual({ day, tags, save, readOnly }) {
   }
 }
 
+// Sessions that don't ride a Strava route or segment (backend plan_tracker.NO_ROUTE_TYPES): indoor days
+// are their structured workout only.
+const NO_ROUTE_TYPES = new Set(["Rest", "Zwift / indoor", "Treadmill run", "Strength", "Yoga / mobility", "Swim"]);
+const takesRoute = (type) => !NO_ROUTE_TYPES.has(type);
+
 function DayEditor({ day, segments, onDone }) {
   const [form, setForm] = useState({
     description: day.description,
@@ -850,7 +855,7 @@ function DayEditor({ day, segments, onDone }) {
         <label className="inline grow">
           Route <input value={form.route} onChange={set("route")} placeholder="Stellies / Devon loop or link" />
         </label>
-        {segments.length > 0 && (
+        {segments.length > 0 && takesRoute(day.type) && (
           <label className="inline">
             Route / segment
             <select value={form.segment_id} onChange={set("segment_id")}>
