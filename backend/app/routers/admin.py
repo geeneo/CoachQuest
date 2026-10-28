@@ -14,7 +14,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
-from .. import accounts, admin_users, auth_log, backfill, mailer, platform_catalog, runtime
+from .. import accounts, activity_delete, admin_users, auth_log, backfill, mailer, platform_catalog, runtime
 from ..config import settings
 from ..db import (
     AccessLog,
@@ -198,6 +198,15 @@ async def user_sync_now(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return await connections.sync_for(provider, user, db, force)
+
+
+@router.post("/users/{user_id}/remove-duplicates")
+def user_remove_duplicates(user_id: int, _: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """The athlete's "Remove duplicates", run for them (they can undo it under Deleted activities)."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"removed": activity_delete.remove_duplicates(db, user)}
 
 
 def _user_conn(db: DbSession, user_id: int, provider: str):
@@ -556,6 +565,21 @@ def import_platform_workouts(body: CatalogLink, admin: User = Depends(admin_user
         raise HTTPException(status_code=502, detail=f"Couldn't download it: {exc.__class__.__name__}") from None
     log.info("Admin %s imported workouts from %s", admin.id, body.url)
     return _add_files(db, platform, [(name, data)], admin)
+
+
+class CatalogDelete(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=5000)
+
+
+@router.post("/platform-workouts/delete")
+def delete_platform_workouts(body: CatalogDelete, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Remove several workouts at once (ticked rows or whole collections). Swapped plan days keep their copy."""
+    rows = db.scalars(select(PlatformWorkout).where(PlatformWorkout.id.in_(body.ids))).all()
+    for w in rows:
+        db.delete(w)
+    db.commit()
+    log.info("Admin %s removed %d catalog workouts", admin.id, len(rows))
+    return {"deleted": len(rows)}
 
 
 @router.delete("/platform-workouts/{workout_id}")

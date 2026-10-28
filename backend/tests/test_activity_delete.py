@@ -97,3 +97,35 @@ def test_workout_loses_its_ride(make_user):
     with SessionLocal() as db:
         sw = db.get(ScheduledWorkout, w["id"])
         assert sw.activity_id is None and sw.match == "auto"
+
+
+def test_delete_takes_overlapping_copy_from_the_same_source(make_user):
+    p = make_user("a@example.com")
+    uid = _uid(p)
+    start = datetime.combine(date.today() - timedelta(days=2), datetime.min.time()) + timedelta(hours=7)
+    first = _ride(uid, "strava", "111", start)
+    _ride(uid, "strava", "112", start + timedelta(minutes=20))  # the same hour, uploaded twice
+    assert len(p.get("/api/athletes/me/activities?days=7").json()) == 1
+    assert p.post("/api/activities/delete", json={"ids": [first]}).json() == {"deleted": 1}
+    assert p.get("/api/athletes/me/activities?days=7").json() == []
+
+
+def test_remove_duplicates_keeps_the_shown_copy(make_user):
+    admin = make_user("admin@example.com", "Admin")
+    p = make_user("rider@example.com")
+    uid = _uid(p)
+    start = datetime.combine(date.today() - timedelta(days=2), datetime.min.time()) + timedelta(hours=7)
+    kept = _ride(uid, "strava", "111", start)
+    _ride(uid, "garmin", "g1", start + timedelta(minutes=2))
+    _ride(uid, "strava", "112", start + timedelta(minutes=20))
+    other = _ride(uid, "strava", "222", start - timedelta(days=1))
+    before = p.get("/api/athletes/me/activities?days=7").json()
+    assert [a["id"] for a in before] == [kept, other]
+    assert p.post("/api/activities/remove-duplicates").json() == {"removed": 2}
+    assert p.get("/api/athletes/me/activities?days=7").json() == before  # nothing visible changes
+    with SessionLocal() as db:
+        assert {a.id for a in db.query(Activity).filter_by(user_id=uid)} == {kept, other}
+    assert {d["source"] for d in p.get("/api/activities/deleted").json()} == {"strava", "garmin"}
+    assert p.post("/api/activities/remove-duplicates").json() == {"removed": 0}
+    assert admin.post(f"/api/admin/users/{uid}/remove-duplicates").json() == {"removed": 0}
+    assert p.post(f"/api/admin/users/{uid}/remove-duplicates").status_code == 403

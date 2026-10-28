@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Logo from "../components/Logo.jsx";
 import { useAuth } from "../lib/auth.jsx";
@@ -11,6 +11,15 @@ export default function AuthPage({ mode }) {
   const [pending, setPending] = useState(null);
   const isRegister = mode === "register";
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  // "This is an alpha version…", when a super admin has switched the notice on.
+  const [notice, setNotice] = useState(null);
+  useEffect(() => {
+    if (!isRegister) return;
+    fetch("/api/auth/notice")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setNotice(d?.message || null))
+      .catch(() => {});
+  }, [isRegister]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -35,6 +44,7 @@ export default function AuthPage({ mode }) {
           <Logo variant="full" />
         </h1>
         <p className="muted">{isRegister ? "Create your account" : "Sign in to your training portal"}</p>
+        {isRegister && notice && <div className="notice">{notice}</div>}
         {isRegister && (
           <label>
             Name

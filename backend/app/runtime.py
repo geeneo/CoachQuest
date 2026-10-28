@@ -118,13 +118,21 @@ EDITABLE: dict[str, Editable] = {
         help="On: everyone who signs up waits until a super admin approves them under Admin → Users, whatever "
         "Registration says (Closed still keeps sign-ups out). Only super admins can change this.",
     ),
+    "alpha_notice": Editable(
+        "Alpha notice for new users",
+        "Accounts",
+        choices=("off", "on"),
+        help="On: the sign-up page says CoachQuest is an alpha version and access is subject to approval, and "
+        "everyone who signs up gets an email saying the same. Only super admins can change this.",
+    ),
     "platform_matching": Editable(
-        "Match plan workouts to Zwift / MyWhoosh",
+        "Match plan workouts to Zwift / MyWhoosh and the library",
         "Workouts",
         choices=("on", "off"),
         help="On: indoor plan days show the closest workout from the Zwift / MyWhoosh catalog (Admin → Platform "
-        "workouts) for the athlete's preferred platform, and the athlete can swap to it. Off: hidden everywhere; "
-        "swapped days keep their workout. Only super admins can change this.",
+        "workouts) for the athlete's preferred platform, or else the closest from the CoachQuest library, and the "
+        "athlete can swap to it. Off: hidden everywhere; swapped days keep their workout. Only super admins can "
+        "change this.",
     ),
     "max_sessions_per_day": Editable(
         "Sessions per day",
@@ -178,7 +186,7 @@ EDITABLE: dict[str, Editable] = {
 }
 
 # Only super admins may change these.
-SUPER_ONLY = {"signup_approval", "platform_matching", "max_sessions_per_day"}
+SUPER_ONLY = {"signup_approval", "alpha_notice", "platform_matching", "max_sessions_per_day"}
 
 _overrides: dict[str, str] = {}
 

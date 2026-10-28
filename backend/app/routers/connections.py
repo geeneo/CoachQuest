@@ -64,7 +64,9 @@ def list_connections(user: User = Depends(current_user), db: DbSession = Depends
     own = strava.own_app(db, user.id)
     return {
         "connections": [conn_out(c) for c in conns],
-        "sources": sync_options.summary(user, conns),
+        # The main activity source the athlete picked; None until they pick one.
+        "activity_primary": sync_options.primary_source(db, user.id),
+        "sources": sync_options.overview(conns, sync_options.primary_source(db, user.id)),
         "strava_configured": strava.app_for(db, user.id) is not None,
         "strava_app": {
             "own": own is not None,
@@ -342,7 +344,7 @@ def set_options(
     if not changes:
         raise HTTPException(status_code=422, detail=f"{provider} supports: {', '.join(current)}")
     turned_on = any(v and not current[k] for k, v in changes.items())
-    conn.options = {**current, **changes}
+    conn.options = {**(conn.options or {}), **current, **changes}
     if turned_on:
         # Start the next sync from scratch so the newly enabled data is backfilled.
         conn.last_sync_at = None
@@ -352,32 +354,53 @@ def set_options(
     return conn_out(conn)
 
 
-class SourcePicks(BaseModel):
-    # The app each kind comes from, or null for none of them.
-    activities: str | None = None
-    wellness: str | None = None
+class ActivitySource(BaseModel):
+    provider: str
 
 
-@router.put("/sources")
-def confirm_sources(
-    body: SourcePicks,
+@router.put("/activity-source")
+def set_activity_source(
+    body: ActivitySource,
     background: BackgroundTasks,
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),
 ):
-    """ "Where your data comes from": one app per kind, so nothing is imported twice. Confirms the choice."""
-    conns = db.scalars(select(Connection).where(Connection.user_id == user.id, Connection.provider.in_(SOURCES))).all()
-    choices = sync_options.summary(user, conns)["choices"]
-    picks = body.model_dump()
-    for kind, provider in picks.items():
-        if provider is not None and provider not in choices[kind]:
-            raise HTTPException(status_code=422, detail=f"{kind.capitalize()} can't come from {provider} (not linked?)")
-    for conn in sync_options.choose(conns, picks):
-        conn.last_sync_at = None  # start over, so the newly chosen data is imported
-        background.add_task(run_sync, conn.id)
-    user.sources_confirmed = [c.provider for c in conns]
+    """Choose the main activity source. Other sources keep their own "also import activities" choice."""
+    conn = _conn(db, user, body.provider, SOURCES)
+    if conn.provider == "intervals_icu" and "ACTIVITY:READ" not in (decrypt_json(conn.token_enc).get("scope") or ""):
+        raise HTTPException(
+            status_code=409, detail="Intervals.icu wasn't allowed to share activities. Reconnect it and allow that."
+        )
+    was_on = sync_options.options(conn)["activities"]
+    sync_options.set_primary(db, conn)
+    if not was_on:
+        conn.last_sync_at = None  # backfill its activities on the next sync
     db.commit()
-    return list_connections(user, db)
+    if not was_on:
+        background.add_task(run_sync, conn.id)
+    return {"activity_primary": conn.provider}
+
+
+class WellnessSource(BaseModel):
+    provider: str | None  # None: from none of them
+
+
+@router.put("/wellness-source")
+def set_wellness_source(
+    body: WellnessSource,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Sleep, HRV and resting heart rate from one app, so the same night isn't counted twice."""
+    conns = db.scalars(select(Connection).where(Connection.user_id == user.id, Connection.provider.in_(SOURCES))).all()
+    if body.provider is not None and body.provider not in sync_options.overview(conns, None)["wellness"]["choices"]:
+        raise HTTPException(status_code=422, detail="Sleep and HRV can't come from that app (is it linked?)")
+    for conn in sync_options.set_wellness(conns, body.provider):
+        conn.last_sync_at = None  # import its wellness on the next sync
+        background.add_task(run_sync, conn.id)
+    db.commit()
+    return sync_options.overview(conns, sync_options.primary_source(db, user.id))
 
 
 class BackfillIn(BaseModel):

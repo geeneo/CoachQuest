@@ -74,6 +74,19 @@ def test_upload_list_and_delete(make_user):
     assert len(admin.get("/api/admin/platform-workouts").json()["workouts"]) == 1
 
 
+def test_bulk_delete(make_user):
+    admin = make_user("admin@example.com")
+    rider = make_user("rider@example.com")
+    _upload(admin, "zwift", THRESHOLD_ZWO, RECOVERY_ZWO)
+    _upload(admin, "mywhoosh", RECOVERY_ZWO)
+    ids = [w["id"] for w in admin.get("/api/admin/platform-workouts").json()["workouts"] if w["platform"] == "zwift"]
+    assert rider.post("/api/admin/platform-workouts/delete", json={"ids": ids}).status_code == 403
+    assert admin.post("/api/admin/platform-workouts/delete", json={"ids": [*ids, 9999]}).json() == {"deleted": 2}
+    left = admin.get("/api/admin/platform-workouts").json()["workouts"]
+    assert [(w["platform"], w["name"]) for w in left] == [("mywhoosh", "Easy spin")]
+    assert admin.post("/api/admin/platform-workouts/delete", json={"ids": []}).status_code == 422
+
+
 def _thursday(plan):
     return next(d for d in plan["weeks"][0]["days"] if d["workout"] and d["workout"]["name"] == "4x5 threshold")
 
@@ -226,3 +239,42 @@ def test_zwift_files_from_the_official_zip():
             raise AssertionError(empty)
         except platform_catalog.ZwoError as exc:
             assert "rest day" in str(exc)
+
+
+def test_library_suggested_when_no_platform_match(make_user, planner):  # noqa: F811
+    athlete = make_user("rider@example.com")
+    plan = _create(athlete)
+    url = f"/api/athletes/me/plans/{plan['id']}"
+    plan = athlete.get(url).json()
+    pm = plan["platform_matching"]
+    # No platform and no catalog: every indoor day can still get a workout from CoachQuest's library.
+    assert pm["catalog_size"] == 0 and pm["library_days"] >= 2
+    thursday = _thursday(plan)
+    match = thursday["library_match"]
+    # 4 × 5 min at 105% FTP: a threshold or VO2 max session.
+    assert match["collection"] in {"Threshold", "VO2 max"} and match["score"] >= 65
+
+    day = thursday["date"]
+    plan = athlete.post(f"{url}/days/{day}/library-workout", json={"slug": match["slug"]}).json()
+    swapped = _thursday_by_date(plan, day)
+    assert swapped["workout"]["name"] == match["name"]
+    assert swapped["workout"]["library"] == {"slug": match["slug"], "name": "CoachQuest library"}
+    assert swapped["workout"]["original"]["name"] == "4x5 threshold"
+    assert swapped["library_match"]["slug"] == match["slug"]  # still matched on what the plan asked for
+    names = {sw.name for sw in _scheduled(_uid(athlete)) if sw.day.isoformat() == day}
+    assert names == {match["name"]}
+    assert athlete.post(f"{url}/days/{day}/library-workout", json={"slug": "nope"}).status_code == 404
+
+    plan = athlete.request("DELETE", f"{url}/days/{day}/platform-workout").json()
+    assert _thursday_by_date(plan, day)["workout"] == {"name": "4x5 threshold", "steps": HARD}
+
+
+def test_platform_match_wins_over_library(make_user, planner):  # noqa: F811
+    admin = make_user("admin@example.com")
+    _upload(admin, "zwift", THRESHOLD_ZWO)
+    athlete = make_user("rider@example.com")
+    athlete.request("PUT", "/api/me/platforms", json={"preferred": ["zwift"], "auto": {}})
+    plan = _create(athlete)
+    thursday = _thursday(athlete.get(f"/api/athletes/me/plans/{plan['id']}").json())
+    assert thursday["platform_matches"][0]["name"] == "Threshold 4x5"
+    assert "library_match" not in thursday

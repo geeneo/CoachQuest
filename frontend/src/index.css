@@ -326,7 +326,8 @@ textarea {
   font: inherit;
   width: 100%;
 }
-input[type="checkbox"] {
+input[type="checkbox"],
+input[type="radio"] {
   width: auto;
 }
 select {
@@ -452,6 +453,13 @@ textarea:focus {
 .ok {
   background: color-mix(in srgb, var(--ok) 14%, transparent);
   color: var(--ok);
+}
+.notice {
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  margin: 0.5rem 0;
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border: 1px solid var(--warn);
 }
 .flags {
   border-color: var(--warn);
@@ -1819,22 +1827,6 @@ ul.instructions > li.note.suggestion {
   }
 }
 
-/* Connections: "Where your data comes from". */
-.data-sources.prominent {
-  border: 2px solid var(--accent);
-}
-.source-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  margin: 0.6rem 0;
-}
-.source-label {
-  min-width: 16rem;
-  font-weight: 600;
-}
-
 /* Saved Strava segments. */
 .badge.segment {
   text-decoration: none;
@@ -1845,4 +1837,63 @@ ul.segments li {
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* Admin → Platform workouts */
+.catalog-add {
+  margin: 0.5rem 0 0.75rem;
+}
+.catalog-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+.catalog-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+}
+.catalog-group-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.catalog-group-head .danger-text {
+  margin-left: auto;
+  color: var(--danger);
+}
+.catalog-table {
+  width: 100%;
+  margin-top: 0.35rem;
+}
+.catalog-table td {
+  vertical-align: top;
+  padding: 0.3rem 0.4rem;
+}
+.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 48ch;
+}
+.catalog-table td.nowrap {
+  white-space: nowrap;
+}
+
+/* Workouts → Library */
+.library-group {
+  margin-top: 1.25rem;
+}
+.library-group h2 {
+  margin-bottom: 0.1rem;
+}
+.workout-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.nowrap {
+  white-space: nowrap;
 }

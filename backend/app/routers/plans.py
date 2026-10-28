@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from .. import (
     comments,
+    library,
     localtime,
     plan_approval,
     plan_tracker,
@@ -104,17 +105,21 @@ def _add_matches(db: DbSession, athlete: User, weeks: list[dict], today: date) -
         return {"enabled": False}
     platforms = platform_catalog.athlete_platforms(athlete)
     catalog = platform_catalog.load(db, platforms) if platforms else []
-    days = matched = 0
+    days = matched = from_library = 0
     for week in weeks:
         for d in week["days"]:
             w = d.get("workout")
             if w and w.get("steps") and date.fromisoformat(d["date"]) >= today:
                 days += 1
+                # A swapped day is matched on what the plan asked for.
+                steps = (w.get("original") or w)["steps"]
                 if catalog:
-                    # A day swapped to a platform workout is matched on what the plan asked for.
-                    steps = (w.get("original") or w)["steps"]
                     d["platform_matches"] = platform_catalog.best_matches(db, steps, platforms, catalog)
                     matched += bool(d["platform_matches"])
+                if not d.get("platform_matches"):
+                    # No Zwift / MyWhoosh workout close enough: suggest one from CoachQuest's own library.
+                    d["library_match"] = library.best_match(steps)
+                    from_library += bool(d["library_match"])
     # Enough for the plan page to say why a day shows no match (no platform, empty catalog, none close).
     return {
         "enabled": True,
@@ -124,6 +129,7 @@ def _add_matches(db: DbSession, athlete: User, weeks: list[dict], today: date) -
         "catalog": {p: sum(w.platform == p for w in catalog) for p in platforms},
         "indoor_days": days,
         "matched_days": matched,
+        "library_days": from_library,
         "min_score": platform_catalog.MIN_SCORE,
     }
 
@@ -724,16 +730,45 @@ def use_platform_workout(
     if pw is None:
         raise HTTPException(status_code=404, detail="Workout not found")
     weeks, d = _indoor_day(p, day)
+    source = {"platform": {"id": pw.id, "platform": pw.platform, "name": platform_catalog.PLATFORMS[pw.platform]}}
+    _swap_in(d, pw.name, pw.steps, source, pw.features["duration_s"])
+    _save_weeks(db, p, weeks, background)
+    return plan_out(p, db, full=True, viewer=user)
+
+
+def _swap_in(d: dict, name: str, steps: list[dict], source: dict, duration_s: int) -> None:
+    """Put another workout on a plan day, keeping the plan's own one (and length) to swap back to.
+    Swapping again keeps the first one."""
     w = d["workout"]
-    # The plan's own workout and length, to swap back to. Swapping again keeps the first one.
     original = w.get("original") or {"name": w["name"], "steps": w["steps"], "duration_min": d.get("duration_min")}
-    d["workout"] = {
-        "name": pw.name,
-        "steps": pw.steps,
-        "platform": {"id": pw.id, "platform": pw.platform, "name": platform_catalog.PLATFORMS[pw.platform]},
-        "original": original,
-    }
-    d["duration_min"] = round(pw.features["duration_s"] / 60)
+    d["workout"] = {"name": name, "steps": steps, **source, "original": original}
+    d["duration_min"] = round(duration_s / 60)
+
+
+class UseLibraryWorkout(BaseModel):
+    slug: str
+
+
+@router.post("/{plan_id}/days/{day}/library-workout")
+def use_library_workout(
+    athlete: str,
+    plan_id: int,
+    day: date,
+    body: UseLibraryWorkout,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Swap the day's workout for one from CoachQuest's library. "Back to the plan's workout" undoes it."""
+    if not platform_catalog.enabled():
+        raise HTTPException(status_code=403, detail="Matching plan workouts is switched off")
+    p = _plan(db, user, athlete, plan_id)
+    lw = library.get(body.slug)
+    if lw is None:
+        raise HTTPException(status_code=404, detail="Workout not found")
+    weeks, d = _indoor_day(p, day)
+    source = {"library": {"slug": lw["slug"], "name": "CoachQuest library"}}
+    _swap_in(d, lw["name"], lw["steps"], source, library.FEATURES[lw["slug"]]["duration_s"])
     _save_weeks(db, p, weeks, background)
     return plan_out(p, db, full=True, viewer=user)
 

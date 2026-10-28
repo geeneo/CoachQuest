@@ -1,5 +1,5 @@
 import { CheckCircle2, KeyRound, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
@@ -615,6 +615,23 @@ function UserDetail({ u, isMe, update, reload }) {
               )}
             </div>
           )}
+          <h3>Duplicates</h3>
+          <button
+            className="btn small"
+            disabled={busy}
+            onClick={() =>
+              confirm(
+                `Remove duplicate activities for ${u.display_name}? The extra copies are deleted; ` +
+                  "they can undo it under Deleted activities.",
+              ) &&
+              run(async () => {
+                const r = await api(`/api/admin/users/${u.id}/remove-duplicates`, { method: "POST" });
+                setMsg({ ok: r.removed ? `Removed ${r.removed} duplicate${r.removed === 1 ? "" : "s"}.` : "No duplicates found." });
+              })
+            }
+          >
+            Remove duplicates
+          </button>
           {linked
             .filter(([k]) => k !== "intervals_icu")
             .map(([k, label]) => (
@@ -1048,8 +1065,12 @@ function PlatformWorkouts() {
     setMsg(null);
     try {
       const r = await fn();
-      const more = r.error_count > r.errors.length ? ` (first ${r.errors.length} of ${r.error_count} problems shown)` : "";
-      setMsg({ ok: `${r.added} added, ${r.updated} replaced.${more}`, errors: r.errors });
+      const more =
+        r.error_count > r.errors.length ? ` (first ${r.errors.length} of ${r.error_count} problems shown)` : "";
+      setMsg({
+        ok: `${r.added} added, ${r.updated} replaced.${more}`,
+        errors: r.errors,
+      });
       res.reload();
       return true;
     } catch (err) {
@@ -1067,77 +1088,95 @@ function PlatformWorkouts() {
       const files = await Promise.all(
         picked.map(async (f) =>
           f.name.toLowerCase().endsWith(".zip")
-            ? { name: f.name, content: toBase64(await f.arrayBuffer()), base64: true }
+            ? {
+                name: f.name,
+                content: toBase64(await f.arrayBuffer()),
+                base64: true,
+              }
             : { name: f.name, content: await f.text() },
         ),
       );
-      return api("/api/admin/platform-workouts", { method: "POST", body: { platform, files } });
+      return api("/api/admin/platform-workouts", {
+        method: "POST",
+        body: { platform, files },
+      });
     });
   };
   const importLink = async (e) => {
     e.preventDefault();
     const ok = await run(() =>
-      api("/api/admin/platform-workouts/import-url", { method: "POST", body: { platform, url: link.trim() } }),
+      api("/api/admin/platform-workouts/import-url", {
+        method: "POST",
+        body: { platform, url: link.trim() },
+      }),
     );
     if (ok) setLink("");
   };
-  const remove = (w) =>
-    confirm(`Remove "${w.name}" from the catalog?`) &&
-    api(`/api/admin/platform-workouts/${w.id}`, { method: "DELETE" }).then(res.reload, (e) => setMsg({ error: e.message }));
   const d = res.data;
+  const workouts = d?.workouts || [];
+  const counts = Object.entries(d?.platforms || {})
+    .map(([k, label]) => [label, workouts.filter((w) => w.platform === k).length])
+    .filter(([, n]) => n);
   return (
     <section className="card">
       <h2>Platform workouts</h2>
       <p className="muted small">
-        Zwift and MyWhoosh workouts that indoor plan days are matched against. Upload .zwo files or a .zip full of them
-        (Zwift's own ZIP of its legacy workouts works), or paste a link to one; MyWhoosh workouts download as .zwo too.
-        A workout with the same name is replaced. Athletes see only the name and open it on their platform. Matching
-        shows for athletes who ticked Zwift or MyWhoosh under Connections.
+        {workouts.length.toLocaleString()} workouts
+        {counts.length > 0 && ` (${counts.map(([label, n]) => `${label} ${n.toLocaleString()}`).join(" · ")})`} that
+        indoor plan days are matched against. Athletes see only the name and open it on their platform.
       </p>
       {d && !d.enabled && (
         <div className="error small">
           Matching is switched off (Settings → Workouts). The catalog is kept; athletes don't see matches.
         </div>
       )}
-      <div className="row wrap">
-        <label className="inline">
-          Platform
-          <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
-            {Object.entries(d?.platforms || { zwift: "Zwift", mywhoosh: "MyWhoosh" }).map(([k, label]) => (
-              <option key={k} value={k}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="btn">
-          {busy ? "Working…" : "Upload .zwo or .zip files"}
-          <input type="file" accept=".zwo,.zip" multiple hidden disabled={busy} onChange={upload} />
-        </label>
-      </div>
-      <form className="row wrap" onSubmit={importLink}>
-        <input
-          type="url"
-          className="grow"
-          placeholder="…or paste a link to a .zwo or .zip file"
-          value={link}
-          onChange={(e) => setLink(e.target.value)}
-        />
-        <button className="btn" disabled={busy || !link.trim()}>
-          Import from link
-        </button>
-        <button
-          type="button"
-          className="link-btn small"
-          title="Zwift's ZIP of its legacy workouts, posted on Zwift's forum (Workout Refresh, October 2023)"
-          onClick={() => {
-            setPlatform("zwift");
-            setLink(ZWIFT_LEGACY_ZIP);
-          }}
-        >
-          Use Zwift's official workouts ZIP
-        </button>
-      </form>
+      <details className="catalog-add" open={d && !workouts.length}>
+        <summary>Add workouts</summary>
+        <p className="muted small">
+          Upload .zwo files or a .zip full of them (Zwift's own ZIP of its legacy workouts works), or paste a link to
+          one; MyWhoosh workouts download as .zwo too. A workout with the same name is replaced. Matching shows for
+          athletes who ticked Zwift or MyWhoosh under Connections.
+        </p>
+        <div className="row wrap">
+          <label className="inline">
+            Platform
+            <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
+              {Object.entries(d?.platforms || { zwift: "Zwift", mywhoosh: "MyWhoosh" }).map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="btn">
+            {busy ? "Working…" : "Upload .zwo or .zip files"}
+            <input type="file" accept=".zwo,.zip" multiple hidden disabled={busy} onChange={upload} />
+          </label>
+        </div>
+        <form className="row wrap" onSubmit={importLink}>
+          <input
+            type="url"
+            className="grow"
+            placeholder="…or paste a link to a .zwo or .zip file"
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+          />
+          <button className="btn" disabled={busy || !link.trim()}>
+            Import from link
+          </button>
+          <button
+            type="button"
+            className="link-btn small"
+            title="Zwift's ZIP of its legacy workouts, posted on Zwift's forum (Workout Refresh, October 2023)"
+            onClick={() => {
+              setPlatform("zwift");
+              setLink(ZWIFT_LEGACY_ZIP);
+            }}
+          >
+            Use Zwift's official workouts ZIP
+          </button>
+        </form>
+      </details>
       {msg?.ok && <div className="ok small">{msg.ok}</div>}
       {msg?.errors?.length > 0 && (
         <ul className="error small">
@@ -1150,43 +1189,202 @@ function PlatformWorkouts() {
       )}
       {msg?.error && <div className="error">{msg.error}</div>}
       {res.error && <div className="error">{res.error.message}</div>}
-      {d && (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Platform</th>
-                <th>Workout</th>
-                <th>Length</th>
-                <th>IF · TSS</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {d.workouts.map((w) => (
-                <tr key={w.id}>
-                  <td>{d.platforms[w.platform]}</td>
-                  <td title={w.description}>
-                    {w.name}
-                    {w.collection && <div className="small muted">{w.collection}</div>}
-                  </td>
-                  <td>{duration(w.duration_s)}</td>
-                  <td>
-                    {w.intensity_factor ?? "–"} · {w.tss ?? "–"}
-                  </td>
-                  <td>
-                    <button className="link-btn small" onClick={() => remove(w)}>
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!d.workouts.length && <p className="muted small">No workouts yet.</p>}
-        </div>
-      )}
+      {d && <CatalogBrowser d={d} reload={res.reload} setMsg={setMsg} />}
     </section>
+  );
+}
+
+const LENGTHS = {
+  all: ["Any length", () => true],
+  short: ["Under 45 min", (s) => s < 2700],
+  mid: ["45–75 min", (s) => s >= 2700 && s <= 4500],
+  long: ["Over 75 min", (s) => s > 4500],
+};
+
+// The catalog grouped by collection (Zwift's plans, e.g. "Gravel Grinder"), collapsed, with search and bulk delete.
+function CatalogBrowser({ d, reload, setMsg }) {
+  const [q, setQ] = useState("");
+  const [only, setOnly] = useState("all");
+  const [length, setLength] = useState("all");
+  const [open, setOpen] = useState(() => new Set());
+  const [picked, setPicked] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
+  const needle = q.trim().toLowerCase();
+  const shown = useMemo(
+    () =>
+      d.workouts.filter(
+        (w) =>
+          (only === "all" || w.platform === only) &&
+          LENGTHS[length][1](w.duration_s) &&
+          (!needle || `${w.name} ${w.collection} ${w.description || ""}`.toLowerCase().includes(needle)),
+      ),
+    [d.workouts, only, length, needle],
+  );
+  const groups = useMemo(() => {
+    const by = new Map();
+    for (const w of shown) {
+      const key = `${w.platform}|${w.collection || ""}`;
+      if (!by.has(key))
+        by.set(key, {
+          key,
+          platform: w.platform,
+          name: w.collection || "No collection",
+          items: [],
+        });
+      by.get(key).items.push(w);
+    }
+    return [...by.values()].sort((a, b) => a.platform.localeCompare(b.platform) || a.name.localeCompare(b.name));
+  }, [shown]);
+  // While searching, every group with a hit is open; otherwise the ones the admin opened.
+  const isOpen = (g) => (needle ? true : open.has(g.key));
+  const toggleOpen = (g) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      n.has(g.key) ? n.delete(g.key) : n.add(g.key);
+      return n;
+    });
+  const setMany = (ids, on) =>
+    setPicked((s) => {
+      const n = new Set(s);
+      ids.forEach((id) => (on ? n.add(id) : n.delete(id)));
+      return n;
+    });
+  const remove = async (ids, what) => {
+    if (!confirm(`Remove ${what} from the catalog? Plan days already swapped to them keep their workout.`)) return;
+    setBusy(true);
+    try {
+      const r = await api("/api/admin/platform-workouts/delete", {
+        method: "POST",
+        body: { ids },
+      });
+      setMsg({
+        ok: `Removed ${r.deleted} workout${r.deleted === 1 ? "" : "s"}.`,
+      });
+      setMany(ids, false);
+      reload();
+    } catch (err) {
+      setMsg({ error: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const shownIds = shown.map((w) => w.id);
+  const allShownPicked = shownIds.length > 0 && shownIds.every((id) => picked.has(id));
+  const pickedIds = [...picked];
+  return (
+    <>
+      <div className="row wrap dash-controls">
+        <input
+          type="search"
+          placeholder="Search name, collection or description"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <select value={only} onChange={(e) => setOnly(e.target.value)}>
+          <option value="all">All platforms</option>
+          {Object.entries(d.platforms).map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <select value={length} onChange={(e) => setLength(e.target.value)}>
+          {Object.entries(LENGTHS).map(([k, [label]]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <button className="link-btn small" onClick={() => setOpen(new Set(groups.map((g) => g.key)))}>
+          Expand all
+        </button>
+        <button className="link-btn small" onClick={() => setOpen(new Set())}>
+          Collapse all
+        </button>
+      </div>
+      <div className="row wrap delete-bar">
+        <label className="check small">
+          <input type="checkbox" checked={allShownPicked} onChange={(e) => setMany(shownIds, e.target.checked)} />
+          Select all {shown.length.toLocaleString()} shown
+        </label>
+        <button
+          className="btn small danger"
+          disabled={busy || !pickedIds.length}
+          onClick={() => remove(pickedIds, `${pickedIds.length} selected workout${pickedIds.length === 1 ? "" : "s"}`)}
+        >
+          Delete selected{pickedIds.length ? ` (${pickedIds.length})` : ""}
+        </button>
+        {pickedIds.length > 0 && (
+          <button className="link-btn small" onClick={() => setPicked(new Set())}>
+            Clear selection
+          </button>
+        )}
+      </div>
+      <div className="catalog-groups">
+        {groups.map((g) => {
+          const ids = g.items.map((w) => w.id);
+          const all = ids.every((id) => picked.has(id));
+          const some = !all && ids.some((id) => picked.has(id));
+          return (
+            <div key={g.key} className="catalog-group">
+              <div className="catalog-group-head">
+                <input
+                  type="checkbox"
+                  checked={all}
+                  ref={(el) => el && (el.indeterminate = some)}
+                  onChange={(e) => setMany(ids, e.target.checked)}
+                  title="Select this collection"
+                />
+                <button className="link-btn" onClick={() => toggleOpen(g)} aria-expanded={isOpen(g)}>
+                  {isOpen(g) ? "▾" : "▸"} <strong>{g.name}</strong>
+                </button>
+                <span className="muted small">
+                  {d.platforms[g.platform]} · {g.items.length} workout
+                  {g.items.length === 1 ? "" : "s"}
+                </span>
+                <button
+                  className="link-btn small danger-text"
+                  disabled={busy}
+                  onClick={() => remove(ids, `the ${g.items.length} workouts in "${g.name}"`)}
+                >
+                  Delete collection
+                </button>
+              </div>
+              {isOpen(g) && (
+                <div className="table-wrap">
+                  <table className="catalog-table">
+                    <tbody>
+                      {g.items.map((w) => (
+                        <tr key={w.id}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={picked.has(w.id)}
+                              onChange={(e) => setMany([w.id], e.target.checked)}
+                            />
+                          </td>
+                          <td title={w.description}>
+                            {w.name}
+                            {w.description && <div className="small muted clamp">{w.description}</div>}
+                          </td>
+                          <td className="num nowrap">{duration(w.duration_s)}</td>
+                          <td className="num muted nowrap">
+                            IF {w.intensity_factor ?? "–"} · {w.tss ?? "–"} TSS
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {!groups.length && (
+          <p className="muted small">{d.workouts.length ? "No workouts match." : "No workouts yet."}</p>
+        )}
+      </div>
+    </>
   );
 }
 

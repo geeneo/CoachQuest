@@ -101,3 +101,37 @@ def test_old_database_gets_options_column(tmp_path, monkeypatch):
     monkeypatch.setattr(dbmod, "engine", old)
     dbmod.init_db()
     assert "options" in {c["name"] for c in inspect(old).get_columns("connections")}
+
+
+def test_main_activity_source_wins_and_others_fill_in(make_user):
+    p = make_user("a@example.com")
+    _seed(p.get("/api/auth/me").json()["id"])
+    assert p.get("/api/connections").json()["activity_primary"] is None  # not picked yet
+    # Garmin as the main source: its copy of the shared ride is shown, Strava's only fills in.
+    r = p.request("PUT", "/api/connections/activity-source", json={"provider": "garmin"})
+    assert r.json() == {"activity_primary": "garmin"}
+    assert _names(p) == [("garmin", "Ride"), ("garmin", "Walk")]
+    body = p.get("/api/connections").json()
+    assert body["activity_primary"] == "garmin"
+    assert {c["provider"]: c["options"]["activities"] for c in body["connections"]} == {"strava": True, "garmin": True}
+    # Strava as main: the shared ride comes from Strava, the Garmin-only walk still shows.
+    p.request("PUT", "/api/connections/activity-source", json={"provider": "strava"})
+    assert _names(p) == [("garmin", "Walk"), ("strava", "Ride")]
+    # Switching Garmin's "also import" off leaves Strava only; the main source flag stays on Strava.
+    p.patch("/api/connections/garmin/options", json={"activities": False})
+    assert _names(p) == [("strava", "Ride")]
+    assert p.get("/api/connections").json()["activity_primary"] == "strava"
+    assert p.request("PUT", "/api/connections/activity-source", json={"provider": "intervals_icu"}).status_code == 404
+
+
+def test_new_connection_imports_activities_only_if_none_does(make_user):
+    from app import sync_options
+
+    p = make_user("a@example.com")
+    uid = p.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        assert sync_options.first_activities(db, uid, "garmin") is True
+        db.add(Connection(user_id=uid, provider="strava", token_enc="x"))
+        db.commit()
+        assert sync_options.first_activities(db, uid, "garmin") is False
+        assert sync_options.first_activities(db, uid, "strava") is True  # reconnecting Strava itself

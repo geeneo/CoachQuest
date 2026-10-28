@@ -131,9 +131,11 @@ def athlete_summary(athlete: str, user: User = Depends(current_user), db: DbSess
     out = {"id": a.id, "display_name": a.display_name, "scopes": sorted(scopes), "is_me": a.id == user.id}
     # An admin looking without a grant: the page says it is read only.
     out["view_only"] = is_friend(db, user, a.id)
-    if a.id == user.id:  # My training points to "Where your data comes from" until it's confirmed
+    if a.id == user.id:  # My training points to Connections until a main activity source is picked
         mine = db.scalars(select(Connection).where(Connection.user_id == a.id)).all()
-        out["sources_need_confirm"] = sync_options.summary(a, mine)["needs_confirm"]
+        out["sources_need_confirm"] = sync_options.overview(mine, sync_options.primary_source(db, a.id))[
+            "needs_primary"
+        ]
     out["admin_view"] = (
         user.is_admin
         and a.id != user.id
@@ -212,6 +214,12 @@ class ActivityIds(BaseModel):
 def delete_activities(body: ActivityIds, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     """The athlete deletes their own activities from CoachQuest (never from Strava, Garmin or Intervals.icu)."""
     return {"deleted": activity_delete.delete(db, user, body.ids)}
+
+
+@router.post("/activities/remove-duplicates")
+def remove_duplicate_activities(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Delete the extra copies of sessions recorded or imported more than once."""
+    return {"removed": activity_delete.remove_duplicates(db, user)}
 
 
 @router.get("/activities/deleted")

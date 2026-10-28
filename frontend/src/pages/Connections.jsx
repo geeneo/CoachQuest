@@ -67,13 +67,13 @@ export default function Connections() {
         </div>
       )}
       {conns.error && <div className="error">{conns.error.message}</div>}
-      {conns.data?.sources?.linked.length >= 2 && (
-        <DataSources
-          sources={conns.data.sources}
-          intervals={platforms.data?.find((p) => p.id === "intervals_icu")}
-          reload={reloadAll}
-        />
-      )}
+      <ActivitySource
+        byProvider={byProvider}
+        primary={conns.data?.activity_primary}
+        sources={conns.data?.sources}
+        intervals={platforms.data?.find((p) => p.id === "intervals_icu")}
+        reload={conns.reload}
+      />
       <StravaCard
         conn={byProvider.strava}
         configured={conns.data?.strava_configured}
@@ -92,27 +92,25 @@ export default function Connections() {
   );
 }
 
-const APP_NAMES = { strava: "Strava", garmin: "Garmin", intervals_icu: "Intervals.icu" };
-const SOURCE_KINDS = [
-  ["activities", "Rides, runs and other activities"],
-  ["wellness", "Sleep, HRV and resting heart rate"],
-];
+const SOURCE_NAMES = { strava: "Strava", garmin: "Garmin", intervals_icu: "Intervals.icu" };
+const ONLY_ON = {
+  strava: "e.g. sessions recorded in the Strava app or uploaded there by hand",
+  garmin: "e.g. walks or strength sessions recorded on your watch",
+  intervals_icu: "e.g. sessions uploaded to Intervals.icu only",
+};
 
-// "Where your data comes from": one app per kind, so the same ride or night isn't counted twice.
-// Open and highlighted until confirmed, and again whenever another app is linked.
-function DataSources({ sources, intervals, reload }) {
-  const initial = Object.fromEntries(SOURCE_KINDS.map(([k]) => [k, sources.from[k][0] ?? null]));
-  const [picks, setPicks] = useState(initial);
-  const [open, setOpen] = useState(sources.needs_confirm);
+// One clear choice: the main activity source (its copy wins when a session is on several platforms),
+// plus, per other source, whether to also import the sessions that are only there.
+function ActivitySource({ byProvider, primary, sources, intervals, reload }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const twice = SOURCE_KINDS.filter(([k]) => sources.from[k].length > 1);
-  const confirm = async () => {
+  const connected = Object.keys(SOURCE_NAMES).filter((p) => byProvider[p]);
+  if (!connected.length) return null;
+  const run = async (fn) => {
     setBusy(true);
     setError(null);
     try {
-      await api("/api/connections/sources", { method: "PUT", body: picks });
-      setOpen(false);
+      await fn();
       reload();
     } catch (err) {
       setError(err.message);
@@ -120,71 +118,112 @@ function DataSources({ sources, intervals, reload }) {
       setBusy(false);
     }
   };
-  const said = (k) => (sources.from[k].length ? sources.from[k].map((p) => APP_NAMES[p]).join(" + ") : "none");
-  if (!open) {
-    return (
-      <section className={`card data-sources small ${twice.length ? "flags" : ""}`}>
-        <span>
-          <strong>Where your data comes from:</strong> activities from {said("activities")}, sleep and HRV from{" "}
-          {said("wellness")}
-          {twice.length ? " (twice, so some may be counted double)" : ""}.
-        </span>{" "}
-        <button className="link-btn small" onClick={() => setOpen(true)}>
-          Change
-        </button>
-      </section>
-    );
-  }
+  const canRead = (p) => p !== "intervals_icu" || (byProvider[p].scopes || []).includes("ACTIVITY:READ");
+  const choose = (p) =>
+    run(() => api("/api/connections/activity-source", { method: "PUT", body: { provider: p } }));
+  const also = (p, on) =>
+    run(() => api(`/api/connections/${p}/options`, { method: "PATCH", body: { activities: on } }));
+  const wellness = sources?.wellness;
+  const wellnessFrom = (p) =>
+    run(() => api("/api/connections/wellness-source", { method: "PUT", body: { provider: p } }));
+  const importing = connected.filter((p) => byProvider[p].options.activities);
+  const others = connected.filter((p) => p !== primary);
+  const name = (p) => SOURCE_NAMES[p];
   return (
-    <section className="card data-sources prominent">
-      <h2>Where your data comes from</h2>
-      <p>
-        You've linked {sources.linked.map((p) => APP_NAMES[p]).join(", ")}. Pick <strong>one app</strong> for each kind
-        of data, so the same ride or night's sleep isn't counted twice.
+    <section className={`card${primary ? "" : " flags"}`} id="activity-source">
+      <h2>Where your activities come from</h2>
+      {!primary && (
+        <p>
+          <strong>Choose your main activity source below.</strong>
+          {importing.length > 1 &&
+            ` Activities now come from ${importing.map(name).join(" and ")}, so the same ride can show up twice.`}
+        </p>
+      )}
+      <p className="small">
+        The same ride often reaches several platforms: your Garmin uploads it to Garmin Connect <em>and</em> to Strava.
+        CoachQuest keeps one copy of each session, the one from your <strong>main source</strong>. Sessions that are only
+        on another platform can still come in from there.
       </p>
-      {SOURCE_KINDS.map(([kind, label]) => (
-        <div key={kind} className="source-row">
-          <span className="source-label">{label}</span>
-          <div className="chips" role="radiogroup" aria-label={label}>
-            {[...sources.choices[kind], null].map((p) => (
-              <button
-                key={p ?? "none"}
-                type="button"
-                role="radio"
-                aria-checked={picks[kind] === p}
-                className={`chip ${picks[kind] === p ? "on" : ""}`}
-                onClick={() => setPicks({ ...picks, [kind]: p })}
-              >
-                {p ? APP_NAMES[p] : "None"}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-      <div className="source-row">
-        <span className="source-label">Workouts you schedule go to</span>
-        <span>
-          {intervals?.auto_sync
-            ? "Intervals.icu, and from there to Zwift / MyWhoosh"
-            : "nowhere yet: tick Auto-send workouts for Intervals.icu below, or download them as files"}
-        </span>
-      </div>
-      <p className="hint">
-        Zwift and MyWhoosh rides reach CoachQuest through Strava or Garmin, so you don't need a third copy. Weight and
-        FTP from Garmin are set on the Garmin card. Turning a source off hides what it already imported; turning one on
-        imports it.
+      <fieldset className="sync-choices">
+        <legend>1. Main activity source</legend>
+        {Object.keys(SOURCE_NAMES).map((p) => (
+          <label key={p} className="check">
+            <input
+              type="radio"
+              name="activity-primary"
+              checked={primary === p}
+              disabled={busy || !byProvider[p] || !canRead(p)}
+              onChange={() => choose(p)}
+            />
+            <span>
+              {name(p)}
+              {!byProvider[p] && <span className="hint"> Connect it below first.</span>}
+              {byProvider[p] && !canRead(p) && (
+                <span className="hint"> Activities weren't allowed when you connected: reconnect to allow them.</span>
+              )}
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      {primary && others.length > 0 && (
+        <fieldset className="sync-choices">
+          <legend>2. Also import activities that are only on…</legend>
+          {others.map((p) => (
+            <label key={p} className="check">
+              <input
+                type="checkbox"
+                checked={!!byProvider[p].options.activities}
+                disabled={busy || !canRead(p)}
+                onChange={(e) => also(p, e.target.checked)}
+              />
+              <span>
+                {name(p)} <span className="hint">({ONLY_ON[p]})</span>
+              </span>
+            </label>
+          ))}
+          <p className="hint">
+            Sessions that are on {name(primary)} too are shown once, from {name(primary)}. Leave these off if everything
+            you do reaches {name(primary)}.
+          </p>
+        </fieldset>
+      )}
+      {wellness?.choices.length > 1 && (
+        <fieldset className="sync-choices">
+          <legend>{primary && others.length > 0 ? "3." : "2."} Sleep, HRV and resting heart rate from</legend>
+          {[...wellness.choices, null].map((p) => (
+            <label key={p ?? "none"} className="check">
+              <input
+                type="radio"
+                name="wellness-source"
+                checked={p ? wellness.from.length === 1 && wellness.from[0] === p : !wellness.from.length}
+                disabled={busy}
+                onChange={() => wellnessFrom(p)}
+              />
+              <span>{p ? name(p) : "None"}</span>
+            </label>
+          ))}
+          {wellness.from.length > 1 && (
+            <p className="hint">Both bring in sleep and HRV now, so a night can count twice: pick one.</p>
+          )}
+        </fieldset>
+      )}
+      <p className="small">
+        <strong>Workouts you schedule go to:</strong>{" "}
+        {intervals?.auto_sync
+          ? "Intervals.icu, and from there to Zwift / MyWhoosh."
+          : "nowhere yet. Tick Auto-send workouts for Intervals.icu below, or download them as files."}
       </p>
+      <ul className="small">
+        <li>
+          A ride can also land on one platform twice, e.g. when Zwift / MyWhoosh <em>and</em> your Garmin both upload it
+          to Strava. Let only one of them upload (in Zwift / MyWhoosh or Garmin Connect, under connected apps).
+        </li>
+        <li>
+          Already have doubles? <Link to="/">Recent activities</Link> → <strong>Remove duplicates</strong> deletes the
+          extra copies (you can undo it).
+        </li>
+      </ul>
       {error && <div className="error">{error}</div>}
-      <div className="row">
-        <button className="btn primary" disabled={busy} onClick={confirm}>
-          {busy ? "Saving…" : "Confirm"}
-        </button>
-        {!sources.needs_confirm && (
-          <button className="btn" onClick={() => setOpen(false)}>
-            Cancel
-          </button>
-        )}
-      </div>
     </section>
   );
 }
@@ -533,10 +572,13 @@ function SyncChoices({ conn, provider, run, busy }) {
         await api(`/api/connections/${provider}/data/${kind}`, { method: "DELETE" });
       }
     });
+  // Activities are chosen for all sources together, under "Where your activities come from".
+  const kinds = Object.entries(conn.options).filter(([kind]) => kind !== "activities");
+  if (!kinds.length) return null;
   return (
     <fieldset className="sync-choices">
       <legend>Import from {name}</legend>
-      {Object.entries(conn.options).map(([kind, on]) => (
+      {kinds.map(([kind, on]) => (
         <label key={kind} className="check">
           <input type="checkbox" checked={on} disabled={busy} onChange={(e) => toggle(kind, e.target.checked)} />
           {KIND_LABELS[kind]}
@@ -752,12 +794,8 @@ function GarminCard({ conn, reload }) {
   );
 }
 
+// Activities from Intervals.icu are chosen under "Where your activities come from".
 const ICU_CHOICES = {
-  activities: [
-    "ACTIVITY:READ",
-    "Import activities",
-    "Leave off if Strava or Garmin already brings your rides in; the same ride is only shown once either way.",
-  ],
   wellness: [
     "WELLNESS:READ",
     "Import wellness (sleep, HRV, resting HR, steps)",

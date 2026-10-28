@@ -105,6 +105,15 @@ app that is no longer set up). Usage shows how many users are on the shared app.
 A user on the shared app with no sign-in for 30 days is flagged "idle on shared
 Strava app": ask them to disconnect or move to their own app to free the slot.
 
+### Alpha notice for new users
+
+Off by default; only super admins can switch it (Admin → Settings → Accounts →
+"Alpha notice for new users", or `ALPHA_NOTICE=on`). When on, the sign-up page
+says CoachQuest is an alpha version and access is subject to approval, and
+everyone who signs up gets a welcome email saying the same (needs Email set up).
+It only informs: whether sign-ups wait for approval is still decided by
+Registration and "Super admin approves new sign-ups".
+
 ### Admin access to athletes' data
 
 Off by default. Admin → Settings → Accounts → "Admins can view athletes' data"
@@ -145,6 +154,27 @@ puts one on matching days: ride it outdoors, or the same efforts indoors
 with the segment named. Plan days show it as a link to Strava, and it can be
 set on a day by hand in the day editor.
 
+### Workout library
+
+Workouts → Library: 90 structured bike workouts written for CoachQuest, open to
+every user, in ten collections (recovery & endurance, tempo, sweet spot,
+threshold, over-unders & race efforts, VO2 max, anaerobic & sprints, short &
+sharp, cadence & skills, tests). Power is a share of FTP, so each fits any
+athlete. Search, filter by collection and length, then put a workout on your
+own or an athlete's calendar, save a copy to My workouts to change it, or
+download the .zwo (Zwift: custom workouts folder; MyWhoosh: Workout Builder →
+Upload). Scheduled workouts go to Intervals.icu (and on to Zwift / MyWhoosh)
+like any other.
+
+Plans use it too: an indoor plan day with no close Zwift / MyWhoosh workout
+(or an athlete with no platform picked) shows the closest library workout
+with its match score, and "Use this" swaps it in; "Back to the plan's
+workout" undoes it. Same super admin switch as platform matching.
+
+The library lives in `backend/app/library.py` as code, so it is reviewed like
+code and the same on every server; each workout is checked against the steps
+format when the module loads.
+
 ### Matching Zwift / MyWhoosh workouts
 
 Neither Zwift nor MyWhoosh lets another app search its workouts, so admins
@@ -164,6 +194,11 @@ see the workout's name; the files stay on the server.
 
 A super admin can switch it off under Admin → Settings → Workouts → "Match
 plan workouts to Zwift / MyWhoosh". Days already swapped keep their workout.
+
+The catalog list on Admin → Platform workouts is grouped by collection
+(collapsed), with search, platform and length filters, and bulk delete: tick
+workouts or whole collections, then "Delete selected", or "Delete collection".
+Uploading and importing are under "Add workouts".
 
 ### News & guides
 
@@ -204,15 +239,29 @@ Each connection has its own import choices on the Connections page:
 - **Strava:** activities.
 - **Garmin:** activities and wellness.
 
-A common setup is activities from Strava and wellness only from Garmin. That
-is the default when Garmin is linked after Strava.
+**Where activities come from** (top of the Connections page): the athlete
+picks one *main activity source* (Strava, Garmin or Intervals.icu). When a
+session is on several platforms, the main source's copy is the one shown. Each
+other connected source has "Also import activities that are only on …", for
+sessions that never reach the main source (e.g. walks or strength recorded on
+a Garmin watch only). Until a main source is picked the card is highlighted
+and asks for it. A new connection only imports activities when no other source
+does yet. Wellness, weight and thresholds are chosen per connection as before.
 
 - **Switching a type off** stops importing it and hides what was already
   imported from that source. Load numbers and AI plans update straight away.
   You're also offered the option to delete that data.
 - **Switching a type back on** backfills it on the next sync.
-- **Activities on from both sources:** an activity that both sources have,
-  starting within 10 minutes of each other, is shown once, as the Strava copy.
+- **Duplicates are shown once.** Two activities of the same kind (any two
+  rides count as one kind) are one session when they start within 10 minutes
+  of each other or overlap for at least half of the shorter one. That catches
+  a ride from both Strava and Garmin, and a ride uploaded twice to the same
+  source (e.g. by Zwift and a Garmin head unit). The main activity source's
+  copy is shown (without one picked: Strava, then Garmin, then Intervals.icu);
+  within one source the copy with power, then elevation, then the longer one.
+- **Remove duplicates** (under Recent activities, or Admin → Users → Details)
+  deletes the hidden copies for good. They go to Deleted activities (Undo
+  works) and the next sync doesn't bring them back.
 
 ### AI coach
 

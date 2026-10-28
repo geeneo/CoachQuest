@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import comments, completion, compliance, localtime, platforms, sync_engine, workouts, zwo
+from .. import comments, completion, compliance, library, localtime, platforms, sync_engine, workouts, zwo
 from ..activity_types import category
 from ..db import Activity, Comment, Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -132,6 +132,37 @@ def _zwo_response(name: str, xml: str, day: date | None = None) -> Response:
 def library_zwo(workout_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     w = _own(db, user, workout_id)
     return _zwo_response(w.name, zwo.zwo(workout_out(w), user.display_name))
+
+
+# ---- CoachQuest workout library (library.py), open to every user ----
+
+
+def _library_workout(slug: str) -> dict:
+    w = library.get(slug)
+    if w is None:
+        raise HTTPException(status_code=404, detail="Workout not found")
+    return w
+
+
+@router.get("/library")
+def library_list(user: User = Depends(current_user)):
+    """Every library workout with its timeline and an estimate for the user's FTP."""
+    return {
+        "collections": [{"key": k, "name": name, "description": d} for k, name, d in library.COLLECTIONS],
+        "workouts": [library.out(w, user.ftp_watts) for w in library.LIBRARY],
+    }
+
+
+@router.get("/library/{slug}")
+def library_detail(slug: str, user: User = Depends(current_user)):
+    """With the steps, for "Schedule" and "Save to my workouts"."""
+    return library.out(_library_workout(slug), user.ftp_watts, with_steps=True)
+
+
+@router.get("/library/{slug}/zwo")
+def library_workout_zwo(slug: str, user: User = Depends(current_user)):
+    w = _library_workout(slug)
+    return _zwo_response(w["name"], zwo.zwo(w, "CoachQuest"))
 
 
 # ---- Calendar ----

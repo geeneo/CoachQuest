@@ -162,7 +162,9 @@ async def exchange_code(db: DbSession, user: User, code: str, granted_scope: str
     payload = resp.json()
     conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "strava"))
     if conn is None:
-        conn = Connection(user_id=user.id, provider="strava", token_enc="")
+        # Another source already brings in activities: the user switches over under Activity source.
+        options = None if sync_options.first_activities(db, user.id, "strava") else {"activities": False}
+        conn = Connection(user_id=user.id, provider="strava", token_enc="", options=options)
         db.add(conn)
     conn.external_id = str(payload.get("athlete", {}).get("id", ""))
     conn.status = "active"

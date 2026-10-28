@@ -67,6 +67,8 @@ class Settings:
     admin_view_data: str = os.getenv("ADMIN_VIEW_DATA", "off")
     # "on": new sign-ups wait until a super admin approves them. Admin → Settings → Accounts.
     signup_approval: str = os.getenv("SIGNUP_APPROVAL", "off")
+    # "on": the sign-up page and a welcome email say this is an alpha and access is subject to approval.
+    alpha_notice: str = os.getenv("ALPHA_NOTICE", "off")
     # "on": indoor plan days show the closest Zwift / MyWhoosh workout from the catalog.
     platform_matching: str = os.getenv("PLATFORM_MATCHING", "on")
     # Most sessions an athlete can plan on one day (weekday preferences; the AI coach plans them all).

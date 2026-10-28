@@ -1,8 +1,13 @@
 """Which data a user imports from which provider.
 
-Typical setup to avoid duplicate activities: activities from Strava, wellness
-only from Garmin. Turning a data type off stops importing it and hides what was
-already imported from that provider, so the change shows up at once.
+Activities: the athlete picks a main activity source (Strava, Garmin or
+Intervals.icu). Other sources can also import activities, for sessions that are
+only there (e.g. walks recorded on Garmin only); when a session is on several,
+the main source's copy is the one shown (fitness.dedupe). A new connection only
+imports activities when no other source does yet, so the athlete chooses.
+
+Turning a data type off stops importing it and hides what was already imported
+from that provider, so the change shows up at once.
 """
 
 from sqlalchemy import select
@@ -32,40 +37,60 @@ def hidden_sources(db: DbSession, user_id: int, kind: str) -> set[str]:
     return {c.provider for c in conns if kind in KINDS.get(c.provider, ()) and not options(c)[kind]}
 
 
-# ---- "Where your data comes from" (Connections): one source per kind, confirmed by the user ----
+def activity_sources(db: DbSession, user_id: int) -> list[str]:
+    """Connected providers importing activities (normally one)."""
+    conns = db.scalars(select(Connection).where(Connection.user_id == user_id)).all()
+    return [c.provider for c in conns if "activities" in KINDS.get(c.provider, ()) and options(c)["activities"]]
 
-# The kinds a user picks one source for, so the same ride or night isn't imported twice.
-CHOOSE = ("activities", "wellness")
+
+def first_activities(db: DbSession, user_id: int, provider: str) -> bool:
+    """For a new connection: import activities only when no other source does yet."""
+    return not [p for p in activity_sources(db, user_id) if p != provider]
+
+
+def primary_source(db: DbSession, user_id: int) -> str | None:
+    """The main activity source the athlete picked (Connections → Activity source), or None if not picked."""
+    conns = db.scalars(select(Connection).where(Connection.user_id == user_id)).all()
+    return next((c.provider for c in conns if (c.options or {}).get("primary") and options(c)["activities"]), None)
+
+
+def set_primary(db: DbSession, conn: Connection) -> None:
+    """Make `conn` the main activity source (activities on); the flag moves off the user's other connections."""
+    for other in db.scalars(select(Connection).where(Connection.user_id == conn.user_id)).all():
+        if other.id != conn.id and (other.options or {}).get("primary"):
+            other.options = {k: v for k, v in other.options.items() if k != "primary"}
+    conn.options = {**(conn.options or {}), "activities": True, "primary": True}
+
+
+# ---- Connections: wellness source and "choose your main source" reminder ----
+
 LINKED = ("strava", "garmin", "intervals_icu")
 
 
-def summary(user, conns: list[Connection]) -> dict:
-    """Which linked app supplies each kind today, and whether the user still has to confirm it.
-
-    Asked again whenever an app is linked that wasn't there when they last confirmed."""
+def overview(conns: list[Connection], primary: str | None) -> dict:
+    """The linked apps, which ones bring in sleep / HRV / resting HR (and could), and whether to remind the
+    athlete to pick a main activity source (two or more apps linked, none picked)."""
     conns = sorted((c for c in conns if c.provider in LINKED), key=lambda c: LINKED.index(c.provider))
     linked = [c.provider for c in conns]
-    by_kind = {kind: [c.provider for c in conns if kind in KINDS[c.provider] and options(c)[kind]] for kind in CHOOSE}
-    choices = {kind: [p for p in linked if kind in KINDS[p]] for kind in CHOOSE}
-    new = set(linked) - set(user.sources_confirmed or [])
+    able = [c for c in conns if "wellness" in KINDS[c.provider]]
     return {
         "linked": linked,
-        "from": by_kind,
-        "choices": choices,
-        "needs_confirm": len(linked) >= 2 and bool(new),
-        "confirmed": bool(user.sources_confirmed),
+        "wellness": {
+            "from": [c.provider for c in able if options(c)["wellness"]],
+            "choices": [c.provider for c in able],
+        },
+        "needs_primary": len(linked) >= 2 and primary is None,
     }
 
 
-def choose(conns: list[Connection], picks: dict[str, str | None]) -> list[Connection]:
-    """Turn each kind on for the picked app only (None: from none). Returns connections that got data turned on."""
+def set_wellness(conns: list[Connection], provider: str | None) -> list[Connection]:
+    """Sleep, HRV and resting HR from `provider` only (None: from none). Returns connections turned on."""
     turned_on = []
     for c in conns:
-        current = options(c) if c.provider in KINDS else {}
-        changes = {k: c.provider == picks[k] for k in picks if k in current}
-        if not changes:
+        if "wellness" not in KINDS.get(c.provider, ()):
             continue
-        if any(v and not current[k] for k, v in changes.items()):
+        on = c.provider == provider
+        if on and not options(c)["wellness"]:
             turned_on.append(c)
-        c.options = {**(c.options or {}), **current, **changes}
+        c.options = {**(c.options or {}), **options(c), "wellness": on}
     return turned_on
