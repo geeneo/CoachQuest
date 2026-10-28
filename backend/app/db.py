@@ -586,7 +586,8 @@ class PasswordReset(Base):
 
 
 class Segment(Base):
-    """A Strava segment an athlete trains on (e.g. the climb for hill repeats); see segments.py."""
+    """A favourite Strava route or segment an athlete trains on (e.g. the climb for hill repeats,
+    the Saturday long-ride loop); see segments.py."""
 
     __tablename__ = "segments"
     __table_args__ = (UniqueConstraint("athlete_id", "strava_id"),)
@@ -594,13 +595,18 @@ class Segment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     strava_id: Mapped[int] = mapped_column(BigInteger)
+    kind: Mapped[str] = mapped_column(String(10), default="segment")  # segment | route
     name: Mapped[str] = mapped_column(String(120))
     # From Strava when the athlete's Strava is linked; otherwise empty.
     distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avg_grade: Mapped[float | None] = mapped_column(Float, nullable=True)
     elevation_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
     city: Mapped[str] = mapped_column(String(80), default="")
-    # How it's used, for the AI coach ("hill repeats, 4-8 times, ride back down easy").
+    # Routes: Strava's estimated moving time, and ride or run.
+    est_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sport: Mapped[str] = mapped_column(String(10), default="ride")
+    # What it's for (segments.USES), and how it's used, for the AI coach ("4-8 times, easy back down").
+    uses: Mapped[list | None] = mapped_column(JSON, nullable=True)
     notes: Mapped[str] = mapped_column(String(300), default="")
     added_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -700,6 +706,12 @@ _ADDED_COLUMNS = {
     "races": {"target_seconds": "INTEGER", "ctl_advice": "JSON"},
     "platform_workouts": {"collection": "VARCHAR(160) NOT NULL DEFAULT ''"},
     "grants": {"role": "VARCHAR(10) NOT NULL DEFAULT 'coach'"},
+    "segments": {
+        "kind": "VARCHAR(10) NOT NULL DEFAULT 'segment'",
+        "est_minutes": "INTEGER",
+        "sport": "VARCHAR(10) NOT NULL DEFAULT 'ride'",
+        "uses": "JSON",
+    },
     "ai_calls": {
         "kind": "VARCHAR(12) NOT NULL DEFAULT ''",
         "cache_read_tokens": "INTEGER NOT NULL DEFAULT 0",

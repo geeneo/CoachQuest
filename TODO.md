@@ -2,6 +2,10 @@
 
 ## Next up
 
+- [x] **Favourite Strava routes and segments for planning rides.** Athletes
+      keep favourite routes and segments (from a link or their Strava
+      starred segments and routes), tagged with uses; the AI coach plans
+      outdoor rides on routes and efforts on segments, linked on plan days.
 - [x] **First sign-in: make clear what comes from where (no duplicates).**
       When a new user links Strava, Garmin and Intervals.icu, show a
       prominent step that says which app brings in what (rides, runs,

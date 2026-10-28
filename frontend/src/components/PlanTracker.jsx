@@ -118,7 +118,7 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
       ) && call(`/days/${date}/library-workout`, "POST", { slug: m.slug }),
     restorePlan: (date) => call(`/days/${date}/platform-workout`, "DELETE"),
     maxSessions: plan.max_sessions_per_day || 1,
-    segments: segments.data || [],
+    segments: segments.data?.favourites || [],
   };
   const matching = plan.platform_matching || {};
   return (
@@ -494,11 +494,18 @@ function MatchStatus({ matching }) {
   ) : null;
 }
 
-// A saved Strava segment on a session: opens it in Strava.
+// A favourite Strava route or segment on a session: opens it in Strava.
 function SegmentLink({ segment }) {
+  const route = segment.kind === "route";
   return (
-    <a className="badge segment" href={segment.url} target="_blank" rel="noreferrer" title="Open the segment in Strava">
-      ⛰ {segment.name}
+    <a
+      className="badge segment"
+      href={segment.url}
+      target="_blank"
+      rel="noreferrer"
+      title={`Open the ${route ? "route" : "segment"} in Strava`}
+    >
+      {route ? "🗺" : "⛰"} {segment.name}
     </a>
   );
 }
@@ -727,12 +734,12 @@ function DayEditor({ day, segments, onDone }) {
         </label>
         {segments.length > 0 && (
           <label className="inline">
-            Strava segment
+            Route / segment
             <select value={form.segment_id} onChange={set("segment_id")}>
               <option value="">–</option>
               {segments.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {s.kind === "route" ? "🗺" : "⛰"} {s.name}
                 </option>
               ))}
             </select>

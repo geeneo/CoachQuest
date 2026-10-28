@@ -1897,3 +1897,23 @@ ul.segments li {
 .nowrap {
   white-space: nowrap;
 }
+
+/* Favourite routes & segments. */
+.favourite-group h3 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+}
+.favourite-form {
+  margin-top: 0.75rem;
+}
+.card.inset {
+  background: var(--panel-2);
+  margin: 0.5rem 0;
+}
+.chip.small {
+  padding: 1px 8px;
+  font-size: 0.75rem;
+}
+.favourite-group h3 .muted {
+  font-weight: normal;
+}

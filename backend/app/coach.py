@@ -40,12 +40,18 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 - If a data category is missing because it was not shared, say once what that limits and move on.
 - Fit the plan inside the requested weekly hours and available days. Where `request.available_days` and \
 `weekday_preferences` disagree, the weekday preferences win.
-- `saved_segments` are Strava segments the athlete trains on (e.g. the local climb for hill repeats), \
-with their `notes` on how they're used. When a day's session suits one (hill repeats, climbing efforts, \
-a fixed effort), put its `id` in that session's `segment_id` and name it in the description: on an \
-outdoor day, ride it ("6 x Helshoogte, easy back down"); on an indoor day, give the matching indoor \
-efforts (same duration and power) and name the segment for reference. Use only ids from \
-`saved_segments`; otherwise `segment_id` is null.
+- `favourites` are the athlete's own Strava routes and segments, the places they train. Plan outdoor \
+sessions on them whenever one fits, so the plan says where to ride, and put its `id` in that session's \
+`segment_id` (null when none fits; only ids from `favourites`):
+  - A `route` (`kind`) is a whole ride: use it for outdoor rides whose length matches its `distance_km` \
+and `est_minutes` and whose purpose matches its `uses` (e.g. a "long ride" route for the long ride, a \
+"recovery" route for an easy spin), and set the session's `duration_min` from it. Name it in the \
+description ("Long ride on the Franschhoek loop, Z2").
+  - A `segment` is a climb or stretch for efforts: use it for hill repeats, climbing intervals or fixed \
+efforts, sized from its `distance_km`, `avg_grade_pct` and `climb_m` ("6 x Helshoogte at 95-105% FTP, \
+easy back down").
+  - Follow their `uses` and `notes`. On indoor days, give the matching indoor efforts (same duration and \
+power) and name the segment or route for reference. Vary them across weeks when several fit.
 - When `weekday_preferences` is given, it lists the session types the athlete does on each weekday, and \
 the athlete does ALL of them that day. Plan one session per type: the day's own fields (`type`, \
 `description`, `duration_min`, `intensity`, `workout`) are the main session and every other type goes in \
@@ -150,7 +156,7 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
         facts["weekday_preferences"] = {d: t for d, t in prefs["weekday_prefs"].items() if t}
         saved = segments.for_ai(db, athlete.id)
         if saved:
-            facts["saved_segments"] = saved
+            facts["favourites"] = saved
         facts["upcoming_races"] = [
             {k: v for k, v in race_out(r, today).items() if k not in ("id", "active", "ctl_advice")}
             for r in upcoming(db, athlete.id, today)

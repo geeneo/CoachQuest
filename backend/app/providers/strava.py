@@ -352,19 +352,53 @@ async def deauthorize(conn: Connection) -> None:
         log.info("Strava deauthorize failed: %s", exc)
 
 
-async def segment(db: DbSession, conn: Connection, segment_id: int) -> dict:
-    """A segment's public details (name, length, gradient) from Strava, read with the athlete's own link."""
+async def _get(db: DbSession, conn: Connection, path: str, params: dict | None = None):
     async with httpx.AsyncClient(timeout=20) as client:
         token = await _access_token(db, conn, client)
-        resp = await client.get(f"{API}/segments/{segment_id}", headers={"Authorization": f"Bearer {token}"})
+        resp = await client.get(f"{API}{path}", params=params, headers={"Authorization": f"Bearer {token}"})
     if resp.status_code == 404:
-        raise LookupError("Strava doesn't know that segment (or it's private)")
+        raise LookupError("Strava doesn't know that one (or it's private)")
     resp.raise_for_status()
-    s = resp.json()
+    return resp.json()
+
+
+def _segment_out(s: dict) -> dict:
     return {
+        "kind": "segment",
+        "strava_id": s["id"],
         "name": (s.get("name") or "").strip()[:120],
         "distance_m": round(s.get("distance") or 0),
         "avg_grade": s.get("average_grade"),
         "elevation_m": round((s.get("elevation_high") or 0) - (s.get("elevation_low") or 0)) or None,
         "city": (s.get("city") or "")[:80],
     }
+
+
+def _route_out(r: dict) -> dict:
+    secs = r.get("estimated_moving_time")
+    return {
+        "kind": "route",
+        "strava_id": int(r.get("id_str") or r["id"]),
+        "name": (r.get("name") or "").strip()[:120],
+        "distance_m": round(r.get("distance") or 0),
+        "elevation_m": round(r.get("elevation_gain") or 0) or None,
+        "est_minutes": round(secs / 60) if secs else None,
+        "sport": "run" if r.get("type") == 2 else "ride",
+    }
+
+
+async def segment(db: DbSession, conn: Connection, segment_id: int) -> dict:
+    """A segment's public details (name, length, gradient) from Strava, read with the athlete's own link."""
+    return _segment_out(await _get(db, conn, f"/segments/{segment_id}"))
+
+
+async def route(db: DbSession, conn: Connection, route_id: int) -> dict:
+    """A route's details (name, length, climbing, estimated time) from Strava."""
+    return _route_out(await _get(db, conn, f"/routes/{route_id}"))
+
+
+async def favourites(db: DbSession, conn: Connection) -> list[dict]:
+    """The athlete's starred segments and their own routes on Strava, to pick favourites from."""
+    starred = await _get(db, conn, "/segments/starred", {"per_page": 100})
+    routes = await _get(db, conn, f"/athletes/{conn.external_id}/routes", {"per_page": 100}) if conn.external_id else []
+    return [_segment_out(s) for s in starred] + [_route_out(r) for r in routes]

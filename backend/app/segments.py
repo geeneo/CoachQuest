@@ -1,8 +1,13 @@
-"""Strava segments an athlete trains on, e.g. the local climb for hill repeats.
+"""Favourite Strava routes and segments an athlete trains on.
 
-Saved by pasting the segment's Strava link. When the athlete's Strava is
-linked, its name, length and gradient come from Strava. The AI coach gets
-them (`saved_segments`) and can put one on a plan day (`segment_id`); the
+A segment is a climb or stretch for efforts (hill repeats, intervals); a route
+is a whole ride (the Saturday long-ride loop, the easy recovery spin). They are
+saved by pasting a Strava link, or picked from the athlete's starred segments
+and routes on Strava. With Strava linked, the details (length, gradient,
+climbing, estimated time) come from Strava. Each gets "uses" (what it's for).
+
+The AI coach gets them (`favourites`) and plans rides on them: it puts the
+favourite's id in a session's `segment_id` (the field predates routes) and the
 plan shows it as a link that opens in Strava.
 """
 
@@ -13,47 +18,87 @@ from sqlalchemy.orm import Session as DbSession
 
 from .db import Segment
 
-LINK = re.compile(r"(?:strava\.com/segments/|^)(\d{3,12})(?:[/?#]|$)")
+KINDS = ("segment", "route")
+# What a favourite is for; the AI coach matches them to sessions.
+USES = (
+    "hill repeats",
+    "intervals",
+    "sprints",
+    "tempo",
+    "endurance",
+    "long ride",
+    "recovery",
+    "race simulation",
+)
+LINK = re.compile(r"strava\.com/(segments|routes)/(\d{3,20})(?:[/?#]|$)")
+BARE = re.compile(r"^\d{3,20}$")
+
+
+def parse_link(text: str) -> tuple[str, int] | None:
+    """("segment" | "route", id) from a Strava link. A bare number is taken as a segment id."""
+    text = text.strip()
+    m = LINK.search(text)
+    if m:
+        return ("segment" if m.group(1) == "segments" else "route"), int(m.group(2))
+    if BARE.match(text):
+        return "segment", int(text)
+    return None
 
 
 def strava_id(text: str) -> int | None:
-    """The segment id in a Strava link (https://www.strava.com/segments/1234567) or a bare number."""
-    m = LINK.search(text.strip())
-    return int(m.group(1)) if m else None
+    """A segment id from a link or number (routes are not segments)."""
+    parsed = parse_link(text)
+    return parsed[1] if parsed and parsed[0] == "segment" else None
+
+
+def clean_uses(uses: list[str] | None) -> list[str]:
+    return [u for u in USES if u in set(uses or [])]
 
 
 def url(s: Segment) -> str:
-    return f"https://www.strava.com/segments/{s.strava_id}"
+    return f"https://www.strava.com/{'routes' if s.kind == 'route' else 'segments'}/{s.strava_id}"
 
 
 def segment_out(s: Segment) -> dict:
     return {
         "id": s.id,
+        "kind": s.kind,
         "name": s.name,
         "url": url(s),
         "distance_m": s.distance_m,
         "avg_grade": s.avg_grade,
         "elevation_m": s.elevation_m,
+        "est_minutes": s.est_minutes,
+        "sport": s.sport,
         "city": s.city,
+        "uses": s.uses or [],
         "notes": s.notes,
     }
 
 
 def for_athlete(db: DbSession, athlete_id: int) -> list[Segment]:
-    return list(db.scalars(select(Segment).where(Segment.athlete_id == athlete_id).order_by(Segment.name)))
+    return list(
+        db.scalars(select(Segment).where(Segment.athlete_id == athlete_id).order_by(Segment.kind, Segment.name))
+    )
 
 
 def for_ai(db: DbSession, athlete_id: int) -> list[dict]:
-    """What the AI coach needs to pick a segment: id (for `segment_id`), name, size and how it's used."""
+    """What the AI coach needs to plan on a favourite: id (for `segment_id`), kind, size, uses and notes."""
     out = []
     for s in for_athlete(db, athlete_id):
-        item = {"id": s.id, "name": s.name}
+        item = {"id": s.id, "kind": s.kind, "name": s.name}
+        if s.kind == "route" and s.sport != "ride":
+            item["sport"] = s.sport
         if s.distance_m:
-            item["distance_km"] = round(s.distance_m / 1000, 2)
+            item["distance_km"] = round(s.distance_m / 1000, 1 if s.kind == "route" else 2)
         if s.avg_grade is not None:
             item["avg_grade_pct"] = s.avg_grade
         if s.elevation_m:
             item["climb_m"] = s.elevation_m
+        if s.est_minutes:
+            item["est_minutes"] = s.est_minutes
+        if s.uses:
+            item["uses"] = s.uses
         if s.notes:
             item["notes"] = s.notes
         out.append(item)

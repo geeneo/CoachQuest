@@ -144,15 +144,21 @@ coach plans every one of them that day as its own session: the main one
 which can be edited, removed or added on the plan. A super admin sets the
 limit (1 to 4) under Admin → Settings → Workouts → "Sessions per day".
 
-### Strava segments
+### Favourite routes & segments
 
-On the Plans tab, an athlete (or their coach) saves Strava segments they
-train on, e.g. the climb for hill repeats, by pasting the segment's link,
-with a note on how it's used. With Strava linked, its name, length and
-gradient come from Strava. The AI coach gets them (`saved_segments`) and
-puts one on matching days: ride it outdoors, or the same efforts indoors
-with the segment named. Plan days show it as a link to Strava, and it can be
-set on a day by hand in the day editor.
+On the Plans tab, an athlete (or their coach) keeps favourite Strava routes
+(whole rides: the long-ride loop, the recovery spin) and segments (climbs
+and stretches for hill repeats and efforts). Add one by pasting its Strava
+link, or with **From my Strava**, which lists the athlete's starred segments
+and their (public) routes. With Strava linked, length, gradient, climbing
+and estimated time come from Strava. Each favourite gets uses (hill repeats,
+intervals, endurance, long ride, recovery…) and notes.
+
+The AI coach gets them as `favourites` and plans rides on them: a route for
+outdoor rides whose length and purpose fit (setting the session's time from
+it), a segment for hill repeats and efforts, or the same efforts indoors
+with the place named. Plan days show it as a 🗺 / ⛰ link to Strava, and the
+day editor can set or clear it.
 
 ### Workout library
 
