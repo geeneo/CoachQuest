@@ -144,6 +144,25 @@ coach plans every one of them that day as its own session: the main one
 which can be edited, removed or added on the plan. A super admin sets the
 limit (1 to 4) under Admin → Settings → Workouts → "Sessions per day".
 
+### Strength training
+
+Profile → **Strength training** sets the athlete's equipment (bodyweight,
+bands, dumbbells, kettlebells, barbell, gym machines, …), level, sports
+(cycling, running), sessions a week, minutes and limits. On Strength days the
+AI coach writes a structured session from an exercise library: sets, reps,
+effort and rest per exercise, periodised (heavy legs and hips twice a week in
+base and build, plyometrics for runners, once a week to maintain in race
+season, clear of key sessions), following Rønnestad & Mujika (2014) and the
+2022 Sports Medicine – Open meta-analysis on heavy vs plyometric training.
+Plan days list the exercises; click one for its instructions.
+
+The library is the public-domain [Free Exercise DB](https://github.com/yuhonas/free-exercise-db)
+(Unlicense), text only: 806 strength, plyometric, powerlifting and stretching
+exercises in `backend/app/data/exercises.json`, built by
+`scripts/import_exercises.py`. Its images are left out because their origin
+isn't documented. The AI gets a shortlist that fits the athlete's equipment
+and level (legs, hips, trunk and back, a share per group).
+
 ### Favourite routes & segments
 
 On the Plans tab, an athlete (or their coach) keeps favourite Strava routes

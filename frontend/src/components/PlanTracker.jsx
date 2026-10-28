@@ -421,6 +421,7 @@ function Day({ day, ctx }) {
             {day.route && <span className="badge">🗺 {day.route}</span>}
           </div>
         )}
+        {!editing && day.strength && <StrengthSession session={day.strength} />}
         {!editing && <PlatformMatches day={day} ctx={ctx} />}
         {!editing && (
           <ExtraSessions day={day} types={types} max={ctx.maxSessions} save={save} readOnly={ctx.ro} />
@@ -529,6 +530,58 @@ function MatchStatus({ matching }) {
   ) : null;
 }
 
+// A strength session the AI coach wrote: each exercise with sets x reps, effort and rest; click one for how.
+function StrengthSession({ session }) {
+  const [open, setOpen] = useState(null); // exercise id shown with instructions
+  const [info, setInfo] = useState({});
+  const show = async (id) => {
+    setOpen(open === id ? null : id);
+    if (!info[id]) {
+      try {
+        const e = await api(`/api/exercises/${encodeURIComponent(id)}`);
+        setInfo((i) => ({ ...i, [id]: e }));
+      } catch {
+        setInfo((i) => ({ ...i, [id]: { instructions: ["Couldn't load the instructions."] } }));
+      }
+    }
+  };
+  const rest = (s) => (s >= 60 ? `${Math.round((s / 60) * 2) / 2} min` : `${s} s`);
+  return (
+    <div className="strength-session small">
+      {session.focus && <strong>🏋 {session.focus}</strong>}
+      <ol>
+        {session.exercises.map((x) => (
+          <li key={x.id}>
+            <button type="button" className="link-btn" onClick={() => show(x.id)}>
+              {x.name}
+            </button>{" "}
+            <span>
+              {x.sets} × {x.reps}
+            </span>
+            {x.effort && <span className="muted"> · {x.effort}</span>}
+            {x.rest_s > 0 && <span className="muted"> · rest {rest(x.rest_s)}</span>}
+            {x.note && <span className="muted"> · {x.note}</span>}
+            {open === x.id && info[x.id] && (
+              <div className="exercise-how muted">
+                {info[x.id].equipment && (
+                  <div>
+                    {info[x.id].equipment} · {info[x.id].muscles?.join(", ")}
+                  </div>
+                )}
+                <ol>
+                  {info[x.id].instructions.map((t, i) => (
+                    <li key={i}>{t}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 // A favourite Strava route or segment on a session: opens it in Strava.
 function SegmentLink({ segment }) {
   const route = segment.kind !== "segment";
@@ -561,6 +614,7 @@ function ExtraSessions({ day, types, max, save, readOnly }) {
               </span>
             ))}
             {e.segment && <SegmentLink segment={e.segment} />}
+            {e.strength && <StrengthSession session={e.strength} />}
           </div>
         ))}
       </div>
@@ -625,6 +679,7 @@ function ExtraSessions({ day, types, max, save, readOnly }) {
           >
             ✕
           </button>
+          {e.strength && <StrengthSession session={e.strength} />}
         </div>
       ))}
       {canAdd && (

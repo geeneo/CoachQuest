@@ -20,6 +20,7 @@ from .routers import (
     coach_ai,
     comments,
     connections,
+    exercises,
     grants,
     instructions,
     plans,
@@ -118,6 +119,7 @@ for r in (
     athlete_notes.router,
     posts.router,
     segments.router,
+    exercises.router,
 ):
     app.include_router(r)
 

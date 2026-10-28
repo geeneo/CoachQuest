@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import update
 from sqlalchemy.orm import Session as DbSession
 
-from .. import runtime
+from .. import runtime, strength
 from ..db import Activity, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
 
@@ -52,6 +52,12 @@ def preferences_out(user: User) -> dict:
         # Up to "Sessions per day" types a day, each a session the AI coach plans that day. Rest stands alone.
         "weekday_prefs": {d: (user.weekday_prefs or {}).get(d, [])[: runtime.max_sessions_per_day()] for d in WEEKDAYS},
         "max_per_day": runtime.max_sessions_per_day(),
+        "strength": strength.prefs(user),
+        "strength_options": {
+            "equipment": list(strength.EQUIPMENT),
+            "levels": list(strength.LEVELS),
+            "sports": list(strength.SPORTS),
+        },
         "note_tags": user.note_tags if user.note_tags is not None else list(DEFAULT_NOTE_TAGS),
         "session_types": list(SESSION_TYPES),
         "week_start": user.week_start or 0,
@@ -68,6 +74,12 @@ def _tag(value: str) -> str:
 class PreferencesIn(BaseModel):
     weekday_prefs: dict[str, list[str]] | None = None
     note_tags: list[str] | None = Field(default=None, max_length=40)
+    strength: dict | None = None
+
+    @field_validator("strength")
+    @classmethod
+    def _strength(cls, v):
+        return None if v is None else strength.clean_prefs(v)
 
     @field_validator("weekday_prefs")
     @classmethod
@@ -112,6 +124,8 @@ def set_preferences(body: PreferencesIn, user: User = Depends(current_user), db:
         user.weekday_prefs = body.weekday_prefs
     if body.note_tags is not None:
         user.note_tags = body.note_tags
+    if body.strength is not None:
+        user.strength_prefs = body.strength
     db.commit()
     return preferences_out(user)
 

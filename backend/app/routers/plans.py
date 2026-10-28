@@ -420,6 +420,7 @@ def swap_days(
         "route",
         "workout",
         "segment_id",
+        "strength",
         "extra_sessions",
     )
     moved_a, moved_b = {k: day_a.get(k) for k in fields}, {k: day_b.get(k) for k in fields}

@@ -78,6 +78,8 @@ class User(Base):
     time_format: Mapped[str | None] = mapped_column(String(4), nullable=True)
     # {"preferred": ["zwift"], "auto": {"zwift": false}}; see platforms.py
     platform_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Strength options from Profile (strength.py): equipment, level, sports, sessions, minutes, limits.
+    strength_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Admin controls for the AI coach: off for this user, and a monthly limit overriding the site's.
     ai_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Admin switch: no emails at all to this user, except password resets and the sign-up approval.
@@ -692,6 +694,7 @@ _ADDED_COLUMNS = {
         "birth_date": "DATE",
         "timezone": "VARCHAR(64)",
         "platform_prefs": "JSON",
+        "strength_prefs": "JSON",
         "date_format": "VARCHAR(10)",
         "ai_disabled": "BOOLEAN NOT NULL DEFAULT 0",
         "emails_disabled": "BOOLEAN NOT NULL DEFAULT 0",

@@ -15,7 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, datefmt, instructions, runtime, segments
+from . import athlete_notes, datefmt, instructions, runtime, segments, strength
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import activities_since, load_curve, profile_out, wellness_since
@@ -52,6 +52,22 @@ efforts, sized from its `distance_km`, `avg_grade_pct` and `climb_m` ("6 x Helsh
 easy back down").
   - Follow their `uses` and `notes`. On indoor days, give the matching indoor efforts (same duration and \
 power) and name the segment or route for reference. Vary them across weeks when several fit.
+- Every "Strength" session (main or extra) gets a structured `strength` session; other sessions have \
+`strength` null. Use only exercise `id`s from `strength.exercises` (they fit the athlete's equipment \
+and level) and follow `strength.options`: their `sports`, `minutes` per session, `sessions_per_week` \
+and `limits` (and any athlete notes on injuries). For cyclists and runners:
+  - Base and build phases: heavy strength twice a week, 3-5 exercises for legs and hips (squat or \
+leg-press pattern, hinge such as deadlift or hip thrust, single-leg work such as split squat or \
+step-up, calves), 3-4 sets of 4-6 reps at a heavy load (RPE 8, 2-3 reps in reserve), 2-3 min rest, plus \
+1-2 trunk exercises. Beginners start lighter (2-3 sets of 8-10, RPE 6-7) and build over 3-4 weeks.
+  - Runners add 2-3 plyometric exercises (hops, bounds, jumps; 2-3 sets of 6-10 contacts) before the \
+heavy work, once they've done a few weeks of strength.
+  - Peak and race season: once a week to maintain (fewer sets, same weight); taper and race week: \
+none, or light mobility only.
+  - Put strength after easy days or on the same day as an easy session (strength after it), never the \
+day before a key ride, run or race, and keep 48 h between two strength sessions.
+  - `reps` is text ("5", "8-10", "30 s"); `effort` says how hard ("RPE 8", "heavy, 2 in reserve"); \
+`rest_s` is rest between sets; `note` is a short cue. Give the session a short `focus` ("Heavy legs").
 - When `weekday_preferences` is given, it lists the session types the athlete does on each weekday, and \
 the athlete does ALL of them that day. Plan one session per type: the day's own fields (`type`, \
 `description`, `duration_min`, `intensity`, `workout`) are the main session and every other type goes in \
@@ -154,6 +170,8 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
         prefs = preferences_out(athlete)
         # {day: [types]}: every type is a session on that day (see SYSTEM_PROMPT).
         facts["weekday_preferences"] = {d: t for d, t in prefs["weekday_prefs"].items() if t}
+        if athlete.strength_prefs or any("Strength" in t for t in prefs["weekday_prefs"].values()):
+            facts["strength"] = strength.for_ai(athlete)
         saved = segments.for_ai(db, athlete.id)
         if saved:
             facts["favourites"] = saved
@@ -373,6 +391,32 @@ WORKOUT_SCHEMA = _obj({"name": {"type": "string"}, "steps": {"type": "array", "i
 # A day's other sessions (plan_tracker.extras): no structured workout, never Rest.
 # A saved Strava segment for the session (segments.py), or null.
 SEGMENT_ID = {"anyOf": [{"type": "null"}, {"type": "integer"}]}
+# A strength session (strength.py): exercises from `strength.exercises`, or null on other sessions.
+STRENGTH_SCHEMA = {
+    "anyOf": [
+        {"type": "null"},
+        _obj(
+            {
+                "focus": {"type": "string"},
+                "exercises": {
+                    "type": "array",
+                    "items": _obj(
+                        {
+                            "id": {"type": "string"},
+                            "sets": {"type": "integer"},
+                            "reps": {"type": "string"},
+                            "effort": {"type": "string"},
+                            "rest_s": {"type": "integer"},
+                            "note": {"type": "string"},
+                        },
+                        ["id", "sets", "reps", "effort", "rest_s", "note"],
+                    ),
+                },
+            },
+            ["focus", "exercises"],
+        ),
+    ]
+}
 EXTRA_SESSION_SCHEMA = _obj(
     {
         "type": {"type": "string", "enum": [t for t in SESSION_TYPES if t != "Rest"]},
@@ -380,8 +424,9 @@ EXTRA_SESSION_SCHEMA = _obj(
         "duration_min": {"type": "integer"},
         "intensity": {"type": "array", "items": {"type": "string"}},
         "segment_id": SEGMENT_ID,
+        "strength": STRENGTH_SCHEMA,
     },
-    ["type", "description", "duration_min", "intensity", "segment_id"],
+    ["type", "description", "duration_min", "intensity", "segment_id", "strength"],
 )
 
 
@@ -412,6 +457,7 @@ def plan_schema() -> dict:
                                         "intensity": {"type": "array", "items": {"type": "string"}},
                                         "workout": {"anyOf": [{"type": "null"}, WORKOUT_SCHEMA]},
                                         "segment_id": SEGMENT_ID,
+                                        "strength": STRENGTH_SCHEMA,
                                         "extra_sessions": {"type": "array", "items": EXTRA_SESSION_SCHEMA},
                                     },
                                     "required": [
@@ -422,6 +468,7 @@ def plan_schema() -> dict:
                                         "intensity",
                                         "workout",
                                         "segment_id",
+                                        "strength",
                                         "extra_sessions",
                                     ],
                                     "additionalProperties": False,

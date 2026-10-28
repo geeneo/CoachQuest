@@ -1930,3 +1930,29 @@ ul.segments li {
 .route-pick {
   margin-bottom: 4px;
 }
+
+/* Strength training. */
+.strong-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.strength-session {
+  flex-basis: 100%;
+  margin: 4px 0;
+}
+.strength-session > ol {
+  margin: 2px 0 0;
+  padding-left: 1.4rem;
+}
+.strength-session .link-btn {
+  padding: 0;
+  color: var(--accent);
+}
+.exercise-how {
+  margin: 4px 0 6px;
+}
+.exercise-how ol {
+  margin: 4px 0 0;
+  padding-left: 1.2rem;
+}

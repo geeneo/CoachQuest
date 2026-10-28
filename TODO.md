@@ -2,6 +2,21 @@
 
 ## Next up
 
+- [x] **Strength training from the AI coach (cycling and running).**
+      - Exercise library: the public-domain Free Exercise DB
+        (github.com/yuhonas/free-exercise-db, Unlicense), text only, no
+        images (their origin isn't documented): strength, plyometrics,
+        powerlifting and stretching exercises with instructions, equipment,
+        level and muscles.
+      - Strength options in Profile: equipment at hand, level, sports
+        (cycling, running), sessions per week, limits.
+      - The AI coach writes the Strength days as structured sessions
+        (exercises from the library with sets, reps, effort and rest),
+        periodised: heavy strength 2x/week in base and build, 1x/week to
+        maintain in race season, plyometrics for runners, clear of key
+        rides and runs (Rønnestad & Mujika 2014; Sports Med Open 2022).
+      - Shown on the plan day with each exercise's instructions.
+
 - [x] **Favourite Strava routes and segments for planning rides.** Athletes
       keep favourite routes and segments (from a link or their Strava
       starred segments and routes), tagged with uses; the AI coach plans

@@ -14,7 +14,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
-from . import runtime, workouts
+from . import runtime, strength, workouts
 from .activity_types import category
 from .localtime import local_date
 
@@ -43,6 +43,7 @@ def _blank_day(d: date) -> dict:
         "missed_reason": None,
         "workout": None,  # {"name", "steps"} for indoor sessions; see plan_workouts.py
         "segment_id": None,  # a saved Strava segment (segments.py) to ride, or name indoors
+        "strength": None,  # a strength session (strength.py) on Strength days
         # More sessions the same day (e.g. Strength after a Zwift ride): [{type, description,
         # duration_min, intensity}]. The day's own fields are its main session. Older plans lack it.
         "extra_sessions": [],
@@ -83,6 +84,7 @@ def clean_session(raw: dict) -> dict | None:
         "duration_min": max(0, min(1440, int(raw.get("duration_min") or 0))),
         "intensity": [str(x)[:30] for x in raw.get("intensity") or []][:6],
         "segment_id": _segment_id(raw.get("segment_id")),
+        "strength": strength.clean(raw.get("strength")),
     }
 
 
@@ -117,6 +119,7 @@ def ai_day(src_day: dict) -> dict:
         "intensity": [str(x) for x in src_day.get("intensity") or []][:6],
         "workout": _workout(src_day.get("workout")),
         "segment_id": _segment_id(src_day.get("segment_id")),
+        "strength": strength.clean(src_day.get("strength")),
         "extra_sessions": [] if src_day.get("type") == "Rest" else clean_sessions(src_day.get("extra_sessions")),
     }
 
@@ -309,7 +312,16 @@ def merge_replan(old: list[dict], new: list[dict], today: date) -> int:
             if kept(d, today):
                 continue
             n = fresh["days"][i]
-            fields = ("type", "description", "duration_min", "intensity", "workout", "segment_id", "extra_sessions")
+            fields = (
+                "type",
+                "description",
+                "duration_min",
+                "intensity",
+                "workout",
+                "segment_id",
+                "strength",
+                "extra_sessions",
+            )
             if any(d.get(k) != n[k] for k in fields):  # older plans lack "workout", "segment_id", "extra_sessions"
                 changed += 1
             d.update({k: n[k] for k in fields}, gear=None, route=None, missed_reason=None)
