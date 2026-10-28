@@ -9,14 +9,15 @@ import { CommentsToggle } from "./PlanComments.jsx";
 import WorkoutChart from "./WorkoutChart.jsx";
 import { useReadOnly } from "../lib/readOnly.js";
 
+// emoji: the badge in the corner of a workout card, so done (and not done) shows at a glance.
 const STATUS = {
   planned: { label: "Planned", cls: "" },
   today: { label: "Today", cls: "info" },
-  done: { label: "✓ Done", cls: "good" },
-  partial: { label: "◐ Partly done", cls: "warn" },
-  missed: { label: "✗ Missed", cls: "bad" },
-  skipped: { label: "Skipped", cls: "" },
-  cancelled: { label: "Cancelled", cls: "" },
+  done: { label: "Done", cls: "good", emoji: "✅" },
+  partial: { label: "Partly done", cls: "warn", emoji: "⚠️" },
+  missed: { label: "Missed", cls: "bad", emoji: "❌" },
+  skipped: { label: "Skipped", cls: "", emoji: "⏭️" },
+  cancelled: { label: "Cancelled", cls: "", emoji: "🚫" },
 };
 const WEEKDAY = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -238,11 +239,21 @@ export default function TrainingCalendar({ id, isMe }) {
                   setSelected(selected === w.id ? null : w.id);
                 }}
               >
+                {STATUS[w.status].emoji && (
+                  <span className="cal-badge" role="img" aria-label={STATUS[w.status].label}>
+                    {STATUS[w.status].emoji}
+                  </span>
+                )}
                 <span className="cal-workout-name">{w.name}</span>
                 <span className="small muted">
                   {duration(w.estimate.duration_s)} · TSS {w.estimate.tss ?? "–"}
                 </span>
-                <span className={`status ${STATUS[w.status].cls}`}>{STATUS[w.status].label}</span>
+                <span className={`status ${STATUS[w.status].cls}`}>
+                  {STATUS[w.status].label}
+                  {(w.status === "done" || w.status === "partial") && w.actual?.minutes
+                    ? ` · ${duration(w.actual.minutes * 60)}`
+                    : ""}
+                </span>
                 {w.delivery.length > 0 && <DeliveryBadge delivery={w.delivery} />}
                 {w.comments > 0 && (
                   <span className="small muted" title="Comments">

@@ -1355,6 +1355,31 @@ label.inline.grow input {
   border-radius: 6px;
   padding: 0.3rem 0.4rem;
   cursor: grab;
+  position: relative;
+}
+/* Done, partly done, missed: a tinted card and an emoji badge in the corner. */
+.cal-workout.done {
+  background: color-mix(in srgb, var(--ok) 16%, var(--panel-2));
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  border-left-color: var(--ok);
+}
+.cal-workout.partial {
+  background: color-mix(in srgb, var(--warn) 14%, var(--panel-2));
+  border-left-color: var(--warn);
+}
+.cal-workout.missed {
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel-2));
+  border-left-color: var(--danger);
+}
+.cal-badge {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.3rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+.cal-workout:has(.cal-badge) .cal-workout-name {
+  padding-right: 1.3rem;
 }
 .cal-workout.selected {
   outline: 2px solid var(--c1);
@@ -1377,7 +1402,8 @@ label.inline.grow input {
   color: var(--muted);
 }
 .cal-workout .status.good {
-  color: var(--accent);
+  color: var(--ok);
+  font-weight: 600;
 }
 .cal-workout .status.warn {
   color: var(--warn);
