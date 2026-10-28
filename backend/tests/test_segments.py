@@ -252,3 +252,17 @@ def test_a_ride_without_strava_keeps_the_name_given(make_user):
     p = make_user("rider@example.com")
     f = p.post("/api/athletes/me/segments", json={"link": RIDE, "name": "Sillos over Hells"}).json()
     assert f["kind"] == "ride" and f["name"] == "Sillos over Hells" and f["distance_m"] is None
+
+
+def test_calendar_shows_the_route(make_user, planner):  # noqa: F811
+    athlete = make_user("rider@example.com")
+    route = athlete.post("/api/athletes/me/segments", json={"link": ROUTE, "name": "Franschhoek loop"}).json()
+    week = _week()
+    week["days"][2].update(type="Road", description="Long ride", segment_id=route["id"])
+    planner["value"] = [week, week]
+    plan = _create(athlete)
+    full = athlete.get(f"/api/athletes/me/plans/{plan['id']}").json()
+    sat = next(d for d in full["weeks"][0]["days"] if d["weekday"] == "sat")["date"]
+    cal = athlete.get(f"/api/athletes/me/calendar?start={sat}&end={sat}").json()
+    day = next(d for d in cal["days"] if d["date"] == sat)
+    assert day["plan"]["segment"]["name"] == "Franschhoek loop" and day["plan"]["segment"]["kind"] == "route"

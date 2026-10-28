@@ -13,7 +13,18 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import comments, completion, compliance, library, localtime, platforms, sync_engine, workouts, zwo
+from .. import (
+    comments,
+    completion,
+    compliance,
+    library,
+    localtime,
+    platforms,
+    segments,
+    sync_engine,
+    workouts,
+    zwo,
+)
 from ..activity_types import category
 from ..db import Activity, Comment, Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -256,17 +267,24 @@ def _plan_days(db: DbSession, athlete_id: int, start: date, end: date) -> dict[s
     plans = db.scalars(
         select(Plan).where(Plan.athlete_id == athlete_id, Plan.start_date.is_not(None)).order_by(Plan.created_at)
     ).all()
+    favourites = {s.id: segments.segment_out(s) for s in segments.for_athlete(db, athlete_id)}
     out = {}
     for p in plans:
         for week in p.weeks or []:
             for d in week["days"]:
                 if start.isoformat() <= d["date"] <= end.isoformat():
+                    extras = [
+                        {**e, **({"segment": favourites[e["segment_id"]]} if e.get("segment_id") in favourites else {})}
+                        for e in d.get("extra_sessions") or []
+                    ]
                     out[d["date"]] = {
                         "plan_id": p.id,
                         "plan_title": p.title,
                         "phase": week["phase"],
                         **{k: d[k] for k in ("type", "description", "duration_min", "intensity", "locked")},
-                        "extra_sessions": d.get("extra_sessions") or [],
+                        "extra_sessions": extras,
+                        # The favourite route or segment the day rides (segments.py), when it's still saved.
+                        "segment": favourites.get(d.get("segment_id")),
                     }
     return out
 

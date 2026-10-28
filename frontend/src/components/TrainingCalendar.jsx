@@ -209,6 +209,21 @@ export default function TrainingCalendar({ id, isMe }) {
                     {d.plan.duration_min}′{view === "day" ? ` · ${d.plan.plan_title}` : ""}
                   </span>
                 )}
+                {[d.plan, ...(d.plan.extra_sessions || [])]
+                  .filter((s) => s.segment)
+                  .map((s) => (
+                    <a
+                      key={s.segment.id}
+                      className="cal-route small"
+                      href={s.segment.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`Open the ${s.segment.kind} in Strava`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {s.segment.kind === "segment" ? "⛰" : "🗺"} {s.segment.name}
+                    </a>
+                  ))}
                 {view === "day" && d.plan.description && <p className="small">{d.plan.description}</p>}
               </div>
             )}

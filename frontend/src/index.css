@@ -1917,3 +1917,16 @@ ul.segments li {
 .favourite-group h3 .muted {
   font-weight: normal;
 }
+
+/* A plan day's favourite route or segment on the calendar. */
+.cal-route {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.route-pick {
+  margin-bottom: 4px;
+}

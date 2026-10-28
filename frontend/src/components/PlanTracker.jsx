@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Lock, MessageSquare, Sparkles, Unlock } from "lucide-react";
+import { ArrowLeftRight, Lock, Map as MapIcon, MessageSquare, Sparkles, Unlock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
@@ -278,6 +278,8 @@ function Day({ day, ctx }) {
   const tags = ctx.prefs?.note_tags || [];
   const [editing, setEditing] = useState(false);
   const [replanning, setReplanning] = useState(null); // null = closed, else {note, coach_notes, busy}
+  const [pickRoute, setPickRoute] = useState(false);
+  const canRoute = !ctx.ro && day.type !== "Rest" && ctx.segments.length > 0;
   const save = (body) => ctx.editDay(day.date, body);
   const canReplan = !ctx.ro && !day.locked && day.date >= new Date().toISOString().slice(0, 10);
   return (
@@ -324,6 +326,16 @@ function Day({ day, ctx }) {
               </button>
             </>
           )}
+          {canRoute && (
+            <button
+              className={`icon-btn ${pickRoute || day.segment ? "active" : ""}`}
+              title="Ride a favourite route or segment"
+              aria-label="Route"
+              onClick={() => setPickRoute(!pickRoute)}
+            >
+              <MapIcon size={14} />
+            </button>
+          )}
           <button
             className={`icon-btn ${ctx.countByDay[day.date] ? "active" : ""}`}
             title="Comments on this day"
@@ -346,6 +358,29 @@ function Day({ day, ctx }) {
         </div>
       </div>
       <div className="day-body">
+        {pickRoute && canRoute && (
+          <label className="inline small route-pick">
+            Ride
+            <select
+              autoFocus
+              value={day.segment ? String(day.segment.id) : ""}
+              onChange={(e) => {
+                save({ segment_id: e.target.value ? Number(e.target.value) : null });
+                setPickRoute(false);
+              }}
+            >
+              <option value="">– no route –</option>
+              {ctx.segments.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.kind === "segment" ? "⛰" : "🗺"} {s.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="link-btn small" onClick={() => setPickRoute(false)}>
+              Cancel
+            </button>
+          </label>
+        )}
         {editing ? (
           <DayEditor
             day={day}
