@@ -2,6 +2,12 @@
 
 ## Next up
 
+- [ ] **Show clearly on the calendar when a session was done (emoji).**
+      A done workout only shows a small "✓ Done" line, easy to miss next to
+      "✓ Intervals.icu". Make done days stand out at a glance, e.g. an emoji
+      badge on the workout card (✅ done, ⏭ skipped, ⚠️ partly done/short),
+      maybe a tinted card, in the week and day views of the plan calendar.
+
 - [x] **Load favourite routes & segments from Strava, picking several at once.**
       In Favourite routes & segments, "From my Strava" lists the athlete's
       starred segments and saved routes, but each one is added with its own
