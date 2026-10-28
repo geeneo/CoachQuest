@@ -12,6 +12,7 @@ import WellnessPanel, { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { dateTime, formLabel } from "../lib/format.js";
 import Segments from "../components/Segments.jsx";
+import { ReadOnly } from "../lib/readOnly.js";
 import PlansPanel from "./PlansPanel.jsx";
 
 const TABS = [
@@ -37,7 +38,7 @@ export default function AthleteView({ self }) {
   const current = tabs.find((t) => t.id === tab) ? tab : tabs[0]?.id;
 
   return (
-    <>
+    <ReadOnly.Provider value={!!(s.view_only || s.admin_view)}>
       <div className="page-head">
         <div>
           <h1>{self ? "My training" : s.display_name}</h1>
@@ -92,7 +93,7 @@ export default function AthleteView({ self }) {
           <PlansPanel id={id} athlete={s} />
         </>
       )}
-    </>
+    </ReadOnly.Provider>
   );
 }
 

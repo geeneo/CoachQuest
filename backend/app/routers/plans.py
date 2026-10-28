@@ -24,7 +24,7 @@ from .. import (
 )
 from ..coach import PHASES, CoachError, build_facts, generate_day, generate_plan, has_data
 from ..db import Comment, Plan, PlatformWorkout, User, get_db
-from ..deps import allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
+from ..deps import active_grant, allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
 from ..queries import activities_since
 from .preferences import SESSION_TYPES, preferences_out
 
@@ -71,6 +71,10 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
         if viewer is not None:
             friend = is_friend(db, viewer, p.athlete_id)
             out["viewer_role"] = "friend" if friend else plan_approval.role(viewer, p.athlete_id)
+            # Friends, and admins looking without a share, only look: the page hides its editing controls.
+            out["read_only"] = friend or (
+                viewer.id != p.athlete_id and viewer.is_admin and active_grant(db, p.athlete_id, viewer.id) is None
+            )
             waiting = p.approval != plan_approval.APPROVED or bool(p.pending)
             out["can_approve"] = waiting and plan_approval.can_approve(db, viewer, p.athlete_id, p)
             if waiting and viewer.id == p.athlete_id and plan_approval.required(db, viewer):

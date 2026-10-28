@@ -2,6 +2,7 @@ import { MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { dateTime, formatDate } from "../lib/format.js";
+import { useReadOnly } from "../lib/readOnly.js";
 
 const fmtDay = (iso) => formatDate(iso, { weekday: "short", year: false });
 
@@ -100,6 +101,7 @@ export function CommentThread({
   const [text, setText] = useState("");
   const [editing, setEditing] = useState(null); // {id, body}
   const [error, setError] = useState(null);
+  const ro = useReadOnly();
   const call = async (path, method, body) => {
     setError(null);
     try {
@@ -201,7 +203,7 @@ export function CommentThread({
             ) : (
               <p className="comment-body">{c.body}</p>
             )}
-            {editing?.id !== c.id && (c.can_edit || c.can_delete) && (
+            {!ro && editing?.id !== c.id && (c.can_edit || c.can_delete) && (
               <div className="row tight">
                 {c.can_edit && (
                   <button
@@ -227,27 +229,29 @@ export function CommentThread({
           </li>
         ))}
       </ul>
-      <form className="stack" onSubmit={add}>
-        <textarea
-          rows={3}
-          maxLength={4000}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={
-            day
-              ? `Comment on ${fmtDay(day)}…`
-              : heading
-                ? "Comment on the whole plan…"
-                : "Add a comment…"
-          }
-        />
-        {error && <div className="error small">{error}</div>}
-        <div>
-          <button className="btn primary" disabled={!text.trim()}>
-            Add comment
-          </button>
-        </div>
-      </form>
+      {!ro && (
+        <form className="stack" onSubmit={add}>
+          <textarea
+            rows={3}
+            maxLength={4000}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={
+              day
+                ? `Comment on ${fmtDay(day)}…`
+                : heading
+                  ? "Comment on the whole plan…"
+                  : "Add a comment…"
+            }
+          />
+          {error && <div className="error small">{error}</div>}
+          <div>
+            <button className="btn primary" disabled={!text.trim()}>
+              Add comment
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

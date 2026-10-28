@@ -39,7 +39,8 @@ def test_friend_cannot_change_anything(make_user, planner):  # noqa: F811
     assert plan["approval"] == "approved"
     url = f"/api/athletes/{aid}/plans/{plan['id']}"
     seen = friend.get(url).json()
-    assert seen["viewer_role"] == "friend" and seen["can_approve"] is False
+    assert seen["viewer_role"] == "friend" and seen["can_approve"] is False and seen["read_only"] is True
+    assert athlete.get(f"/api/athletes/me/plans/{plan['id']}").json()["read_only"] is False
     day = seen["weeks"][0]["days"][1]["date"]
     r = friend.patch(f"{url}/days/{day}", json={"description": "Changed"})
     assert r.status_code == 403 and "View only" in r.json()["detail"]

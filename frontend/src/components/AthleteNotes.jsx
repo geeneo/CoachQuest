@@ -3,9 +3,11 @@ import { useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { dateTime, formatDate } from "../lib/format.js";
+import { useReadOnly } from "../lib/readOnly.js";
 
 // Background the AI coach should know about the athlete (backend athlete_notes.py).
 export default function AthleteNotes({ id, isMe }) {
+  const ro = useReadOnly();
   const res = useApi(`/api/athletes/${id}/notes`);
   const [draft, setDraft] = useState({ category: "health", body: "", review_by: "" });
   const [editing, setEditing] = useState(null);
@@ -47,7 +49,7 @@ export default function AthleteNotes({ id, isMe }) {
         up for review after 6 weeks; a note past its review date is left out until someone confirms it.
       </p>
       {res.error && <div className="error">{res.error.message}</div>}
-      {res.data?.suggestions?.length > 0 && (
+      {!ro && res.data?.suggestions?.length > 0 && (
         <Suggestions list={res.data.suggestions} cats={cats} decide={(sid, body) => call(`/suggestions/${sid}`, "POST", body)} />
       )}
       {groups.map(([cat, list]) => (
@@ -109,36 +111,38 @@ export default function AthleteNotes({ id, isMe }) {
                       </ul>
                     </details>
                   )}
-                  <div className="row tight">
-                    {!n.current && (
+                  {!ro && (
+                    <div className="row tight">
+                      {!n.current && (
+                        <button
+                          className="icon-btn"
+                          title="Still true: send it to the AI again"
+                          aria-label="Confirm"
+                          onClick={() => call(`/${n.id}/confirm`, "POST")}
+                        >
+                          <CheckCircle2 size={15} />
+                        </button>
+                      )}
                       <button
                         className="icon-btn"
-                        title="Still true: send it to the AI again"
-                        aria-label="Confirm"
-                        onClick={() => call(`/${n.id}/confirm`, "POST")}
+                        title="Edit"
+                        aria-label="Edit"
+                        onClick={() =>
+                          setEditing({ id: n.id, body: n.body, category: n.category, review_by: n.review_by || "" })
+                        }
                       >
-                        <CheckCircle2 size={15} />
+                        <Pencil size={15} />
                       </button>
-                    )}
-                    <button
-                      className="icon-btn"
-                      title="Edit"
-                      aria-label="Edit"
-                      onClick={() =>
-                        setEditing({ id: n.id, body: n.body, category: n.category, review_by: n.review_by || "" })
-                      }
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button
-                      className="icon-btn"
-                      title="Delete"
-                      aria-label="Delete"
-                      onClick={() => confirm("Delete this note?") && call(`/${n.id}`, "DELETE")}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
+                      <button
+                        className="icon-btn"
+                        title="Delete"
+                        aria-label="Delete"
+                        onClick={() => confirm("Delete this note?") && call(`/${n.id}`, "DELETE")}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  )}
                 </li>
               ),
             )}
@@ -146,29 +150,31 @@ export default function AthleteNotes({ id, isMe }) {
         </div>
       ))}
       {res.data && !notes.length && <p className="muted small">No notes yet.</p>}
-      <form className="instruction-form" onSubmit={add}>
-        <textarea
-          rows={2}
-          maxLength={300}
-          minLength={3}
-          required
-          placeholder='e.g. "Left knee sore after long climbs", "Power meter on the road bike only", "Night shifts every second week"'
-          value={draft.body}
-          onChange={(e) => setDraft({ ...draft, body: e.target.value })}
-        />
-        <select aria-label="Category" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>
-          {Object.entries(cats).map(([k, label]) => (
-            <option key={k} value={k}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <label className="inline small">
-          Review by {draft.category === "health" ? "(default: 6 weeks)" : "(optional)"}
-          <input type="date" value={draft.review_by} onChange={(e) => setDraft({ ...draft, review_by: e.target.value })} />
-        </label>
-        <button className="btn primary small">Add note</button>
-      </form>
+      {!ro && (
+        <form className="instruction-form" onSubmit={add}>
+          <textarea
+            rows={2}
+            maxLength={300}
+            minLength={3}
+            required
+            placeholder='e.g. "Left knee sore after long climbs", "Power meter on the road bike only", "Night shifts every second week"'
+            value={draft.body}
+            onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+          />
+          <select aria-label="Category" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>
+            {Object.entries(cats).map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <label className="inline small">
+            Review by {draft.category === "health" ? "(default: 6 weeks)" : "(optional)"}
+            <input type="date" value={draft.review_by} onChange={(e) => setDraft({ ...draft, review_by: e.target.value })} />
+          </label>
+          <button className="btn primary small">Add note</button>
+        </form>
+      )}
       {error && <div className="error small">{error}</div>}
     </section>
   );

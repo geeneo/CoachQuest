@@ -7,6 +7,7 @@ import { dateTime, duration, formatDate } from "../lib/format.js";
 import { addDays, localToday } from "../lib/workout.js";
 import { CommentsToggle } from "./PlanComments.jsx";
 import WorkoutChart from "./WorkoutChart.jsx";
+import { useReadOnly } from "../lib/readOnly.js";
 
 const STATUS = {
   planned: { label: "Planned", cls: "" },
@@ -26,6 +27,7 @@ function weekdayOf(iso) {
 // The athlete's calendar: the plan's session for each day, scheduled workouts
 // (drag to move, drop a library workout to add), and what was logged.
 export default function TrainingCalendar({ id, isMe }) {
+  const ro = useReadOnly();
   const [anchor, setAnchor] = useState(localToday());
   const [view, setView] = useState("week");
   const [picked, setPicked] = useState(null); // a library workout chosen by tap, for touch screens
@@ -39,7 +41,7 @@ export default function TrainingCalendar({ id, isMe }) {
     if (!r.active || !r.target_date) continue;
     for (let i = 0; i < (r.days || 1); i++) (raceOn[addDays(r.target_date, i)] ||= []).push({ ...r, day: i + 1 });
   }
-  const library = useApi("/api/workouts");
+  const library = useApi(ro ? null : "/api/workouts");
   const platforms = useApi(`/api/athletes/${id}/platforms`);
 
   const data = cal.data;
@@ -76,6 +78,7 @@ export default function TrainingCalendar({ id, isMe }) {
 
   const onDrop = (e, day) => {
     e.preventDefault();
+    if (ro) return;
     const tpl = e.dataTransfer.getData("application/x-cq-template");
     const moved = e.dataTransfer.getData("application/x-cq-scheduled");
     if (tpl) schedule(Number(tpl), day);
@@ -135,29 +138,31 @@ export default function TrainingCalendar({ id, isMe }) {
       </div>
       {platforms.data && <PlatformLine platforms={platforms.data} isMe={isMe} />}
 
-      <div className="tray">
-        <span className="muted small">
-          {library.data?.length
-            ? picked
-              ? `Tap a day to add "${picked.name}", or tap it again to cancel.`
-              : "Drag a workout onto a day (or tap it, then tap a day):"
-            : "Your workout library is empty."}{" "}
-          <Link to="/workouts">{library.data?.length ? "Manage workouts" : "Build a workout"}</Link>
-        </span>
-        <div className="row wrap">
-          {library.data?.map((w) => (
-            <button
-              key={w.id}
-              draggable
-              className={`chip drag ${picked?.id === w.id ? "on" : ""}`}
-              onDragStart={(e) => e.dataTransfer.setData("application/x-cq-template", String(w.id))}
-              onClick={() => setPicked(picked?.id === w.id ? null : w)}
-            >
-              {w.name} · {duration(w.estimate.duration_s)}
-            </button>
-          ))}
+      {!ro && (
+        <div className="tray">
+          <span className="muted small">
+            {library.data?.length
+              ? picked
+                ? `Tap a day to add "${picked.name}", or tap it again to cancel.`
+                : "Drag a workout onto a day (or tap it, then tap a day):"
+              : "Your workout library is empty."}{" "}
+            <Link to="/workouts">{library.data?.length ? "Manage workouts" : "Build a workout"}</Link>
+          </span>
+          <div className="row wrap">
+            {library.data?.map((w) => (
+              <button
+                key={w.id}
+                draggable
+                className={`chip drag ${picked?.id === w.id ? "on" : ""}`}
+                onDragStart={(e) => e.dataTransfer.setData("application/x-cq-template", String(w.id))}
+                onClick={() => setPicked(picked?.id === w.id ? null : w)}
+              >
+                {w.name} · {duration(w.estimate.duration_s)}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {error && <div className="error">{error}</div>}
       {cal.error && <div className="error">{cal.error.message}</div>}
@@ -210,7 +215,7 @@ export default function TrainingCalendar({ id, isMe }) {
             {d.workouts.map((w) => (
               <button
                 key={w.id}
-                draggable
+                draggable={!ro}
                 className={`cal-workout ${w.status} ${selected === w.id ? "selected" : ""}`}
                 onDragStart={(e) => e.dataTransfer.setData("application/x-cq-scheduled", String(w.id))}
                 onClick={(e) => {
@@ -291,6 +296,7 @@ function PlatformLine({ platforms, isMe }) {
 }
 
 function WorkoutDetail({ w, ftp, id, edit, remove, onError, close, reload }) {
+  const ro = useReadOnly();
   const est = w.estimate;
   const act = w.actual;
   const plannedW = est.avg_watts;
@@ -365,9 +371,9 @@ function WorkoutDetail({ w, ftp, id, edit, remove, onError, close, reload }) {
         {w.delivery.length ? "" : "Delivery: download (.zwo) — not sent to any platform."}
         {w.from_plan ? " Made by the training plan: re-planning updates it until you edit it here." : ""}
       </p>
-      <RideMatch w={w} id={id} edit={edit} />
+      {!ro && <RideMatch w={w} id={id} edit={edit} />}
       <CommentsToggle key={w.id} athleteId={id} target="workout" targetId={w.id} count={w.comments} />
-      {w.delivery.length > 0 && <DeliveryList w={w} id={id} onError={onError} reload={reload} />}
+      {w.delivery.length > 0 && <DeliveryList w={w} id={id} onError={onError} reload={reload} readOnly={ro} />}
       <div className="row wrap">
         <button
           className="btn small primary"
@@ -375,30 +381,34 @@ function WorkoutDetail({ w, ftp, id, edit, remove, onError, close, reload }) {
         >
           <Download size={14} /> Download .zwo
         </button>
-        <label className="inline small">
-          Move to
-          <input type="date" value={w.date} onChange={(e) => e.target.value && edit(w.id, { day: e.target.value })} />
-        </label>
-        {w.status === "skipped" || w.status === "cancelled" ? (
-          <button className="btn small" onClick={() => edit(w.id, { status: "planned" })}>
-            Restore
-          </button>
-        ) : (
+        {!ro && (
           <>
-            <button className="btn small" onClick={() => edit(w.id, { status: "skipped" })}>
-              Skip
-            </button>
-            <button className="btn small" onClick={() => edit(w.id, { status: "cancelled" })}>
-              Cancel
+            <label className="inline small">
+              Move to
+              <input type="date" value={w.date} onChange={(e) => e.target.value && edit(w.id, { day: e.target.value })} />
+            </label>
+            {w.status === "skipped" || w.status === "cancelled" ? (
+              <button className="btn small" onClick={() => edit(w.id, { status: "planned" })}>
+                Restore
+              </button>
+            ) : (
+              <>
+                <button className="btn small" onClick={() => edit(w.id, { status: "skipped" })}>
+                  Skip
+                </button>
+                <button className="btn small" onClick={() => edit(w.id, { status: "cancelled" })}>
+                  Cancel
+                </button>
+              </>
+            )}
+            <button
+              className="btn small danger"
+              onClick={() => window.confirm(`Remove "${w.name}" from the calendar?`) && remove(w.id)}
+            >
+              Remove
             </button>
           </>
         )}
-        <button
-          className="btn small danger"
-          onClick={() => window.confirm(`Remove "${w.name}" from the calendar?`) && remove(w.id)}
-        >
-          Remove
-        </button>
       </div>
     </section>
   );
@@ -426,7 +436,7 @@ function DeliveryBadge({ delivery }) {
   );
 }
 
-function DeliveryList({ w, id, onError, reload }) {
+function DeliveryList({ w, id, onError, reload, readOnly }) {
   const retry = async (jobId) => {
     try {
       await api(`/api/athletes/${id}/sync/${jobId}/retry`, { method: "POST" });
@@ -443,8 +453,8 @@ function DeliveryList({ w, id, onError, reload }) {
           {d.action === "delete" ? " (removing)" : ""}
           {d.at ? ` · ${dateTime(d.at)}` : ""}
           {d.message && <span className="muted"> — {d.message}</span>}
-          {d.state === "blocked" && <Link to="/connections#platforms"> Reconnect</Link>}
-          {d.state === "failed" && d.job_id && (
+          {!readOnly && d.state === "blocked" && <Link to="/connections#platforms"> Reconnect</Link>}
+          {!readOnly && d.state === "failed" && d.job_id && (
             <button className="btn small" onClick={() => retry(d.job_id)}>
               Retry
             </button>

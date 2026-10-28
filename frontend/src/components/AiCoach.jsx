@@ -6,6 +6,7 @@ import { dateTime, formatDate } from "../lib/format.js";
 import Markdown from "./Markdown.jsx";
 import { Stat } from "./WellnessPanel.jsx";
 import { CommentsToggle } from "./PlanComments.jsx";
+import { useReadOnly } from "../lib/readOnly.js";
 
 const VERDICT = {
   go: ["GO", "Train as planned", "verdict-go"],
@@ -14,6 +15,7 @@ const VERDICT = {
 };
 
 export default function AiCoach({ id, isMe }) {
+  const ro = useReadOnly();
   const res = useApi(`/api/athletes/${id}/coach`);
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
@@ -36,10 +38,16 @@ export default function AiCoach({ id, isMe }) {
   return (
     <>
       {error && <div className="error">{error}</div>}
-      <Readiness id={id} daily={d.latest_daily} busy={busy === "daily"} onRun={() => generate("daily")} />
+      {/* Read-only viewers see the notes and reviews, but don't ask the AI for new ones. */}
+      <Readiness id={id} daily={d.latest_daily} busy={busy === "daily"} onRun={ro ? null : () => generate("daily")} />
       {d.progress && <Progress p={d.progress} />}
-      <AskCoach id={id} />
-      <WeeklyReviews id={id} reviews={d.weekly} busy={busy === "weekly"} onRun={() => generate("weekly")} />
+      {!ro && <AskCoach id={id} />}
+      <WeeklyReviews
+        id={id}
+        reviews={d.weekly}
+        busy={busy === "weekly"}
+        onRun={ro ? null : () => generate("weekly")}
+      />
       {isMe && d.ai_settings && <Schedule settings={d.ai_settings} />}
     </>
   );
@@ -53,9 +61,11 @@ function Readiness({ id, daily, busy, onRun }) {
     <section className="card">
       <div className="row between">
         <h2>Today's readiness</h2>
-        <button className="btn" disabled={busy} onClick={onRun}>
-          {busy ? "Checking…" : fresh ? "Check again" : "Check today's readiness"}
-        </button>
+        {onRun && (
+          <button className="btn" disabled={busy} onClick={onRun}>
+            {busy ? "Checking…" : fresh ? "Check again" : "Check today's readiness"}
+          </button>
+        )}
       </div>
       {daily ? (
         <div className="readiness">
@@ -121,9 +131,11 @@ function WeeklyReviews({ id, reviews, busy, onRun }) {
     <section className="card">
       <div className="row between">
         <h2>Weekly reviews</h2>
-        <button className="btn" disabled={busy} onClick={onRun}>
-          {busy ? "Writing…" : "Review last week"}
-        </button>
+        {onRun && (
+          <button className="btn" disabled={busy} onClick={onRun}>
+            {busy ? "Writing…" : "Review last week"}
+          </button>
+        )}
       </div>
       {reviews.length === 0 && <p className="muted">No reviews yet. They compare last week's plan with what you did.</p>}
       {reviews.map((r) => (

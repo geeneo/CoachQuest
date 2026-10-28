@@ -6,6 +6,7 @@ import { PlanApproval, PlanHistory } from "../components/PlanApproval.jsx";
 import PlanTracker from "../components/PlanTracker.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../lib/auth.jsx";
+import { ReadOnly } from "../lib/readOnly.js";
 import { dateTime, formatDate } from "../lib/format.js";
 
 export default function PlanView() {
@@ -22,7 +23,7 @@ export default function PlanView() {
   if (plan.error) return <div className="error">{plan.error.message}</div>;
   if (!p) return null;
   return (
-    <>
+    <ReadOnly.Provider value={!!p.read_only}>
       <Link to={back} className="small">
         <ArrowLeft size={14} /> Back
       </Link>
@@ -55,6 +56,6 @@ export default function PlanView() {
         <summary>Data sent to the AI coach</summary>
         <pre className="facts">{JSON.stringify(p.facts, null, 2)}</pre>
       </details>
-    </>
+    </ReadOnly.Provider>
   );
 }

@@ -7,12 +7,14 @@ import { useAuth } from "../lib/auth.jsx";
 import { duration, shortDate } from "../lib/format.js";
 import Markdown from "./Markdown.jsx";
 import PlanComments from "./PlanComments.jsx";
+import { useReadOnly } from "../lib/readOnly.js";
 
 const PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition"];
 const DAY_LABEL = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 const fmtDate = shortDate;
 
 export default function PlanTracker({ plan, athleteId, setPlan }) {
+  const ro = useReadOnly();
   const prefs = useApi(`/api/athletes/${athleteId}/preferences`);
   const segments = useApi(`/api/athletes/${athleteId}/segments`);
   const [swapFrom, setSwapFrom] = useState(null);
@@ -92,6 +94,7 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
     return r;
   };
   const ctx = {
+    ro,
     prefs: prefs.data,
     editDay,
     swap,
@@ -122,13 +125,16 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
     <>
       <div className="row between tracker-bar">
         <p className="muted small">
-          Click a day's type to change it, click a description to edit it. 🔒 locks a day so re-planning and swaps leave
-          it alone.
+          {ro
+            ? "View only."
+            : "Click a day's type to change it, click a description to edit it. 🔒 locks a day so re-planning and swaps leave it alone."}
         </p>
         <div className="row">
-          <button className="btn" onClick={applyPrefs}>
-            Apply weekday preferences to future days
-          </button>
+          {!ro && (
+            <button className="btn" onClick={applyPrefs}>
+              Apply weekday preferences to future days
+            </button>
+          )}
           <button
             className="btn"
             title="Workouts scheduled on the calendar in this plan's dates, as Zwift files"
@@ -140,9 +146,11 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
           >
             Download plan workouts (ZIP)
           </button>
-          <button className="btn primary" onClick={() => setReplan(replan === null ? "" : null)}>
-            Re-plan from this week
-          </button>
+          {!ro && (
+            <button className="btn primary" onClick={() => setReplan(replan === null ? "" : null)}>
+              Re-plan from this week
+            </button>
+          )}
         </div>
       </div>
       {replan !== null && (
@@ -208,16 +216,20 @@ function Week({ week, index, editWeek, ctx }) {
         <div className="row">
           {week.is_current && <span className="muted small">THIS WEEK — </span>}
           <strong>Week {index + 1}</strong>
-          <select
-            aria-label="Phase"
-            className="phase"
-            value={week.phase}
-            onChange={(e) => editWeek(index, { phase: e.target.value })}
-          >
-            {PHASES.map((p) => (
-              <option key={p}>{p}</option>
-            ))}
-          </select>
+          {ctx.ro ? (
+            <span className="badge">{week.phase}</span>
+          ) : (
+            <select
+              aria-label="Phase"
+              className="phase"
+              value={week.phase}
+              onChange={(e) => editWeek(index, { phase: e.target.value })}
+            >
+              {PHASES.map((p) => (
+                <option key={p}>{p}</option>
+              ))}
+            </select>
+          )}
           <span className="muted small">
             {fmtDate(week.start)} – {fmtDate(week.days[6].date)}
           </span>
@@ -238,6 +250,7 @@ function Week({ week, index, editWeek, ctx }) {
           </span>
           <button
             className={`chip ${week.status === "confirmed" ? "on" : ""}`}
+            disabled={ctx.ro}
             onClick={() => editWeek(index, { status: week.status === "confirmed" ? "draft" : "confirmed" })}
           >
             {week.status === "confirmed" ? "Confirmed" : "Draft"}
@@ -248,6 +261,7 @@ function Week({ week, index, editWeek, ctx }) {
         className="week-focus"
         value={week.focus}
         placeholder="Focus for this week…"
+        readOnly={ctx.ro}
         onSave={(focus) => editWeek(index, { focus })}
       />
       <div className="days">
@@ -265,7 +279,7 @@ function Day({ day, ctx }) {
   const [editing, setEditing] = useState(false);
   const [replanning, setReplanning] = useState(null); // null = closed, else {note, coach_notes, busy}
   const save = (body) => ctx.editDay(day.date, body);
-  const canReplan = !day.locked && day.date >= new Date().toISOString().slice(0, 10);
+  const canReplan = !ctx.ro && !day.locked && day.date >= new Date().toISOString().slice(0, 10);
   return (
     <div className={`day status-${day.status} ${day.is_today ? "today" : ""} ${day.type === "Rest" ? "rest" : ""}`}>
       <div className="day-label">
@@ -274,29 +288,42 @@ function Day({ day, ctx }) {
         <span className="muted small">{fmtDate(day.date)}</span>
       </div>
       <div className="day-tools">
-        <select aria-label="Session type" className="type-pick" value={day.type} onChange={(e) => save({ type: e.target.value })}>
-          {[...new Set([day.type, ...types])].map((t) => (
-            <option key={t}>{t}</option>
-          ))}
-        </select>
+        {ctx.ro ? (
+          <span className="badge type-pick">{day.type}</span>
+        ) : (
+          <select
+            aria-label="Session type"
+            className="type-pick"
+            value={day.type}
+            onChange={(e) => save({ type: e.target.value })}
+          >
+            {[...new Set([day.type, ...types])].map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+        )}
         <div className="row tight">
-          <button
-            className={`icon-btn ${ctx.swapFrom === day.date ? "active" : ""}`}
-            title="Swap with another day"
-            aria-label="Swap"
-            disabled={day.locked}
-            onClick={() => ctx.swap(day.date)}
-          >
-            <ArrowLeftRight size={14} />
-          </button>
-          <button
-            className="icon-btn"
-            title={day.locked ? "Unlock" : "Lock"}
-            aria-label={day.locked ? "Unlock" : "Lock"}
-            onClick={() => save({ locked: !day.locked })}
-          >
-            {day.locked ? <Lock size={14} /> : <Unlock size={14} />}
-          </button>
+          {!ctx.ro && (
+            <>
+              <button
+                className={`icon-btn ${ctx.swapFrom === day.date ? "active" : ""}`}
+                title="Swap with another day"
+                aria-label="Swap"
+                disabled={day.locked}
+                onClick={() => ctx.swap(day.date)}
+              >
+                <ArrowLeftRight size={14} />
+              </button>
+              <button
+                className="icon-btn"
+                title={day.locked ? "Unlock" : "Lock"}
+                aria-label={day.locked ? "Unlock" : "Lock"}
+                onClick={() => save({ locked: !day.locked })}
+              >
+                {day.locked ? <Lock size={14} /> : <Unlock size={14} />}
+              </button>
+            </>
+          )}
           <button
             className={`icon-btn ${ctx.countByDay[day.date] ? "active" : ""}`}
             title="Comments on this day"
@@ -326,8 +353,14 @@ function Day({ day, ctx }) {
             onDone={(body) => (setEditing(false), body && save(body))}
           />
         ) : (
-          <button className="day-desc" onClick={() => setEditing(true)} title="Click to edit">
-            {day.description || (day.type === "Rest" ? "Recovery day." : <span className="muted">Add a description…</span>)}
+          <button
+            className="day-desc"
+            disabled={ctx.ro}
+            onClick={() => setEditing(true)}
+            title={ctx.ro ? undefined : "Click to edit"}
+          >
+            {day.description ||
+              (day.type === "Rest" ? "Recovery day." : <span className="muted">{ctx.ro ? "" : "Add a description…"}</span>)}
             {day.duration_min > 0 && <span className="muted"> ~{duration(day.duration_min * 60)}</span>}
           </button>
         )}
@@ -354,8 +387,10 @@ function Day({ day, ctx }) {
           </div>
         )}
         {!editing && <PlatformMatches day={day} ctx={ctx} />}
-        {!editing && <ExtraSessions day={day} types={types} max={ctx.maxSessions} save={save} />}
-        <Actual day={day} tags={tags} save={save} />
+        {!editing && (
+          <ExtraSessions day={day} types={types} max={ctx.maxSessions} save={save} readOnly={ctx.ro} />
+        )}
+        <Actual day={day} tags={tags} save={save} readOnly={ctx.ro} />
         {replanning && (
           <form
             className="card replan day-replan"
@@ -469,8 +504,26 @@ function SegmentLink({ segment }) {
 }
 
 // The day's other sessions (e.g. Strength after the ride): each its own type, text and time.
-function ExtraSessions({ day, types, max, save }) {
+function ExtraSessions({ day, types, max, save, readOnly }) {
   const extras = day.extra_sessions || [];
+  if (readOnly) {
+    return extras.length ? (
+      <div className="extra-sessions">
+        {extras.map((e, i) => (
+          <div key={i} className="extra-session">
+            <span className="muted">+</span> <strong>{e.type}</strong> {e.description}
+            {e.duration_min > 0 && <span className="muted"> ~{duration(e.duration_min * 60)}</span>}
+            {e.intensity.map((c) => (
+              <span key={c} className="badge intensity">
+                {c}
+              </span>
+            ))}
+            {e.segment && <SegmentLink segment={e.segment} />}
+          </div>
+        ))}
+      </div>
+    ) : null;
+  }
   const choices = types.filter((t) => t !== "Rest");
   const canAdd = day.type !== "Rest" && extras.length + 1 < max;
   if (!extras.length && !canAdd) return null;
@@ -558,9 +611,11 @@ function PlatformMatches({ day, ctx }) {
             Using {w.platform ? `${w.platform.name}'s workout` : "a CoachQuest library workout"} instead of the plan's
             "{w.original?.name}".
           </span>
-          <button type="button" className="link-btn small" onClick={() => ctx.restorePlan(day.date)}>
-            Back to the plan's workout
-          </button>
+          {!ctx.ro && (
+            <button type="button" className="link-btn small" onClick={() => ctx.restorePlan(day.date)}>
+              Back to the plan's workout
+            </button>
+          )}
         </span>
       )}
       {matches.map((m) => (
@@ -570,9 +625,11 @@ function PlatformMatches({ day, ctx }) {
             {m.collection && <span className="muted"> · {m.collection}</span>}{" "}
             <span className="muted">({m.score}% match)</span>
           </span>
-          <button type="button" className="link-btn small" onClick={() => ctx.usePlatform(day.date, m)}>
-            Use this
-          </button>
+          {!ctx.ro && (
+            <button type="button" className="link-btn small" onClick={() => ctx.usePlatform(day.date, m)}>
+              Use this
+            </button>
+          )}
         </span>
       ))}
       {lib && (
@@ -581,16 +638,18 @@ function PlatformMatches({ day, ctx }) {
             From the CoachQuest library: <strong>{lib.name}</strong>
             <span className="muted"> · {lib.collection}</span> <span className="muted">({lib.score}% match)</span>
           </span>
-          <button type="button" className="link-btn small" onClick={() => ctx.useLibrary(day.date, lib)}>
-            Use this
-          </button>
+          {!ctx.ro && (
+            <button type="button" className="link-btn small" onClick={() => ctx.useLibrary(day.date, lib)}>
+              Use this
+            </button>
+          )}
         </span>
       )}
     </div>
   );
 }
 
-function Actual({ day, tags, save }) {
+function Actual({ day, tags, save, readOnly }) {
   const a = day.actual;
   const logged = a && (
     <span className="muted">
@@ -608,6 +667,7 @@ function Actual({ day, tags, save }) {
     case "extra":
       return <div className="actual muted">+ Trained on a rest day {logged}</div>;
     case "missed":
+      if (readOnly) return <div className="actual bad-text">✗ Not logged{day.missed_reason ? ` · ${day.missed_reason}` : ""}</div>;
       return (
         <div className="actual bad-text row tight">
           ✗ Not logged
@@ -689,8 +749,9 @@ function DayEditor({ day, segments, onDone }) {
   );
 }
 
-function EditableText({ value, placeholder, onSave, className }) {
+function EditableText({ value, placeholder, onSave, className, readOnly }) {
   const [editing, setEditing] = useState(false);
+  if (readOnly) return value ? <span className={className}>{value}</span> : null;
   if (editing) {
     return (
       <input

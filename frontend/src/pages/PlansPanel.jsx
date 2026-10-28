@@ -6,10 +6,12 @@ import { api } from "../lib/api.js";
 import { dateTime, formatDate } from "../lib/format.js";
 import { MAX_WEEKS, weeksToEvent } from "../lib/planWeeks.js";
 import { localToday } from "../lib/workout.js";
+import { useReadOnly } from "../lib/readOnly.js";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function PlansPanel({ id, athlete }) {
+  const ro = useReadOnly();
   const plans = useApi(`/api/athletes/${id}/plans`);
   const current = useApi(`/api/athletes/${id}/plans/current`);
   const navigate = useNavigate();
@@ -148,187 +150,189 @@ export default function PlansPanel({ id, athlete }) {
           </div>
         </section>
       )}
-      <section className="card">
-        <h2>
-          <Sparkles size={18} /> New plan from the AI coach
-        </h2>
-        <p className="muted small">
-          Claude gets only the data {athlete.is_me ? "you have" : `${athlete.display_name} has`} shared, plus load and
-          readiness facts computed by CoachQuest. Generating can take a minute or two.
-          {athlete.is_me && " If you have a coach, plans you generate wait for their approval before workouts go to your calendar."}
-        </p>
-        {approval.data?.has_coach &&
-          (approval.data.can_change ? (
-            <div className="row wrap small">
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={!approval.data.off}
-                  onChange={(e) => setApproval({ required: e.target.checked })}
-                />{" "}
-                Plans and re-plans {athlete.display_name} asks the AI for wait for a coach's approval
-              </label>
-              {!approval.data.off && (
-                <label className="inline">
-                  If no coach answers, {athlete.display_name} may decide after
-                  <select
-                    value={approval.data.wait_hours}
-                    onChange={(e) => setApproval({ wait_hours: Number(e.target.value) })}
-                  >
-                    <option value={24}>24 hours</option>
-                    <option value={48}>48 hours</option>
-                    <option value={72}>72 hours</option>
-                    <option value={0}>never</option>
-                  </select>
+      {!ro && (
+        <section className="card">
+          <h2>
+            <Sparkles size={18} /> New plan from the AI coach
+          </h2>
+          <p className="muted small">
+            Claude gets only the data {athlete.is_me ? "you have" : `${athlete.display_name} has`} shared, plus load and
+            readiness facts computed by CoachQuest. Generating can take a minute or two.
+            {athlete.is_me && " If you have a coach, plans you generate wait for their approval before workouts go to your calendar."}
+          </p>
+          {approval.data?.has_coach &&
+            (approval.data.can_change ? (
+              <div className="row wrap small">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={!approval.data.off}
+                    onChange={(e) => setApproval({ required: e.target.checked })}
+                  />{" "}
+                  Plans and re-plans {athlete.display_name} asks the AI for wait for a coach's approval
                 </label>
-              )}
-            </div>
-          ) : (
-            <p className="small muted">
-              {approval.data.required
-                ? `Plans and re-plans you ask for wait for your coach's approval before workouts go to your calendar${
-                    approval.data.wait_hours
-                      ? `; if no coach answers within ${approval.data.wait_hours} hours (or the day comes first), you can decide yourself.`
-                      : "."
-                  }`
-                : "Your coach lets your plans and re-plans apply straight away (no approval needed)."}
-            </p>
-          ))}
-        <form className="grid-form" onSubmit={generate}>
-          <label>
-            Title
-            <input value={form.title} onChange={set("title")} required maxLength={200} placeholder="Base block 1" />
-          </label>
-          <label>
-            Goal
-            <input value={form.goal} onChange={set("goal")} required maxLength={500} placeholder="160 km gran fondo" />
-          </label>
-          {upcomingRaces.length > 0 && (
+                {!approval.data.off && (
+                  <label className="inline">
+                    If no coach answers, {athlete.display_name} may decide after
+                    <select
+                      value={approval.data.wait_hours}
+                      onChange={(e) => setApproval({ wait_hours: Number(e.target.value) })}
+                    >
+                      <option value={24}>24 hours</option>
+                      <option value={48}>48 hours</option>
+                      <option value={72}>72 hours</option>
+                      <option value={0}>never</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            ) : (
+              <p className="small muted">
+                {approval.data.required
+                  ? `Plans and re-plans you ask for wait for your coach's approval before workouts go to your calendar${
+                      approval.data.wait_hours
+                        ? `; if no coach answers within ${approval.data.wait_hours} hours (or the day comes first), you can decide yourself.`
+                        : "."
+                    }`
+                  : "Your coach lets your plans and re-plans apply straight away (no approval needed)."}
+              </p>
+            ))}
+          <form className="grid-form" onSubmit={generate}>
             <label>
-              Race
-              <select value="" onChange={(e) => pickRace(e.target.value)}>
-                <option value="">Pick a race to fill in the date…</option>
-                {upcomingRaces.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    🏁 {r.short_name || r.code} · {formatDate(r.target_date)} ({r.days_to_go} days)
-                  </option>
-                ))}
-              </select>
+              Title
+              <input value={form.title} onChange={set("title")} required maxLength={200} placeholder="Base block 1" />
             </label>
-          )}
-          <label>
-            Event date
-            <input
-              type="date"
-              value={form.event_date}
-              onChange={(e) => {
-                setWeeksByHand(false);
-                setMovedAway(null);
-                setForm({ ...form, event_date: e.target.value });
-              }}
-            />
-          </label>
-          <label>
-            Start week
-            <input
-              type="date"
-              value={form.start_date}
-              onChange={(e) => {
-                setMovedAway(null);
-                setForm({ ...form, start_date: e.target.value });
-              }}
-            />
-            <span className="hint">Starts on the first day of that week (Profile → My week starts on). Empty: next week.</span>
-          </label>
-          <label>
-            Weeks
-            <input
-              type="number"
-              min={1}
-              max={MAX_WEEKS}
-              value={form.weeks}
-              onChange={(e) => {
-                setWeeksByHand(true);
-                setForm({ ...form, weeks: e.target.value });
-              }}
-            />
-            {fit?.error && <span className="hint error-text">{fit.error}</span>}
-            {fit && !fit.error && !weeksByHand && (
-              <span className="hint">
-                {away
-                  ? `The event is ${away} weeks away; a plan covers at most ${MAX_WEEKS}, so it starts on ${formatDate(fit.start)}.`
-                  : `${fit.weeks} week${fit.weeks === 1 ? "" : "s"} from ${formatDate(fit.start)} to the event, race week included.`}
-              </span>
+            <label>
+              Goal
+              <input value={form.goal} onChange={set("goal")} required maxLength={500} placeholder="160 km gran fondo" />
+            </label>
+            {upcomingRaces.length > 0 && (
+              <label>
+                Race
+                <select value="" onChange={(e) => pickRace(e.target.value)}>
+                  <option value="">Pick a race to fill in the date…</option>
+                  {upcomingRaces.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      🏁 {r.short_name || r.code} · {formatDate(r.target_date)} ({r.days_to_go} days)
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
-            {fit && !fit.error && weeksByHand && Number(form.weeks) !== fit.weeks && (
+            <label>
+              Event date
+              <input
+                type="date"
+                value={form.event_date}
+                onChange={(e) => {
+                  setWeeksByHand(false);
+                  setMovedAway(null);
+                  setForm({ ...form, event_date: e.target.value });
+                }}
+              />
+            </label>
+            <label>
+              Start week
+              <input
+                type="date"
+                value={form.start_date}
+                onChange={(e) => {
+                  setMovedAway(null);
+                  setForm({ ...form, start_date: e.target.value });
+                }}
+              />
+              <span className="hint">Starts on the first day of that week (Profile → My week starts on). Empty: next week.</span>
+            </label>
+            <label>
+              Weeks
+              <input
+                type="number"
+                min={1}
+                max={MAX_WEEKS}
+                value={form.weeks}
+                onChange={(e) => {
+                  setWeeksByHand(true);
+                  setForm({ ...form, weeks: e.target.value });
+                }}
+              />
+              {fit?.error && <span className="hint error-text">{fit.error}</span>}
+              {fit && !fit.error && !weeksByHand && (
+                <span className="hint">
+                  {away
+                    ? `The event is ${away} weeks away; a plan covers at most ${MAX_WEEKS}, so it starts on ${formatDate(fit.start)}.`
+                    : `${fit.weeks} week${fit.weeks === 1 ? "" : "s"} from ${formatDate(fit.start)} to the event, race week included.`}
+                </span>
+              )}
+              {fit && !fit.error && weeksByHand && Number(form.weeks) !== fit.weeks && (
+                <span className="hint">
+                  The event is in week {fit.weeks}.{" "}
+                  <button type="button" className="link-btn small" onClick={() => setWeeksByHand(false)}>
+                    Use {fit.weeks}
+                  </button>
+                </span>
+              )}
+            </label>
+            <label>
+              Hours per week
+              <input type="number" min={1} max={30} step={0.5} value={form.hours_per_week} onChange={set("hours_per_week")} />
+            </label>
+            <fieldset>
+              <legend>Training days</legend>
               <span className="hint">
-                The event is in week {fit.weeks}.{" "}
-                <button type="button" className="link-btn small" onClick={() => setWeeksByHand(false)}>
-                  Use {fit.weeks}
-                </button>
+                From {athlete.is_me ? "your" : "the athlete's"} weekday preferences (Profile); re-plans follow them too.
               </span>
-            )}
-          </label>
-          <label>
-            Hours per week
-            <input type="number" min={1} max={30} step={0.5} value={form.hours_per_week} onChange={set("hours_per_week")} />
-          </label>
-          <fieldset>
-            <legend>Training days</legend>
-            <span className="hint">
-              From {athlete.is_me ? "your" : "the athlete's"} weekday preferences (Profile); re-plans follow them too.
-            </span>
-            <div className="chips">
-              {DAYS.map((d) => (
-                <button
-                  type="button"
-                  key={d}
-                  className={`chip ${form.available_days.includes(d) ? "on" : ""}`}
-                  onClick={() => toggleDay(d)}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-          <label className="wide">
-            Notes for the AI coach
-            <textarea
-              rows={3}
-              value={form.notes}
-              onChange={set("notes")}
-              maxLength={2000}
-              placeholder="Indoor trainer on weekdays, knee niggle, travelling week 3…"
-            />
-          </label>
-          {!athlete.is_me && (
+              <div className="chips">
+                {DAYS.map((d) => (
+                  <button
+                    type="button"
+                    key={d}
+                    className={`chip ${form.available_days.includes(d) ? "on" : ""}`}
+                    onClick={() => toggleDay(d)}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
             <label className="wide">
-              Coach's notes (the AI coach must follow these)
+              Notes for the AI coach
               <textarea
                 rows={3}
-                value={form.coach_notes}
-                onChange={set("coach_notes")}
+                value={form.notes}
+                onChange={set("notes")}
                 maxLength={2000}
-                placeholder="e.g. No intervals before the race recce; keep week 3 easy; long ride on Saturday"
+                placeholder="Indoor trainer on weekdays, knee niggle, travelling week 3…"
               />
-              <span className="hint">Shown on the plan, so {athlete.display_name} sees what shaped it.</span>
             </label>
-          )}
-          <label className="check wide">
-            <input
-              type="checkbox"
-              checked={form.structured_workouts}
-              onChange={(e) => setForm({ ...form, structured_workouts: e.target.checked })}
-            />
-            Turn indoor sessions into structured workouts on the calendar (sent to Zwift through Intervals.icu when
-            auto-send is on)
-          </label>
-          {error && <div className="error wide">{error}</div>}
-          <button className="btn primary" disabled={busy}>
-            {busy ? "Writing your plan…" : "Generate plan"}
-          </button>
-        </form>
-      </section>
+            {!athlete.is_me && (
+              <label className="wide">
+                Coach's notes (the AI coach must follow these)
+                <textarea
+                  rows={3}
+                  value={form.coach_notes}
+                  onChange={set("coach_notes")}
+                  maxLength={2000}
+                  placeholder="e.g. No intervals before the race recce; keep week 3 easy; long ride on Saturday"
+                />
+                <span className="hint">Shown on the plan, so {athlete.display_name} sees what shaped it.</span>
+              </label>
+            )}
+            <label className="check wide">
+              <input
+                type="checkbox"
+                checked={form.structured_workouts}
+                onChange={(e) => setForm({ ...form, structured_workouts: e.target.checked })}
+              />
+              Turn indoor sessions into structured workouts on the calendar (sent to Zwift through Intervals.icu when
+              auto-send is on)
+            </label>
+            {error && <div className="error wide">{error}</div>}
+            <button className="btn primary" disabled={busy}>
+              {busy ? "Writing your plan…" : "Generate plan"}
+            </button>
+          </form>
+        </section>
+      )}
       <section className="card">
         <h2>Saved plans</h2>
         {plans.data?.length ? (
@@ -342,9 +346,11 @@ export default function PlansPanel({ id, athlete }) {
                 <span className="muted small">
                   {p.request?.weeks} weeks · by {p.author} · {dateTime(p.created_at)}
                 </span>
-                <button className="icon-btn" aria-label="Delete plan" onClick={() => remove(p.id)}>
-                  <Trash2 size={16} />
-                </button>
+                {!ro && (
+                  <button className="icon-btn" aria-label="Delete plan" onClick={() => remove(p.id)}>
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
