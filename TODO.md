@@ -2,6 +2,13 @@
 
 ## Next up
 
+- [ ] **Admin → Platform workouts: collapse the screen.**
+      With 1,177 workouts the section is pages and pages of collections.
+      Make the whole section collapsible (collapsed by default, showing just
+      the counts and search), group collections by series (e.g. "2018 PRL100
+      Prep" with its weeks inside), sort weeks in number order (Week 2 before
+      Week 10), and show the first 20 groups with "Show more".
+
 - [x] **Show clearly on the calendar when a session was done (emoji).**
       A done workout only shows a small "✓ Done" line, easy to miss next to
       "✓ Intervals.icu". Make done days stand out at a glance, e.g. an emoji
