@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
+import { useReadOnly } from "../lib/readOnly.js";
 
 const DAYS = [
   ["mon", "Mon"],
@@ -14,8 +15,13 @@ const DAYS = [
   ["sun", "Sun"],
 ];
 
-export default function TrainingPreferences() {
-  const res = useApi("/api/athletes/me/preferences");
+// The athlete's own (Profile, id "me"), or an athlete's for their coach (plans tab): coaches with
+// the plans scope edit weekdays and strength options; note tags stay the athlete's.
+export default function TrainingPreferences({ id = "me" }) {
+  const self = id === "me";
+  const readOnly = useReadOnly();
+  const url = `/api/athletes/${id}/preferences`;
+  const res = useApi(url);
   const [prefs, setPrefs] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => {
@@ -25,7 +31,7 @@ export default function TrainingPreferences() {
   const save = async (body) => {
     setError(null);
     try {
-      setPrefs(await api("/api/me/preferences", { method: "PUT", body }));
+      setPrefs(await api(url, { method: "PUT", body }));
     } catch (err) {
       setError(err.message);
       res.reload();
@@ -34,16 +40,18 @@ export default function TrainingPreferences() {
   if (!prefs) return null;
   return (
     <>
-      <WeekdayPrefs prefs={prefs} setPrefs={setPrefs} save={save} />
-      <StrengthOptions prefs={prefs} save={save} />
-      <NoteTags prefs={prefs} setPrefs={setPrefs} save={save} setError={setError} />
+      <WeekdayPrefs prefs={prefs} setPrefs={setPrefs} save={save} self={self} readOnly={readOnly} />
+      <StrengthOptions prefs={prefs} save={save} self={self} readOnly={readOnly} />
+      {self && <NoteTags prefs={prefs} setPrefs={setPrefs} save={save} setError={setError} />}
       {error && <div className="error">{error}</div>}
     </>
   );
 }
 
-function WeekdayPrefs({ prefs, setPrefs, save }) {
-  const weekStart = useAuth().user.week_start || 0; // follows Profile at once, before prefs reload
+function WeekdayPrefs({ prefs, setPrefs, save, self, readOnly }) {
+  const auth = useAuth();
+  // Your own follows Profile at once, before prefs reload; an athlete's follows theirs.
+  const weekStart = (self ? auth.user.week_start : prefs.week_start) || 0;
   const max = prefs.max_per_day || 1;
   const [full, setFull] = useState(null); // the day that hit the limit, for the hint
   const toggle = (day, type) => {
@@ -65,10 +73,17 @@ function WeekdayPrefs({ prefs, setPrefs, save }) {
   return (
     <section className="card">
       <h2>Weekday preferences</h2>
+      {!self && (
+        <p className="small">
+          {readOnly
+            ? "What this athlete does on each day of the week. The AI coach plans these types on these days."
+            : "What this athlete does on each day of the week. You can change it: the athlete sees your change in their Profile, and the AI coach uses it the next time it plans or re-plans."}
+        </p>
+      )}
       <p className="muted small">
         {max > 1
-          ? `What you do on each day of the week: pick up to ${max} types a day, e.g. Zwift / indoor + Strength. The AI coach plans every one of them that day, as separate sessions. `
-          : "What you do on each day of the week: pick one type per day. The AI coach plans that type on that day. "}
+          ? `${self ? "What you do on each day of the week: p" : "P"}ick up to ${max} types a day, e.g. Zwift / indoor + Strength. The AI coach plans every one of them that day, as separate sessions. `
+          : `${self ? "What you do on each day of the week: p" : "P"}ick one type per day. The AI coach plans that type on that day. `}
         Click a type again to remove it. Rest clears the day's other types and stays free. Saved as you click.
       </p>
       <div className="weekday-grid">
@@ -84,6 +99,7 @@ function WeekdayPrefs({ prefs, setPrefs, save }) {
                     type="button"
                     aria-pressed={on}
                     className={`chip ${on ? "on" : ""}`}
+                    disabled={readOnly}
                     onClick={() => toggle(day, type)}
                   >
                     {type}
@@ -172,7 +188,7 @@ function NoteTags({ prefs, setPrefs, save, setError }) {
 }
 
 // Strength options for the AI coach (backend strength.py): equipment, level, sports, how much.
-function StrengthOptions({ prefs, save }) {
+function StrengthOptions({ prefs, save, self, readOnly }) {
   const [form, setForm] = useState(prefs.strength);
   const [saved, setSaved] = useState(false);
   const opts = prefs.strength_options;
@@ -194,6 +210,7 @@ function StrengthOptions({ prefs, save }) {
           type="button"
           aria-pressed={form[key].includes(v)}
           className={`chip ${form[key].includes(v) ? "on" : ""}`}
+          disabled={readOnly}
           onClick={() => (toggle(key, v), setSaved(false))}
         >
           {v}
@@ -209,7 +226,9 @@ function StrengthOptions({ prefs, save }) {
         reps, effort and rest, heavier in base and build, lighter in race season. It only picks exercises you can do
         with this equipment.
       </p>
+      {!self && <p className="small">This athlete's strength options{readOnly ? "." : ": you can change them."}</p>}
       <form className="stack" onSubmit={submit} onChange={() => setSaved(false)}>
+        <fieldset className="stack" disabled={readOnly}>
         <div>
           <span className="small strong-label">Equipment I have</span>
           {chips("equipment", opts.equipment)}
@@ -261,10 +280,13 @@ function StrengthOptions({ prefs, save }) {
             onChange={(e) => setForm({ ...form, limits: e.target.value })}
           />
         </label>
-        <div className="row">
-          <button className="btn primary">Save strength options</button>
-          {saved && <span className="ok-text small">Saved. Used the next time the AI coach plans.</span>}
-        </div>
+        </fieldset>
+        {!readOnly && (
+          <div className="row">
+            <button className="btn primary">Save strength options</button>
+            {saved && <span className="ok-text small">Saved. Used the next time the AI coach plans.</span>}
+          </div>
+        )}
       </form>
     </section>
   );

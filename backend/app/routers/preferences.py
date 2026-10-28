@@ -130,6 +130,28 @@ def set_preferences(body: PreferencesIn, user: User = Depends(current_user), db:
     return preferences_out(user)
 
 
+@router.put("/athletes/{athlete}/preferences")
+def set_athlete_preferences(
+    athlete: str, body: PreferencesIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """A coach with the plans scope sets the athlete's weekday preferences and strength options.
+
+    Note tags stay the athlete's own (they tag their activities with them)."""
+    athlete_id = resolve_athlete_id(athlete, user)
+    if athlete_id == user.id:
+        return set_preferences(body, user, db)
+    require_scope(db, user, athlete_id, "plans")
+    if body.note_tags is not None:
+        raise HTTPException(status_code=403, detail="Only the athlete changes their activity note tags")
+    target = db.get(User, athlete_id)
+    if body.weekday_prefs is not None:
+        target.weekday_prefs = body.weekday_prefs
+    if body.strength is not None:
+        target.strength_prefs = body.strength
+    db.commit()
+    return preferences_out(target)
+
+
 @router.post("/me/note-tags/rename")
 def rename_tag(body: TagRename, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     """Rename a tag everywhere: in the list and on activities already tagged with it."""

@@ -107,3 +107,31 @@ def test_apply_preferences_gives_each_day_all_its_sessions():
     # Rest clears the extra sessions.
     plan_tracker.apply_preferences(weeks, {"tue": ["Rest"]}, date(2030, 1, 1))
     assert day["tue"]["type"] == "Rest" and day["tue"]["extra_sessions"] == []
+
+
+def test_coach_with_plans_scope_edits_weekdays_and_strength(make_user):
+    athlete = make_user("a@example.com")
+    coach = make_user("c@example.com")
+    aid = athlete.get("/api/auth/me").json()["id"]
+    g = athlete.post("/api/grants", json={"coach_email": "c@example.com", "scopes": ["plans"]}).json()
+    coach.post(f"/api/grants/{g['id']}/accept")
+    url = f"/api/athletes/{aid}/preferences"
+    r = coach.request("PUT", url, json={"weekday_prefs": {"tue": ["Zwift / indoor", "Strength"], "mon": ["Rest"]}})
+    assert r.status_code == 200, r.text
+    assert athlete.get("/api/athletes/me/preferences").json()["weekday_prefs"]["tue"] == ["Zwift / indoor", "Strength"]
+    strength = {"equipment": ["dumbbells"], "level": "beginner", "sports": ["running"]}
+    assert coach.request("PUT", url, json={"strength": strength}).json()["strength"]["sports"] == ["running"]
+    assert coach.request("PUT", url, json={"note_tags": ["x"]}).status_code == 403
+    assert coach.request("PUT", url, json={"weekday_prefs": {"mon": ["Rest", "Road"]}}).status_code == 422
+    # The athlete can use the same address for themselves.
+    assert athlete.request("PUT", "/api/athletes/me/preferences", json={"note_tags": ["x"]}).status_code == 200
+
+
+def test_coach_without_plans_scope_cannot_edit(make_user):
+    athlete = make_user("a@example.com")
+    coach = make_user("c@example.com")
+    aid = athlete.get("/api/auth/me").json()["id"]
+    g = athlete.post("/api/grants", json={"coach_email": "c@example.com", "scopes": ["activities"]}).json()
+    coach.post(f"/api/grants/{g['id']}/accept")
+    r = coach.request("PUT", f"/api/athletes/{aid}/preferences", json={"weekday_prefs": {"mon": ["Rest"]}})
+    assert r.status_code == 404
