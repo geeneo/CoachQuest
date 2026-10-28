@@ -2,7 +2,7 @@
 
 ## Next up
 
-- [ ] **Guide (News & guides): link Intervals.icu with Zwift so plan workouts show in Zwift.**
+- [x] **Guide (News & guides): link Intervals.icu with Zwift so plan workouts show in Zwift.**
       A how-to post (posts_seed.py, like the routes & segments guide):
       CoachQuest → Intervals.icu calendar → Zwift.
       1. CoachQuest: connect Intervals.icu on Connections; plan workouts are
@@ -15,9 +15,10 @@
       CoachQuest, Intervals.icu and Zwift (targets are % FTP); HR targets
       aren't supported; not syncing → check the workout is % FTP (not HR),
       wait a day, or disconnect and reconnect Zwift in Intervals.icu.
-      Also check: CoachQuest sends workouts as type "Ride"; forum replies
-      say Zwift wants them marked indoor (VirtualRide) — test and fix.
-      Videos: youtube.com/shorts/T207hvyiQ74 (Nina Nygaard, create a Zwift
+      Done: workouts now go to Intervals.icu with "indoor": true (its API's
+      flag; Zwift only takes indoor workouts).
+      Videos: youtube.com/watch?v=UcodSWxvZdQ&t=145s (TheCycloBrewer, Zwift
+      custom workout scheduling), youtube.com/shorts/T207hvyiQ74 (Nina Nygaard, create a Zwift
       workout on intervals.icu), youtube.com/watch?v=Qkqgb51NIHY (syncing
       Intervals.icu to Zwift and others).
       Docs: forum.intervals.icu/t/intervals-icu-and-zwift-integration-is-live/81764,

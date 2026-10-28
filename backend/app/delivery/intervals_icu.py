@@ -184,6 +184,8 @@ class IntervalsIcu(Adapter):
             "category": "WORKOUT",
             "start_date_local": f"{day.isoformat()}T00:00:00",
             "type": "Ride",
+            # Trainer workouts: Intervals.icu passes indoor ones on to Zwift (the coming 7 days).
+            "indoor": True,
             "name": workout["name"],
             "filename": zwo.filename(workout["name"]),
             "file_contents": zwo.zwo(workout),

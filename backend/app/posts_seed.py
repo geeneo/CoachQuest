@@ -164,8 +164,9 @@ Open **My training → Plans → Favourite routes & segments**. Then either:
   - a route: `strava.com/routes/…`
   - a segment: `strava.com/segments/…`
   - a ride you did: `strava.com/activities/…` (saved as a route, "from a ride")
-- Or click **From my Strava** to pick from your starred segments and your routes on Strava, and
-  click **Add**. Private routes on Strava don't show up there; paste their link instead.
+- Or click **From my Strava**, tick your starred segments and routes on Strava (several at once),
+  and click **Add to favourites**. Routes missing? Connect Strava again on **Connections** and
+  allow it to see your private routes.
 
 With Strava connected, the length, climbing, gradient and time are filled in for you.
 
@@ -184,7 +185,7 @@ Make a new plan, or click **Re-plan from this week** on your plan. The AI coach 
 
 - plans outdoor rides on a route whose length and ticks fit, and takes the ride's time from it;
 - plans hill repeats and efforts on a segment ("6 x Kendal climb at 95-105% FTP, easy back down");
-- on indoor days, gives the same efforts and names the climb for reference.
+- keeps indoor days to their structured workout, without a route or segment.
 
 ## 4. Or put a route on a day yourself
 
@@ -281,6 +282,77 @@ See the guide *Strength training with the AI coach* for the steps.
 """,
 )
 
+ZWIFT_GUIDE = (
+    "Get your plan into Zwift: link Intervals.icu with Zwift",
+    "Step by step: CoachQuest puts your workouts on your Intervals.icu calendar, and Zwift picks them up.",
+    """Your plan's indoor workouts can wait for you in Zwift, ready to ride in ERG mode. CoachQuest
+can't send them to Zwift directly, but Intervals.icu (free) can, so the chain is:
+
+**CoachQuest → Intervals.icu calendar → Zwift**
+
+## 1. Connect Intervals.icu in CoachQuest
+
+1. Open **Connections**.
+2. On the **Intervals.icu** card, click **Connect Intervals.icu** and allow CoachQuest to write to
+   your calendar. (No account yet? Make one at [intervals.icu](https://intervals.icu), it's free.)
+3. Under **Connected platforms**, tick **Auto-send workouts** for Intervals.icu.
+
+From now on, every workout on your **Calendar** from today on is put on your Intervals.icu
+calendar, and kept up to date when you change, move or delete it.
+
+## 2. Link Zwift in Intervals.icu
+
+1. In Intervals.icu, open **Settings** and find the **Zwift** box.
+2. Click **Connect**. Zwift opens: make sure you're logged in to the Zwift account you ride with,
+   and accept.
+3. Back in Intervals.icu, choose what to upload to Zwift: tick workouts for **Rides**. You can also
+   let it download your Zwift rides (they then come straight from Zwift instead of through Strava).
+
+## 3. Ride it in Zwift
+
+- **Today's workout** shows on the Zwift home screen when you log in.
+- **The coming week** is under **Workouts → Custom → Intervals.icu**.
+
+## 4. Keep your FTP the same everywhere
+
+Power targets are a percentage of FTP, so set the same FTP in CoachQuest (**Profile**),
+Intervals.icu (**Settings → Sports → Ride**) and Zwift. Otherwise Zwift asks for different watts
+than your plan.
+
+## Good to know
+
+- Intervals.icu sends **the next 7 days** to Zwift, every day. A workout further out arrives later;
+  past ones are taken off.
+- CoachQuest sends workouts as indoor rides, which is what Zwift takes. Workouts you make yourself
+  in Intervals.icu need **Indoor** ticked too.
+- Targets are power (% of FTP) and cadence; heart-rate targets don't carry over to Zwift.
+- **Connections → Workout delivery** in CoachQuest shows what was sent, and lets you retry anything
+  that failed.
+
+## Not showing up in Zwift?
+
+1. Check the workout is on your Intervals.icu calendar (if not, look at **Workout delivery**).
+2. Check it's within the next 7 days.
+3. Close Zwift and log in again: workouts are loaded when Zwift starts.
+4. Still nothing? In Intervals.icu **Settings → Zwift**, disconnect and connect again. Zwift
+   support suggests this for workouts that stop syncing.
+
+## Watch how it's done
+
+- TheCycloBrewer: [Zwift custom workout scheduling with Intervals.icu](https://www.youtube.com/watch?v=UcodSWxvZdQ&t=145s)
+- [How to sync Intervals.icu to Zwift and other apps](https://www.youtube.com/watch?v=Qkqgb51NIHY)
+- Nina Nygaard: [create a Zwift workout on Intervals.icu](https://www.youtube.com/shorts/T207hvyiQ74)
+
+## More help
+
+- [Intervals.icu and Zwift integration is live](https://forum.intervals.icu/t/intervals-icu-and-zwift-integration-is-live/81764)
+  (the Intervals.icu forum, setup and questions)
+- [Intervals.icu announces Zwift integration](https://zwiftinsider.com/intervals-integration/) (Zwift Insider)
+- [Planned workouts not syncing to Zwift](https://forum.intervals.icu/t/solved-planned-workouts-not-syncing-to-zwift/97528)
+  (fixes others found)
+""",
+)
+
 # Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
 POSTS = [
     *(
@@ -292,6 +364,7 @@ POSTS = [
     {"key": "routes-news", "kind": "news", "position": 0, "published": True, "post": ROUTES_NEWS},
     {"key": "strength", "kind": "guide", "position": 27, "published": True, "post": STRENGTH_GUIDE},
     {"key": "strength-news", "kind": "news", "position": 0, "published": True, "post": STRENGTH_NEWS},
+    {"key": "zwift-intervals", "kind": "guide", "position": 15, "published": True, "post": ZWIFT_GUIDE},
 ]
 FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
 SEEDED = "posts_seeded"

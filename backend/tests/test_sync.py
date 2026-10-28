@@ -185,6 +185,7 @@ def test_assign_sends_once_and_updates_in_place(make_user, fake):
     assert path == "/api/v1/athlete/0/events/bulk?upsert=true"
     e = events[0]
     assert e["external_id"] == f"cq-{sw['id']}" and e["category"] == "WORKOUT" and e["type"] == "Ride"
+    assert e["indoor"] is True  # or Zwift doesn't take it from Intervals.icu
     assert e["start_date_local"] == f"{sw['date']}T00:00:00" and e["filename"].endswith(".zwo")
     assert "<workout_file>" in e["file_contents"] and 'Power="0.75"' in e["file_contents"]
     cal = a.get(f"/api/athletes/me/calendar?start={sw['date']}&end={sw['date']}").json()
