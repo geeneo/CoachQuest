@@ -107,6 +107,60 @@ async def add_segment(
     return segments.segment_out(s)
 
 
+class StravaPick(BaseModel):
+    kind: str = Field(pattern="^(route|segment)$")
+    strava_id: int
+
+
+class FromStrava(BaseModel):
+    items: list[StravaPick] = Field(min_length=1, max_length=200)
+    uses: list[str] = Field(default_factory=list, max_length=8)
+
+
+# What a pick is for when none is ticked: routes are rides, segments are efforts.
+DEFAULT_USES = {"route": ["endurance"], "segment": ["hill repeats"]}
+
+
+@router.post("/from-strava")
+async def add_from_strava(
+    athlete: str, body: FromStrava, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """Save several of the athlete's Strava routes and starred segments at once.
+
+    Details come from Strava's list (one call each for segments and routes), not from the request;
+    ones already saved are skipped."""
+    athlete_id = _athlete_id(db, user, athlete)
+    conn = _strava(db, athlete_id)
+    if conn is None:
+        raise HTTPException(status_code=409, detail="Strava isn't linked: connect it on Connections first")
+    try:
+        found = await strava.favourites(db, conn)
+    except (httpx.HTTPError, LookupError, KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=502, detail="Strava didn't answer; try again in a minute") from None
+    wanted = {(p.kind, p.strava_id) for p in body.items}
+    have = {s.strava_id for s in segments.for_athlete(db, athlete_id)}
+    uses = segments.clean_uses(body.uses)
+    added = []
+    for f in found:
+        if (f["kind"], f["strava_id"]) not in wanted or f["strava_id"] in have:
+            continue
+        have.add(f["strava_id"])
+        details = {k: v for k, v in f.items() if k not in ("kind", "strava_id", "name")}
+        s = Segment(
+            athlete_id=athlete_id,
+            strava_id=f["strava_id"],
+            kind=f["kind"],
+            name=f["name"] or f"Strava {f['kind']} {f['strava_id']}",
+            added_by=user.id,
+            uses=uses or DEFAULT_USES[f["kind"]],
+            **details,
+        )
+        db.add(s)
+        added.append(s)
+    db.commit()
+    return {"added": [segments.segment_out(s) for s in added]}
+
+
 def _imported_ride(db: DbSession, athlete_id: int, strava_id: int) -> dict:
     """A ride the athlete did, from the activities already imported from Strava (no Strava call)."""
     a = db.scalar(

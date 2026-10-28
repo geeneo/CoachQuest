@@ -2,7 +2,7 @@
 
 ## Next up
 
-- [ ] **Load favourite routes & segments from Strava, picking several at once.**
+- [x] **Load favourite routes & segments from Strava, picking several at once.**
       In Favourite routes & segments, "From my Strava" lists the athlete's
       starred segments and saved routes, but each one is added with its own
       Add button. Make it a picker: show Routes and Segments (filter to one

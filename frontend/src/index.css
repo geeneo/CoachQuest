@@ -2002,3 +2002,31 @@ ul.segments li {
   fill: var(--muted);
   font-size: 9px;
 }
+.strava-picker .pick-all,
+.strava-picker .picks li label {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+.strava-picker .pick-all {
+  margin-top: 10px;
+}
+.strava-picker input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  flex: none;
+  align-self: center;
+}
+.strava-picker .picks {
+  max-height: 360px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+.strava-picker .picks li {
+  padding: 0.35rem 0;
+  justify-content: flex-start;
+}

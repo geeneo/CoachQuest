@@ -266,3 +266,38 @@ def test_calendar_shows_the_route(make_user, planner):  # noqa: F811
     cal = athlete.get(f"/api/athletes/me/calendar?start={sat}&end={sat}").json()
     day = next(d for d in cal["days"] if d["date"] == sat)
     assert day["plan"]["segment"]["name"] == "Franschhoek loop" and day["plan"]["segment"]["kind"] == "route"
+
+
+def test_add_several_from_strava_at_once(make_user, monkeypatch):
+    p = make_user("rider@example.com")
+    uid = p.get("/api/auth/me").json()["id"]
+    url = "/api/athletes/me/segments/from-strava"
+    pick = {"items": [{"kind": "route", "strava_id": 7}]}
+    assert p.post(url, json=pick).status_code == 409  # not linked
+    _strava(uid)
+
+    async def fake_favourites(db, conn):
+        return [
+            {"kind": "segment", "strava_id": 1, "name": "Helshoogte", "distance_m": 6100, "avg_grade": 5.2},
+            {"kind": "segment", "strava_id": 2, "name": "Franschhoek Pass", "distance_m": 9000, "avg_grade": 4.1},
+            {"kind": "route", "strava_id": 7, "name": "Long loop", "distance_m": 121000, "est_minutes": 270},
+        ]
+
+    monkeypatch.setattr(strava, "favourites", fake_favourites)
+    body = {
+        "items": [
+            {"kind": "segment", "strava_id": 1},
+            {"kind": "route", "strava_id": 7},
+            {"kind": "segment", "strava_id": 999},  # not on the athlete's Strava: skipped
+        ]
+    }
+    added = p.post(url, json=body).json()["added"]
+    assert [(a["kind"], a["name"]) for a in added] == [("segment", "Helshoogte"), ("route", "Long loop")]
+    assert added[0]["uses"] == ["hill repeats"] and added[1]["uses"] == ["endurance"]  # defaults per kind
+    assert added[1]["est_minutes"] == 270
+    # Uses for all picked; ones already saved are skipped.
+    body = {"items": [{"kind": "segment", "strava_id": 1}, {"kind": "segment", "strava_id": 2}], "uses": ["intervals"]}
+    added = p.post(url, json=body).json()["added"]
+    assert [(a["name"], a["uses"]) for a in added] == [("Franschhoek Pass", ["intervals"])]
+    assert len(p.get("/api/athletes/me/segments").json()["favourites"]) == 3
+    assert p.post(url, json={"items": [{"kind": "ride", "strava_id": 1}]}).status_code == 422

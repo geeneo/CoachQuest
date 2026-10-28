@@ -60,10 +60,18 @@ export default function Segments({ id, readOnly }) {
       setFromStrava(null);
     }
   };
-  const addFromStrava = async (f) => {
-    const link = `https://www.strava.com/${f.kind === "route" ? "routes" : "segments"}/${f.strava_id}`;
-    if (await call("", "POST", { link, name: f.name, uses: f.kind === "route" ? ["endurance"] : ["hill repeats"] }))
-      setFromStrava(fromStrava.filter((x) => x !== f));
+  const addFromStrava = async (items, uses) => {
+    setError(null);
+    try {
+      const { added } = await api(`${url}/from-strava`, { method: "POST", body: { items, uses } });
+      const done = new Set(added.map((a) => `${a.kind}:${a.strava_id}`));
+      setFromStrava(fromStrava.filter((f) => !done.has(`${f.kind}:${f.strava_id}`)));
+      res.reload();
+      return added.length;
+    } catch (e) {
+      setError(e.message);
+      return null;
+    }
   };
   const d = res.data;
   const list = d?.favourites || [];
@@ -142,31 +150,7 @@ export default function Segments({ id, readOnly }) {
             </div>
           )}
           {Array.isArray(fromStrava) && (
-            <div className="card inset">
-              {fromStrava.length ? (
-                <ul className="list segments">
-                  {fromStrava.map((f) => (
-                    <li key={`${f.kind}${f.strava_id}`}>
-                      <span>
-                        {KIND[f.kind][1]} <strong>{f.name}</strong>
-                        <span className="muted small">{stats(f).map((x) => ` · ${x}`).join("")}</span>
-                      </span>
-                      <button type="button" className="btn small" onClick={() => addFromStrava(f)}>
-                        Add
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted small">
-                  Nothing new on Strava: star segments or save routes there, then look again. (Private routes stay
-                  hidden.)
-                </p>
-              )}
-              <button type="button" className="link-btn small" onClick={() => setFromStrava(null)}>
-                Close
-              </button>
-            </div>
+            <StravaPicker found={fromStrava} uses={uses} add={addFromStrava} close={() => setFromStrava(null)} />
           )}
           <form className="stack favourite-form" onSubmit={add}>
             <div className="row wrap">
@@ -218,5 +202,113 @@ export default function Segments({ id, readOnly }) {
       )}
       {error && <div className="error">{error}</div>}
     </section>
+  );
+}
+
+// The athlete's Strava routes and starred segments: filter, tick several (or a whole group), say what
+// they're for, add them together (POST /segments/from-strava).
+function StravaPicker({ found, uses, add, close }) {
+  const [show, setShow] = useState("both"); // both | route | segment
+  const [picked, setPicked] = useState(() => new Set());
+  const [pickUses, setPickUses] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(null);
+  const key = (f) => `${f.kind}:${f.strava_id}`;
+  const flip = (keys, on) => {
+    const next = new Set(picked);
+    keys.forEach((k) => (on ? next.add(k) : next.delete(k)));
+    setPicked(next);
+    setDone(null);
+  };
+  const submit = async () => {
+    setBusy(true);
+    const items = found.filter((f) => picked.has(key(f))).map((f) => ({ kind: f.kind, strava_id: f.strava_id }));
+    const n = await add(items, pickUses);
+    setBusy(false);
+    if (n != null) {
+      setPicked(new Set());
+      setDone(n);
+    }
+  };
+  if (!found.length && done == null) {
+    return (
+      <div className="card inset">
+        <p className="muted small">
+          Nothing new on Strava: star segments or save routes there, then look again. (Private routes stay hidden.)
+        </p>
+        <button type="button" className="link-btn small" onClick={close}>
+          Close
+        </button>
+      </div>
+    );
+  }
+  const groups = ["route", "segment"].filter((k) => show === "both" || show === k);
+  return (
+    <div className="card inset strava-picker">
+      <div className="chips tight" role="group" aria-label="Show">
+        {[
+          ["both", "Routes and segments"],
+          ["route", "Routes"],
+          ["segment", "Segments"],
+        ].map(([v, label]) => (
+          <button key={v} type="button" className={`chip small ${show === v ? "on" : ""}`} onClick={() => setShow(v)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {groups.map((kind) => {
+        const list = found.filter((f) => f.kind === kind);
+        if (!list.length) return null;
+        const keys = list.map(key);
+        const all = keys.every((k) => picked.has(k));
+        return (
+          <div key={kind} className="favourite-group">
+            <label className="pick-all">
+              <input type="checkbox" checked={all} onChange={() => flip(keys, !all)} />
+              <strong>
+                {KIND[kind][1]} {KIND[kind][0]}
+              </strong>{" "}
+              <span className="muted small">
+                {list.length} on Strava · select all
+              </span>
+            </label>
+            <ul className="list segments picks">
+              {list.map((f) => (
+                <li key={key(f)}>
+                  <label>
+                    <input type="checkbox" checked={picked.has(key(f))} onChange={(e) => flip([key(f)], e.target.checked)} />{" "}
+                    <strong>{f.name}</strong>
+                    <span className="muted small">{stats(f).map((x) => ` · ${x}`).join("")}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+      <div className="small strong-label">What they're for</div>
+      <div className="chips tight" aria-label="What they're for">
+        {uses.map((u) => (
+          <button
+            key={u}
+            type="button"
+            className={`chip small ${pickUses.includes(u) ? "on" : ""}`}
+            onClick={() => setPickUses(pickUses.includes(u) ? pickUses.filter((x) => x !== u) : [...pickUses, u])}
+          >
+            {u}
+          </button>
+        ))}
+      </div>
+      <p className="muted small">None ticked: routes are for endurance, segments for hill repeats. Change each later.</p>
+      <div className="row wrap">
+        <button type="button" className="btn primary" disabled={!picked.size || busy} onClick={submit}>
+          {busy ? "Adding…" : `Add ${picked.size || ""} to favourites`}
+        </button>
+        <button type="button" className="link-btn small" onClick={close}>
+          Close
+        </button>
+        {done != null && <span className="ok-text small">Added {done}.</span>}
+      </div>
+    </div>
   );
 }
