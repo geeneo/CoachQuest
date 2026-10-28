@@ -1201,8 +1201,20 @@ const LENGTHS = {
   long: ["Over 75 min", (s) => s > 4500],
 };
 
-// The catalog grouped by collection (Zwift's plans, e.g. "Gravel Grinder"), collapsed, with search and bulk delete.
+// A collection's series: "2018 PRL100 Prep • Week 3" is in "2018 PRL100 Prep"; other names are their own.
+const SERIES_PART = /^(.*?)[\s•·:|–—-]*\b(?:week|wk|day|part|stage|phase|block)\s*\d+\b.*$/i;
+function seriesOf(collection) {
+  const m = collection.match(SERIES_PART);
+  return m && m[1].trim() ? m[1].trim() : collection;
+}
+const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }); // Week 2 before 10
+const SERIES_PAGE = 20;
+
+// The catalog by series and collection (Zwift's plans, e.g. "Gravel Grinder"): closed until browsed or
+// searched, 20 series at a time, with search and bulk delete.
 function CatalogBrowser({ d, reload, setMsg }) {
+  const [browsing, setBrowsing] = useState(false);
+  const [limit, setLimit] = useState(SERIES_PAGE);
   const [q, setQ] = useState("");
   const [only, setOnly] = useState("all");
   const [length, setLength] = useState("all");
@@ -1233,8 +1245,17 @@ function CatalogBrowser({ d, reload, setMsg }) {
         });
       by.get(key).items.push(w);
     }
-    return [...by.values()].sort((a, b) => a.platform.localeCompare(b.platform) || a.name.localeCompare(b.name));
+    const sorted = [...by.values()].sort((a, b) => a.platform.localeCompare(b.platform) || byName(a.name, b.name));
+    // Then the collections of a series together ("2018 PRL100 Prep" with its weeks).
+    const series = new Map();
+    for (const g of sorted) {
+      const key = `${g.platform}|${seriesOf(g.name)}`;
+      if (!series.has(key)) series.set(key, { key, platform: g.platform, name: seriesOf(g.name), groups: [] });
+      series.get(key).groups.push(g);
+    }
+    return [...series.values()];
   }, [shown]);
+  const showing = browsing || !!needle;
   // While searching, every group with a hit is open; otherwise the ones the admin opened.
   const isOpen = (g) => (needle ? true : open.has(g.key));
   const toggleOpen = (g) =>
@@ -1295,97 +1316,164 @@ function CatalogBrowser({ d, reload, setMsg }) {
             </option>
           ))}
         </select>
-        <button className="link-btn small" onClick={() => setOpen(new Set(groups.map((g) => g.key)))}>
-          Expand all
-        </button>
-        <button className="link-btn small" onClick={() => setOpen(new Set())}>
-          Collapse all
-        </button>
-      </div>
-      <div className="row wrap delete-bar">
-        <label className="check small">
-          <input type="checkbox" checked={allShownPicked} onChange={(e) => setMany(shownIds, e.target.checked)} />
-          Select all {shown.length.toLocaleString()} shown
-        </label>
-        <button
-          className="btn small danger"
-          disabled={busy || !pickedIds.length}
-          onClick={() => remove(pickedIds, `${pickedIds.length} selected workout${pickedIds.length === 1 ? "" : "s"}`)}
-        >
-          Delete selected{pickedIds.length ? ` (${pickedIds.length})` : ""}
-        </button>
-        {pickedIds.length > 0 && (
-          <button className="link-btn small" onClick={() => setPicked(new Set())}>
-            Clear selection
+        {showing ? (
+          <>
+            <button
+              className="link-btn small"
+              onClick={() => setOpen(new Set(groups.flatMap((sr) => [sr.key, ...sr.groups.map((g) => g.key)])))}
+            >
+              Expand all
+            </button>
+            <button className="link-btn small" onClick={() => setOpen(new Set())}>
+              Collapse all
+            </button>
+            {browsing && (
+              <button
+                className="link-btn small"
+                onClick={() => {
+                  setBrowsing(false);
+                  setOpen(new Set());
+                  setLimit(SERIES_PAGE);
+                }}
+              >
+                Hide catalog
+              </button>
+            )}
+          </>
+        ) : (
+          <button className="btn small" onClick={() => setBrowsing(true)}>
+            Browse {shown.length.toLocaleString()} workouts in {groups.length.toLocaleString()} series
           </button>
         )}
       </div>
-      <div className="catalog-groups">
-        {groups.map((g) => {
-          const ids = g.items.map((w) => w.id);
-          const all = ids.every((id) => picked.has(id));
-          const some = !all && ids.some((id) => picked.has(id));
-          return (
-            <div key={g.key} className="catalog-group">
-              <div className="catalog-group-head">
-                <input
-                  type="checkbox"
-                  checked={all}
-                  ref={(el) => el && (el.indeterminate = some)}
-                  onChange={(e) => setMany(ids, e.target.checked)}
-                  title="Select this collection"
-                />
-                <button className="link-btn" onClick={() => toggleOpen(g)} aria-expanded={isOpen(g)}>
-                  {isOpen(g) ? "▾" : "▸"} <strong>{g.name}</strong>
-                </button>
-                <span className="muted small">
-                  {d.platforms[g.platform]} · {g.items.length} workout
-                  {g.items.length === 1 ? "" : "s"}
-                </span>
-                <button
-                  className="link-btn small danger-text"
-                  disabled={busy}
-                  onClick={() => remove(ids, `the ${g.items.length} workouts in "${g.name}"`)}
-                >
-                  Delete collection
-                </button>
-              </div>
-              {isOpen(g) && (
-                <div className="table-wrap">
-                  <table className="catalog-table">
-                    <tbody>
-                      {g.items.map((w) => (
-                        <tr key={w.id}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={picked.has(w.id)}
-                              onChange={(e) => setMany([w.id], e.target.checked)}
-                            />
-                          </td>
-                          <td title={w.description}>
-                            {w.name}
-                            {w.description && <div className="small muted clamp">{w.description}</div>}
-                          </td>
-                          <td className="num nowrap">{duration(w.duration_s)}</td>
-                          <td className="num muted nowrap">
-                            IF {w.intensity_factor ?? "–"} · {w.tss ?? "–"} TSS
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+      {showing && (
+        <div className="row wrap delete-bar">
+          <label className="check small">
+            <input type="checkbox" checked={allShownPicked} onChange={(e) => setMany(shownIds, e.target.checked)} />
+            Select all {shown.length.toLocaleString()} shown
+          </label>
+          <button
+            className="btn small danger"
+            disabled={busy || !pickedIds.length}
+            onClick={() => remove(pickedIds, `${pickedIds.length} selected workout${pickedIds.length === 1 ? "" : "s"}`)}
+          >
+            Delete selected{pickedIds.length ? ` (${pickedIds.length})` : ""}
+          </button>
+          {pickedIds.length > 0 && (
+            <button className="link-btn small" onClick={() => setPicked(new Set())}>
+              Clear selection
+            </button>
+          )}
+        </div>
+      )}
+      {showing && (
+        <div className="catalog-groups">
+          {groups.slice(0, limit).map((sr) => {
+            if (sr.groups.length === 1) return collection(sr.groups[0]);
+            const ids = sr.groups.flatMap((g) => g.items.map((w) => w.id));
+            const all = ids.every((id) => picked.has(id));
+            const some = !all && ids.some((id) => picked.has(id));
+            return (
+              <div key={sr.key} className="catalog-group">
+                <div className="catalog-group-head">
+                  <input
+                    type="checkbox"
+                    checked={all}
+                    ref={(el) => el && (el.indeterminate = some)}
+                    onChange={(e) => setMany(ids, e.target.checked)}
+                    title="Select this series"
+                  />
+                  <button className="link-btn" onClick={() => toggleOpen(sr)} aria-expanded={isOpen(sr)}>
+                    {isOpen(sr) ? "▾" : "▸"} <strong>{sr.name}</strong>
+                  </button>
+                  <span className="muted small">
+                    {d.platforms[sr.platform]} · {sr.groups.length} collections · {ids.length} workouts
+                  </span>
+                  <button
+                    className="link-btn small danger-text"
+                    disabled={busy}
+                    onClick={() => remove(ids, `the ${ids.length} workouts in the "${sr.name}" series`)}
+                  >
+                    Delete series
+                  </button>
                 </div>
-              )}
-            </div>
-          );
-        })}
-        {!groups.length && (
-          <p className="muted small">{d.workouts.length ? "No workouts match." : "No workouts yet."}</p>
-        )}
-      </div>
+                {isOpen(sr) && <div className="catalog-series">{sr.groups.map(collection)}</div>}
+              </div>
+            );
+          })}
+          {groups.length > limit && (
+            <button className="btn small" onClick={() => setLimit(limit + SERIES_PAGE)}>
+              Show more ({(groups.length - limit).toLocaleString()} series left)
+            </button>
+          )}
+          {!groups.length && (
+            <p className="muted small">{d.workouts.length ? "No workouts match." : "No workouts yet."}</p>
+          )}
+        </div>
+      )}
     </>
   );
+
+  // One collection: its workouts, closed until opened.
+  function collection(g) {
+    const ids = g.items.map((w) => w.id);
+    const all = ids.every((id) => picked.has(id));
+    const some = !all && ids.some((id) => picked.has(id));
+    return (
+      <div key={g.key} className="catalog-group">
+        <div className="catalog-group-head">
+          <input
+            type="checkbox"
+            checked={all}
+            ref={(el) => el && (el.indeterminate = some)}
+            onChange={(e) => setMany(ids, e.target.checked)}
+            title="Select this collection"
+          />
+          <button className="link-btn" onClick={() => toggleOpen(g)} aria-expanded={isOpen(g)}>
+            {isOpen(g) ? "▾" : "▸"} <strong>{g.name}</strong>
+          </button>
+          <span className="muted small">
+            {d.platforms[g.platform]} · {g.items.length} workout
+            {g.items.length === 1 ? "" : "s"}
+          </span>
+          <button
+            className="link-btn small danger-text"
+            disabled={busy}
+            onClick={() => remove(ids, `the ${g.items.length} workouts in "${g.name}"`)}
+          >
+            Delete collection
+          </button>
+        </div>
+        {isOpen(g) && (
+          <div className="table-wrap">
+            <table className="catalog-table">
+              <tbody>
+                {g.items.map((w) => (
+                  <tr key={w.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={picked.has(w.id)}
+                        onChange={(e) => setMany([w.id], e.target.checked)}
+                      />
+                    </td>
+                    <td title={w.description}>
+                      {w.name}
+                      {w.description && <div className="small muted clamp">{w.description}</div>}
+                    </td>
+                    <td className="num nowrap">{duration(w.duration_s)}</td>
+                    <td className="num muted nowrap">
+                      IF {w.intensity_factor ?? "–"} · {w.tss ?? "–"} TSS
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
 }
 
 // Zwift's own ZIP of its legacy workouts (about 1,300 rides), from its forum thread "Workout Refresh [October 2023]".

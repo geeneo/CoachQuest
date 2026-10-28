@@ -1886,6 +1886,16 @@ ul.segments li {
   flex-wrap: wrap;
   gap: 0.6rem;
 }
+/* A series' collections, indented under it. */
+.catalog-series {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.35rem 0 0.1rem 1.4rem;
+}
+.catalog-groups > .btn {
+  align-self: flex-start;
+}
 .catalog-group-head .danger-text {
   margin-left: auto;
   color: var(--danger);

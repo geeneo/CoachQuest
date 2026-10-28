@@ -2,7 +2,15 @@
 
 ## Next up
 
-- [ ] **Admin → Platform workouts: collapse the screen.**
+- [ ] **Indoor sessions: no Strava segments, only workouts.**
+      An indoor day (Zwift / indoor) can be planned with a favourite
+      segment linked, e.g. Thu "Zwift / indoor 40′" shows "⛰ Kendal climb A"
+      next to the "Kendal A 5x2" workout. Indoor days should only get a
+      structured workout: the AI coach shouldn't link a route or segment to
+      them (prompt and a server-side check that drops it), and the calendar
+      shouldn't show one. Segments and routes stay for outdoor (Road) days.
+
+- [x] **Admin → Platform workouts: collapse the screen.**
       With 1,177 workouts the section is pages and pages of collections.
       Make the whole section collapsible (collapsed by default, showing just
       the counts and search), group collections by series (e.g. "2018 PRL100
