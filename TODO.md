@@ -2,6 +2,14 @@
 
 ## Next up
 
+- [ ] **Load favourite routes & segments from Strava, picking several at once.**
+      In Favourite routes & segments, "From my Strava" lists the athlete's
+      starred segments and saved routes, but each one is added with its own
+      Add button. Make it a picker: show Routes and Segments (filter to one
+      or both), tick the ones wanted (select all per group), set what
+      they're for (uses) in one go, and add them together. Also on the
+      coach's view of the athlete.
+
 - [x] **Strength training from the AI coach (cycling and running).**
       - Exercise library: the public-domain Free Exercise DB
         (github.com/yuhonas/free-exercise-db, Unlicense), text only, no
