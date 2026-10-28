@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import segments
-from ..db import Connection, Segment, User, get_db
+from ..db import Activity, Connection, Segment, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
 from ..providers import strava
 
@@ -73,16 +73,18 @@ async def add_segment(
     if parsed is None:
         raise HTTPException(
             status_code=422,
-            detail="Paste a Strava route or segment link, e.g. https://www.strava.com/segments/1234567",
+            detail="Paste a Strava route, segment or ride link, e.g. https://www.strava.com/routes/… "
+            "or https://www.strava.com/activities/…",
         )
     kind, sid = parsed
     if db.scalar(select(Segment).where(Segment.athlete_id == athlete_id, Segment.strava_id == sid)):
         raise HTTPException(status_code=409, detail=f"That {kind} is already a favourite")
-    details: dict = {}
+    details: dict = _imported_ride(db, athlete_id, sid) if kind == "ride" else {}
     conn = _strava(db, athlete_id)
-    if conn is not None:
+    if conn is not None and not details:
+        fetch = {"route": strava.route, "segment": strava.segment, "ride": strava.activity}[kind]
         try:
-            details = await (strava.route if kind == "route" else strava.segment)(db, conn, sid)
+            details = await fetch(db, conn, sid)
         except LookupError:
             raise HTTPException(status_code=404, detail=f"Strava doesn't know that {kind} (or it's private)") from None
         except (httpx.HTTPError, KeyError, TypeError, ValueError):
@@ -103,6 +105,24 @@ async def add_segment(
     db.add(s)
     db.commit()
     return segments.segment_out(s)
+
+
+def _imported_ride(db: DbSession, athlete_id: int, strava_id: int) -> dict:
+    """A ride the athlete did, from the activities already imported from Strava (no Strava call)."""
+    a = db.scalar(
+        select(Activity).where(
+            Activity.user_id == athlete_id, Activity.source == "strava", Activity.external_id == str(strava_id)
+        )
+    )
+    if a is None:
+        return {}
+    return {
+        "name": (a.name or "")[:120],
+        "distance_m": round(a.distance_m or 0) or None,
+        "elevation_m": round(a.elevation_m or 0) or None,
+        "est_minutes": round(a.duration_s / 60) if a.duration_s else None,
+        "sport": "run" if "Run" in (a.sport or "") else "ride",
+    }
 
 
 class FavouriteEdit(BaseModel):

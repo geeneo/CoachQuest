@@ -397,6 +397,19 @@ async def route(db: DbSession, conn: Connection, route_id: int) -> dict:
     return _route_out(await _get(db, conn, f"/routes/{route_id}"))
 
 
+async def activity(db: DbSession, conn: Connection, activity_id: int) -> dict:
+    """One of the athlete's own rides, to save as a route (when it isn't imported yet)."""
+    a = await _get(db, conn, f"/activities/{activity_id}")
+    secs = a.get("moving_time") or a.get("elapsed_time")
+    return {
+        "name": (a.get("name") or "").strip()[:120],
+        "distance_m": round(a.get("distance") or 0),
+        "elevation_m": round(a.get("total_elevation_gain") or 0) or None,
+        "est_minutes": round(secs / 60) if secs else None,
+        "sport": "run" if "Run" in (a.get("sport_type") or a.get("type") or "") else "ride",
+    }
+
+
 async def favourites(db: DbSession, conn: Connection) -> list[dict]:
     """The athlete's starred segments and their own routes on Strava, to pick favourites from."""
     starred = await _get(db, conn, "/segments/starred", {"per_page": 100})

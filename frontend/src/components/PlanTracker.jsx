@@ -496,14 +496,14 @@ function MatchStatus({ matching }) {
 
 // A favourite Strava route or segment on a session: opens it in Strava.
 function SegmentLink({ segment }) {
-  const route = segment.kind === "route";
+  const route = segment.kind !== "segment";
   return (
     <a
       className="badge segment"
       href={segment.url}
       target="_blank"
       rel="noreferrer"
-      title={`Open the ${route ? "route" : "segment"} in Strava`}
+      title={`Open the ${segment.kind} in Strava`}
     >
       {route ? "🗺" : "⛰"} {segment.name}
     </a>
@@ -739,7 +739,7 @@ function DayEditor({ day, segments, onDone }) {
               <option value="">–</option>
               {segments.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.kind === "route" ? "🗺" : "⛰"} {s.name}
+                  {s.kind === "segment" ? "⛰" : "🗺"} {s.name}
                 </option>
               ))}
             </select>

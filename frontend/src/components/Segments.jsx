@@ -5,13 +5,18 @@ import { api } from "../lib/api.js";
 import { duration } from "../lib/format.js";
 
 const KIND = {
-  route: ["Routes", "🗺", "Whole rides: the long-ride loop, the easy spin. The AI coach plans outdoor rides on them."],
+  route: [
+    "Routes",
+    "🗺",
+    "Whole rides: the long-ride loop, the easy spin, also saved from a ride you did. The AI coach plans outdoor rides on them.",
+  ],
   segment: ["Segments", "⛰", "Climbs and stretches for efforts: hill repeats, intervals, sprints."],
 };
 
 function stats(f) {
   return [
     f.distance_m && `${(f.distance_m / 1000).toFixed(f.kind === "route" ? 0 : 1)} km`,
+    f.kind === "ride" && "from a ride",
     f.kind === "segment" && f.avg_grade != null && `${f.avg_grade}%`,
     f.elevation_m && `${f.elevation_m} m up`,
     f.est_minutes && `~${duration(f.est_minutes * 60)}`,
@@ -74,7 +79,8 @@ export default function Segments({ id, readOnly }) {
         Strava.
       </p>
       {["route", "segment"].map((kind) => {
-        const group = list.filter((f) => f.kind === kind);
+        // Rides saved from an activity are routes too.
+        const group = list.filter((f) => f.kind === kind || (kind === "route" && f.kind === "ride"));
         if (!group.length) return null;
         return (
           <div key={kind} className="favourite-group">
@@ -168,7 +174,7 @@ export default function Segments({ id, readOnly }) {
                 className="grow"
                 value={draft.link}
                 onChange={(e) => setDraft({ ...draft, link: e.target.value })}
-                placeholder="Strava route or segment link, e.g. https://www.strava.com/routes/…"
+                placeholder="Strava route, segment or ride link, e.g. https://www.strava.com/activities/…"
                 required
               />
               <input

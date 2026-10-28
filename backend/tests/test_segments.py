@@ -27,7 +27,8 @@ def test_links():
     assert segments.parse_link(ROUTE) == ("route", 3234567890123456789)
     assert segments.parse_link("https://www.strava.com/segments/89012") == ("segment", 89012)
     assert segments.parse_link("1234567") == ("segment", 1234567)
-    assert segments.parse_link("https://www.strava.com/activities/1234567") is None
+    assert segments.parse_link("https://www.strava.com/activities/1234567") == ("ride", 1234567)
+    assert segments.parse_link("https://www.strava.com/athletes/1234567") is None
     assert segments.parse_link("Helshoogte") is None
     assert segments.clean_uses(["long ride", "flying", "hill repeats"]) == ["hill repeats", "long ride"]
 
@@ -200,3 +201,54 @@ def test_friends_cannot_add_favourites(make_user):
     athlete, friend, aid = _friends(make_user)
     assert friend.post(f"/api/athletes/{aid}/segments", json={"link": LINK}).status_code == 403
     assert friend.get(f"/api/athletes/{aid}/segments").status_code == 200
+
+
+RIDE = "https://www.strava.com/activities/20709345142"
+
+
+def test_a_ride_becomes_a_route(make_user, monkeypatch):
+    from datetime import datetime
+
+    from app.db import Activity
+
+    p = make_user("rider@example.com")
+    uid = p.get("/api/auth/me").json()["id"]
+    assert segments.parse_link(RIDE) == ("ride", 20709345142)
+    with SessionLocal() as db:  # already imported from Strava: no Strava call needed
+        db.add(
+            Activity(
+                user_id=uid,
+                source="strava",
+                external_id="20709345142",
+                name="Sillos, Stellenbosch over Hells and back",
+                sport="Ride",
+                start_time=datetime(2026, 10, 24, 6, 0),
+                duration_s=17700,
+                distance_m=120700,
+                elevation_m=1213,
+            )
+        )
+        db.commit()
+    body = {"link": RIDE, "uses": ["long ride"], "notes": "long ride 120km"}
+    f = p.post("/api/athletes/me/segments", json=body).json()
+    assert f["kind"] == "ride" and f["url"] == RIDE and f["name"] == "Sillos, Stellenbosch over Hells and back"
+    assert f["distance_m"] == 120700 and f["elevation_m"] == 1213 and f["est_minutes"] == 295
+    with SessionLocal() as db:
+        [ai] = segments.for_ai(db, uid)
+        assert ai["kind"] == "route" and ai["from_a_ride"] is True and ai["distance_km"] == 120.7
+
+    # Not imported: asked from Strava (the athlete's own ride).
+    _strava(uid)
+
+    async def fake_activity(db, conn, aid):
+        return {"name": "Morning loop", "distance_m": 60000, "elevation_m": 500, "est_minutes": 130, "sport": "ride"}
+
+    monkeypatch.setattr(strava, "activity", fake_activity)
+    g = p.post("/api/athletes/me/segments", json={"link": "https://www.strava.com/activities/555"}).json()
+    assert g["name"] == "Morning loop" and g["est_minutes"] == 130
+
+
+def test_a_ride_without_strava_keeps_the_name_given(make_user):
+    p = make_user("rider@example.com")
+    f = p.post("/api/athletes/me/segments", json={"link": RIDE, "name": "Sillos over Hells"}).json()
+    assert f["kind"] == "ride" and f["name"] == "Sillos over Hells" and f["distance_m"] is None
