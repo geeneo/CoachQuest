@@ -213,6 +213,73 @@ See the guide *Plan your rides on your favourite routes and segments* for the st
 """,
 )
 
+STRENGTH_GUIDE = (
+    "Strength training with the AI coach",
+    "Tell the coach what equipment you have; it writes your strength sessions for cycling and running.",
+    """Strength work makes cyclists and runners faster and more robust: research shows heavy strength
+training helps cycling, and heavy strength plus jumps (plyometrics) helps running economy, without
+hurting either. CoachQuest's AI coach now writes your strength sessions.
+
+## 1. Set your strength options
+
+Open **Profile → Strength training**:
+
+- **Equipment I have**: tick everything you can use, e.g. bodyweight, bands, dumbbells,
+  kettlebells, barbell or gym machines. The coach only picks exercises you can do with it.
+- **For**: cycling, running or both.
+- **Level**: beginner, intermediate or expert.
+- **Sessions a week** and **Minutes each**.
+- **Limits**: injuries or exercises to avoid, e.g. "left knee: no deep jumps".
+
+Click **Save strength options**.
+
+## 2. Pick your strength days
+
+In **Profile → Weekday preferences**, add **Strength** on one or two days. It can share a day with a
+ride or run (e.g. **Zwift / indoor** + **Strength**): the coach plans both.
+
+## 3. Let the AI coach write the sessions
+
+Make a new plan, or click **Re-plan from this week** on your plan. Each Strength session comes
+with a list of exercises, each with **sets × reps**, how hard (e.g. **RPE 8**: about 2 reps left in
+the tank), rest between sets and a short cue.
+
+How the coach builds them:
+
+- **Base and build**: heavy legs and hips twice a week (a squat, a hinge such as a deadlift or hip
+  thrust, single-leg work, calves) plus core. Beginners start lighter and build up over 3-4 weeks.
+- **Runners**: a few hops, bounds or jumps before the heavy work, once you've done some weeks of
+  strength.
+- **Race season**: once a week to keep it. **Taper and race week**: none.
+- Never the day before a key ride, run or race, and at least 48 hours between strength sessions.
+
+## 4. Do the session
+
+On your training plan, the day shows the session, e.g. **🏋 Heavy legs**. Click an exercise's name
+to see how to do it, step by step.
+
+## Good to know
+
+- The exercises come from an open, public-domain exercise library (text only).
+- Start light the first time you do an exercise, and stop if anything hurts.
+- Record strength sessions on your watch or in Strava: they count toward that day's planned time
+  on your plan.
+""",
+)
+
+STRENGTH_NEWS = (
+    "New: strength training from the AI coach",
+    "Set your equipment in Profile; the AI coach writes strength sessions for cycling and running.",
+    """- **Profile → Strength training**: tick your equipment, pick cycling and/or running, your level
+  and any limits.
+- On your **Strength** days the AI coach writes a full session: exercises with sets, reps, effort
+  and rest, heavier in base and build and lighter in race season.
+- Click an exercise on your plan for step-by-step instructions.
+
+See the guide *Strength training with the AI coach* for the steps.
+""",
+)
+
 # Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
 POSTS = [
     *(
@@ -222,6 +289,8 @@ POSTS = [
     {"key": "whats-new-1", "kind": "news", "position": 0, "published": False, "post": NEWS},
     {"key": "routes", "kind": "guide", "position": 25, "published": True, "post": ROUTES_GUIDE},
     {"key": "routes-news", "kind": "news", "position": 0, "published": True, "post": ROUTES_NEWS},
+    {"key": "strength", "kind": "guide", "position": 27, "published": True, "post": STRENGTH_GUIDE},
+    {"key": "strength-news", "kind": "news", "position": 0, "published": True, "post": STRENGTH_NEWS},
 ]
 FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
 SEEDED = "posts_seeded"

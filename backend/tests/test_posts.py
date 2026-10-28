@@ -8,14 +8,14 @@ def test_shipped_posts_are_added_once(make_user):
     admin = make_user("admin@example.com")
     rider = make_user("rider@example.com")
     listing = admin.get("/api/posts").json()
-    assert len(listing["guides"]) == 5 and len(listing["news"]) == 2  # a fresh install gets them all
+    assert len(listing["guides"]) == 6 and len(listing["news"]) == 3  # a fresh install gets them all
     drafts = [p["title"] for p in listing["guides"] + listing["news"] if not p["published"]]
     assert len(drafts) == len(posts_seed.FIRST_BATCH)  # the first batch waits for the admin
     assert listing["can_edit"] is True
     # Riders see only what's published: the routes guide and its news, not the drafts (even by id).
     seen = rider.get("/api/posts").json()
-    assert [g["title"] for g in seen["guides"]] == [posts_seed.ROUTES_GUIDE[0]]
-    assert [n["title"] for n in seen["news"]] == [posts_seed.ROUTES_NEWS[0]]
+    assert [g["title"] for g in seen["guides"]] == [posts_seed.ROUTES_GUIDE[0], posts_seed.STRENGTH_GUIDE[0]]
+    assert {n["title"] for n in seen["news"]} == {posts_seed.ROUTES_NEWS[0], posts_seed.STRENGTH_NEWS[0]}
     draft = next(p for p in listing["guides"] if not p["published"])
     assert rider.get(f"/api/posts/{draft['id']}").status_code == 404
     with SessionLocal() as db:
@@ -33,7 +33,9 @@ def test_an_existing_install_gets_only_the_new_posts(make_user):
         db.commit()
         posts_seed.seed(db)
         titles = {p.title for p in db.query(Post)}
-        assert titles == {"Getting started (edited)", posts_seed.ROUTES_GUIDE[0], posts_seed.ROUTES_NEWS[0]}
+        shipped_later = {posts_seed.ROUTES_GUIDE[0], posts_seed.ROUTES_NEWS[0]}
+        shipped_later |= {posts_seed.STRENGTH_GUIDE[0], posts_seed.STRENGTH_NEWS[0]}
+        assert titles == {"Getting started (edited)"} | shipped_later
         # Deleting a shipped post doesn't bring it back.
         db.query(Post).filter_by(title=posts_seed.ROUTES_NEWS[0]).delete()
         db.commit()
