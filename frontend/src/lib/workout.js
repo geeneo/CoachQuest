@@ -109,3 +109,24 @@ export function addDays(iso, n) {
   d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+// Steps laid out on a timeline, intervals expanded, for WorkoutChart (mirrors workouts.blocks in the backend).
+export function blocks(steps) {
+  const out = [];
+  let t = 0;
+  const add = (step, kind, secs, p0, p1, cadence) => {
+    out.push({ step, kind, start_s: t, duration_s: secs, power_start: p0, power_end: p1, cadence });
+    t += secs;
+  };
+  (steps || []).forEach((s, i) => {
+    if (s.kind === "intervals") {
+      for (let r = 0; r < s.repeat; r++) {
+        add(i, "on", s.on_s, s.on_power, s.on_power, s.cadence);
+        add(i, "off", s.off_s, s.off_power, s.off_power, s.off_cadence);
+      }
+    } else if (s.kind === "steady" || s.kind === "recovery") add(i, s.kind, s.duration_s, s.power, s.power, s.cadence);
+    else if (s.kind === "free") add(i, s.kind, s.duration_s, null, null, null);
+    else add(i, s.kind, s.duration_s, s.power_start, s.power_end, s.cadence);
+  });
+  return out;
+}

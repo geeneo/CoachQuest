@@ -73,6 +73,8 @@ class Settings:
     platform_matching: str = os.getenv("PLATFORM_MATCHING", "on")
     # Most sessions an athlete can plan on one day (weekday preferences; the AI coach plans them all).
     max_sessions_per_day: str = os.getenv("MAX_SESSIONS_PER_DAY", "3")
+    # "on": strength exercises show start/end photos from the exercise library (strength.py).
+    exercise_photos: str = os.getenv("EXERCISE_PHOTOS", "on")
 
     smtp_host: str = os.getenv("SMTP_HOST", "")
     smtp_port: str = os.getenv("SMTP_PORT", "587")

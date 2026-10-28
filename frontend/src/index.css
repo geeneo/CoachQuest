@@ -1956,3 +1956,49 @@ ul.segments li {
   margin: 4px 0 0;
   padding-left: 1.2rem;
 }
+.exercise-thumb {
+  width: 36px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.exercise-pictures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: 4px;
+}
+.exercise-photo {
+  width: min(200px, 42vw);
+  border-radius: 6px;
+  background: #fff;
+}
+.muscle-map {
+  display: flex;
+  gap: 4px;
+}
+.muscle-map svg {
+  width: 80px;
+  height: 160px;
+}
+.muscle-map .mm-body {
+  fill: var(--panel-2);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.muscle-map .mm-rest {
+  fill: color-mix(in srgb, var(--muted) 25%, var(--panel-2));
+}
+.muscle-map .mm-primary {
+  fill: var(--brand-orange);
+}
+.muscle-map .mm-secondary {
+  fill: color-mix(in srgb, var(--brand-orange) 40%, var(--panel-2));
+}
+.muscle-map .mm-label {
+  fill: var(--muted);
+  font-size: 9px;
+}

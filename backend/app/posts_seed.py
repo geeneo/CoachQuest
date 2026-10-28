@@ -256,11 +256,12 @@ How the coach builds them:
 ## 4. Do the session
 
 On your training plan, the day shows the session, e.g. **🏋 Heavy legs**. Click an exercise's name
-to see how to do it, step by step.
+to see how to do it: photos of the start and end of the movement, a body map with the muscles it
+works, and the steps.
 
 ## Good to know
 
-- The exercises come from an open, public-domain exercise library (text only).
+- The exercises come from an open, public-domain exercise library (text and photos).
 - Start light the first time you do an exercise, and stop if anything hurts.
 - Record strength sessions on your watch or in Strava: they count toward that day's planned time
   on your plan.

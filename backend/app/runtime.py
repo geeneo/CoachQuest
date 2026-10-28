@@ -142,6 +142,14 @@ EDITABLE: dict[str, Editable] = {
         "plans every one of them on that day. Lowering it keeps the first ones picked. Only super admins can "
         "change this.",
     ),
+    "exercise_photos": Editable(
+        "Exercise photos",
+        "Workouts",
+        choices=("on", "off"),
+        help="On: strength exercises show start and end photos from the free exercise library. Where those "
+        "photos first came from isn't documented; turn this off to hide them everywhere at once (the muscle map "
+        "stays). Only super admins can change this.",
+    ),
     "anthropic_model_short": Editable(
         "Model for notes, reviews and chat",
         "AI coach",
@@ -186,7 +194,7 @@ EDITABLE: dict[str, Editable] = {
 }
 
 # Only super admins may change these.
-SUPER_ONLY = {"signup_approval", "alpha_notice", "platform_matching", "max_sessions_per_day"}
+SUPER_ONLY = {"signup_approval", "alpha_notice", "platform_matching", "max_sessions_per_day", "exercise_photos"}
 
 _overrides: dict[str, str] = {}
 

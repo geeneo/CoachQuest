@@ -1,7 +1,8 @@
 """Strength training for cyclists and runners: the exercise library and AI-written strength sessions.
 
-The library is the public-domain Free Exercise DB (text only, see
-scripts/import_exercises.py), in data/exercises.json. Each athlete sets their
+The library is the public-domain Free Exercise DB (see scripts/import_exercises.py), in
+data/exercises.json, with its photos shrunk in data/exercise-images/
+(scripts/import_exercise_images.py; the super admin can hide them, `exercise_photos`). Each athlete sets their
 strength options in Profile (equipment, level, sports, sessions per week,
 minutes, limits). The AI coach gets a shortlist of fitting exercises
 (`strength.exercises`) and writes Strength sessions as exercises with sets,
@@ -12,7 +13,11 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+from . import runtime
+
 DATA = Path(__file__).resolve().parent / "data" / "exercises.json"
+# Start (0) and end (1) photos per exercise, 400 px WebP (scripts/import_exercise_images.py).
+PHOTOS = DATA.parent / "exercise-images"
 
 # What an athlete can pick in Profile, and the library's equipment values each one unlocks.
 EQUIPMENT = {
@@ -169,6 +174,19 @@ def clean(raw) -> dict | None:
     return {"focus": _text(raw.get("focus"), 120), "exercises": exercises}
 
 
+def photos_on() -> bool:
+    """Admin → Settings → "Exercise photos" (super admin): off hides them everywhere."""
+    return runtime.get("exercise_photos") != "off"
+
+
+def photo(exercise_id: str, n: int) -> Path | None:
+    """The photo file, if photos are on and it exists. Only library ids, so no path tricks."""
+    if not photos_on() or exercise_id not in library() or n not in (0, 1):
+        return None
+    path = PHOTOS / exercise_id / f"{n}.webp"
+    return path if path.is_file() else None
+
+
 def exercise_out(e: dict) -> dict:
     return {
         "id": e["id"],
@@ -179,4 +197,5 @@ def exercise_out(e: dict) -> dict:
         "muscles": e["primaryMuscles"],
         "secondary_muscles": e["secondaryMuscles"],
         "instructions": e["instructions"],
+        "photos": sum(photo(e["id"], n) is not None for n in (0, 1)),
     }

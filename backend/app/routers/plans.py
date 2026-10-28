@@ -19,6 +19,7 @@ from .. import (
     platform_catalog,
     runtime,
     segments,
+    strength,
     sync_engine,
     zwo,
 )
@@ -88,6 +89,7 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
             out["platform_matching"] = _add_matches(db, athlete, out["weeks"], today)
             _add_segments(db, p.athlete_id, out["weeks"])
             out["max_sessions_per_day"] = runtime.max_sessions_per_day()
+            out["exercise_photos"] = strength.photos_on()
     return out
 
 

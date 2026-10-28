@@ -1,6 +1,7 @@
 """The exercise library (strength.py): search it, and read one exercise's instructions."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 
 from .. import strength
 from ..db import User
@@ -36,3 +37,12 @@ def get_exercise(exercise_id: str, _: User = Depends(current_user)):
     if e is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
     return strength.exercise_out(e)
+
+
+@router.get("/{exercise_id}/photo/{n}")
+def get_photo(exercise_id: str, n: int, _: User = Depends(current_user)):
+    """Start (0) or end (1) photo of the movement; 404 when photos are off or missing."""
+    path = strength.photo(exercise_id, n)
+    if path is None:
+        raise HTTPException(status_code=404, detail="No photo")
+    return FileResponse(path, media_type="image/webp", headers={"Cache-Control": "private, max-age=86400"})

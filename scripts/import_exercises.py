@@ -6,8 +6,8 @@ dist/exercises.json. Usage:
     curl -sSLo /tmp/exercises.json https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json
     python scripts/import_exercises.py /tmp/exercises.json
 
-Keeps the categories useful to cyclists and runners and drops the image paths
-(their origin isn't documented), so CoachQuest ships text only.
+Keeps the categories useful to cyclists and runners. The photos are imported
+separately (scripts/import_exercise_images.py).
 """
 
 import json

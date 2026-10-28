@@ -124,6 +124,21 @@ def test_exercise_lookup(make_user):
     assert p.get("/api/exercises/Nope").status_code == 404
 
 
+def test_exercise_photos_and_super_admin_switch(make_user):
+    p = make_user("rider@example.com")
+    assert p.get(f"/api/exercises/{SQUAT}").json()["photos"] == 2
+    r = p.get(f"/api/exercises/{SQUAT}/photo/0")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/webp" and len(r.content) < 40_000
+    assert p.get(f"/api/exercises/{SQUAT}/photo/2").status_code == 404
+    assert p.get("/api/exercises/..%2F..%2Fexercises.json/photo/0").status_code == 404
+
+    boss = make_user("admin@example.com")
+    assert boss.request("PUT", "/api/admin/settings", json={"values": {"exercise_photos": "off"}}).status_code == 200
+    assert p.get(f"/api/exercises/{SQUAT}/photo/0").status_code == 404
+    assert p.get(f"/api/exercises/{SQUAT}").json()["photos"] == 0
+    boss.request("PUT", "/api/admin/settings", json={"values": {"exercise_photos": "on"}})
+
+
 def test_friends_see_but_cannot_set_options(make_user):
     athlete, friend, aid = _friends(make_user)
     assert friend.get(f"/api/athletes/{aid}/preferences").json()["strength"]["level"] == "beginner"

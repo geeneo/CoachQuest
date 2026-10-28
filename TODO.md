@@ -16,6 +16,10 @@
         maintain in race season, plyometrics for runners, clear of key
         rides and runs (Rønnestad & Mujika 2014; Sports Med Open 2022).
       - Shown on the plan day with each exercise's instructions.
+- [x] **Drawings in workouts.** Plan days show the indoor workout's power
+      chart; strength exercises show start/end photos (400 px WebP, ~15 MB,
+      super admin switch "Exercise photos" in case their origin is
+      questioned) and a muscle map (our own SVG drawing).
 
 - [x] **Favourite Strava routes and segments for planning rides.** Athletes
       keep favourite routes and segments (from a link or their Strava

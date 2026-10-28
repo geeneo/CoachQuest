@@ -157,10 +157,13 @@ season, clear of key sessions), following Rønnestad & Mujika (2014) and the
 Plan days list the exercises; click one for its instructions.
 
 The library is the public-domain [Free Exercise DB](https://github.com/yuhonas/free-exercise-db)
-(Unlicense), text only: 806 strength, plyometric, powerlifting and stretching
+(Unlicense): 806 strength, plyometric, powerlifting and stretching
 exercises in `backend/app/data/exercises.json`, built by
-`scripts/import_exercises.py`. Its images are left out because their origin
-isn't documented. The AI gets a shortlist that fits the athlete's equipment
+`scripts/import_exercises.py`. Their start and end photos, shrunk to 400 px
+WebP (1,606 photos, ~15 MB), are in `backend/app/data/exercise-images/`, built
+by `scripts/import_exercise_images.py`. Where those photos first came from
+isn't documented, so a super admin can hide them all at once (Admin → Settings
+→ Workouts → Exercise photos); the muscle map (our own drawing) stays. The AI gets a shortlist that fits the athlete's equipment
 and level (legs, hips, trunk and back, a share per group).
 
 ### Favourite routes & segments

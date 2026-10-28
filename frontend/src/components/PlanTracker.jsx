@@ -1,12 +1,15 @@
 import { ArrowLeftRight, Lock, Map as MapIcon, MessageSquare, Sparkles, Unlock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api, download } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { duration, shortDate } from "../lib/format.js";
+import { blocks } from "../lib/workout.js";
 import Markdown from "./Markdown.jsx";
+import MuscleMap from "./MuscleMap.jsx";
 import PlanComments from "./PlanComments.jsx";
+import WorkoutChart from "./WorkoutChart.jsx";
 import { useReadOnly } from "../lib/readOnly.js";
 
 const PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition"];
@@ -122,7 +125,7 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
   };
   const matching = plan.platform_matching || {};
   return (
-    <>
+    <Photos.Provider value={!!plan.exercise_photos}>
       <div className="row between tracker-bar">
         <p className="muted small">
           {ro
@@ -204,7 +207,7 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
           <Markdown>{plan.content_md.split("\n### Week 1")[0]}</Markdown>
         </details>
       )}
-    </>
+    </Photos.Provider>
   );
 }
 
@@ -421,6 +424,9 @@ function Day({ day, ctx }) {
             {day.route && <span className="badge">🗺 {day.route}</span>}
           </div>
         )}
+        {!editing && day.workout?.steps?.length > 0 && (
+          <WorkoutChart blocks={blocks(day.workout.steps)} height={90} />
+        )}
         {!editing && day.strength && <StrengthSession session={day.strength} />}
         {!editing && <PlatformMatches day={day} ctx={ctx} />}
         {!editing && (
@@ -531,7 +537,19 @@ function MatchStatus({ matching }) {
 }
 
 // A strength session the AI coach wrote: each exercise with sets x reps, effort and rest; click one for how.
+// Whether exercise photos are on (Admin → Settings, super admin): plan_out's exercise_photos.
+const Photos = createContext(false);
+const photoUrl = (id, n) => `/api/exercises/${encodeURIComponent(id)}/photo/${n}`;
+
+// A photo of the movement; hides itself if there isn't one.
+function ExercisePhoto({ id, n, className }) {
+  const [gone, setGone] = useState(false);
+  if (gone) return null;
+  return <img className={className} src={photoUrl(id, n)} alt="" loading="lazy" onError={() => setGone(true)} />;
+}
+
 function StrengthSession({ session }) {
+  const photos = useContext(Photos);
   const [open, setOpen] = useState(null); // exercise id shown with instructions
   const [info, setInfo] = useState({});
   const show = async (id) => {
@@ -552,6 +570,7 @@ function StrengthSession({ session }) {
       <ol>
         {session.exercises.map((x) => (
           <li key={x.id}>
+            {photos && <ExercisePhoto id={x.id} n={0} className="exercise-thumb" />}
             <button type="button" className="link-btn" onClick={() => show(x.id)}>
               {x.name}
             </button>{" "}
@@ -563,9 +582,18 @@ function StrengthSession({ session }) {
             {x.note && <span className="muted"> · {x.note}</span>}
             {open === x.id && info[x.id] && (
               <div className="exercise-how muted">
+                <div className="exercise-pictures">
+                  {photos &&
+                    info[x.id].photos > 0 &&
+                    [0, 1].map((n) => <ExercisePhoto key={n} id={x.id} n={n} className="exercise-photo" />)}
+                  {info[x.id].muscles && (
+                    <MuscleMap primary={info[x.id].muscles} secondary={info[x.id].secondary_muscles || []} />
+                  )}
+                </div>
                 {info[x.id].equipment && (
                   <div>
                     {info[x.id].equipment} · {info[x.id].muscles?.join(", ")}
+                    {info[x.id].secondary_muscles?.length > 0 && <> (also {info[x.id].secondary_muscles.join(", ")})</>}
                   </div>
                 )}
                 <ol>
