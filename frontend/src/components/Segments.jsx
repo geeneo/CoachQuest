@@ -1,5 +1,6 @@
 import { ExternalLink, Mountain, Route, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { duration } from "../lib/format.js";
@@ -33,6 +34,7 @@ export default function Segments({ id, readOnly }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [fromStrava, setFromStrava] = useState(null); // null = closed, "loading", or a list
+  const [privateRoutes, setPrivateRoutes] = useState(true); // false: linked before private routes were asked for
   const call = async (path, method, body) => {
     setError(null);
     try {
@@ -54,7 +56,9 @@ export default function Segments({ id, readOnly }) {
     setFromStrava("loading");
     setError(null);
     try {
-      setFromStrava(await api(`${url}/strava`));
+      const { found, private_routes } = await api(`${url}/strava`);
+      setPrivateRoutes(private_routes);
+      setFromStrava(found);
     } catch (e) {
       setError(e.message);
       setFromStrava(null);
@@ -150,7 +154,13 @@ export default function Segments({ id, readOnly }) {
             </div>
           )}
           {Array.isArray(fromStrava) && (
-            <StravaPicker found={fromStrava} uses={uses} add={addFromStrava} close={() => setFromStrava(null)} />
+            <StravaPicker
+              found={fromStrava}
+              uses={uses}
+              add={addFromStrava}
+              close={() => setFromStrava(null)}
+              note={!privateRoutes && <PrivateRoutesNote self={id === "me"} />}
+            />
           )}
           <form className="stack favourite-form" onSubmit={add}>
             <div className="row wrap">
@@ -207,7 +217,7 @@ export default function Segments({ id, readOnly }) {
 
 // The athlete's Strava routes and starred segments: filter, tick several (or a whole group), say what
 // they're for, add them together (POST /segments/from-strava).
-function StravaPicker({ found, uses, add, close }) {
+function StravaPicker({ found, uses, add, close, note }) {
   const [show, setShow] = useState("both"); // both | route | segment
   const [picked, setPicked] = useState(() => new Set());
   const [pickUses, setPickUses] = useState([]);
@@ -234,8 +244,9 @@ function StravaPicker({ found, uses, add, close }) {
     return (
       <div className="card inset">
         <p className="muted small">
-          Nothing new on Strava: star segments or save routes there, then look again. (Private routes stay hidden.)
+          Nothing new on Strava: star segments or save routes there, then look again.
         </p>
+        {note}
         <button type="button" className="link-btn small" onClick={close}>
           Close
         </button>
@@ -258,7 +269,13 @@ function StravaPicker({ found, uses, add, close }) {
       </div>
       {groups.map((kind) => {
         const list = found.filter((f) => f.kind === kind);
-        if (!list.length) return null;
+        if (!list.length) {
+          return kind === "route" && !note ? (
+            <p key={kind} className="muted small">
+              No new routes on Strava: save one there (Maps → Saved routes), then look again.
+            </p>
+          ) : null;
+        }
         const keys = list.map(key);
         const all = keys.every((k) => picked.has(k));
         return (
@@ -286,6 +303,7 @@ function StravaPicker({ found, uses, add, close }) {
           </div>
         );
       })}
+      {groups.includes("route") && note}
       <div className="small strong-label">What they're for</div>
       <div className="chips tight" aria-label="What they're for">
         {uses.map((u) => (
@@ -310,5 +328,22 @@ function StravaPicker({ found, uses, add, close }) {
         {done != null && <span className="ok-text small">Added {done}.</span>}
       </div>
     </div>
+  );
+}
+
+// Strava only shares private routes (its default for saved routes) when the link allowed it; links made
+// before CoachQuest asked for that show public routes only, until Strava is connected again.
+function PrivateRoutesNote({ self }) {
+  return (
+    <p className="muted small">
+      Routes missing? Strava only shares private routes (its default) with permission to see them.{" "}
+      {self ? (
+        <>
+          Connect Strava again on <Link to="/connections">Connections</Link> and allow it.
+        </>
+      ) : (
+        "Ask the athlete to connect Strava again on Connections and allow it."
+      )}
+    </p>
   );
 }

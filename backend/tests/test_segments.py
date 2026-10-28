@@ -147,13 +147,15 @@ def test_pick_from_strava(make_user, monkeypatch):
     import httpx
 
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
-    found = p.get("/api/athletes/me/segments/strava").json()
+    got = p.get("/api/athletes/me/segments/strava").json()
+    assert got["private_routes"] is False  # linked before read_all was asked for
+    found = got["found"]
     assert [(f["kind"], f["name"]) for f in found] == [("segment", "Helshoogte"), ("route", "Franschhoek loop")]
     assert found[1]["est_minutes"] == 270 and found[0]["elevation_m"] == 330
     assert calls[-1].endswith("/athletes/99/routes")
     # Once a favourite, it's not offered again.
     p.post("/api/athletes/me/segments", json={"link": "https://www.strava.com/segments/1234567", "name": "Hells"})
-    assert [f["kind"] for f in p.get("/api/athletes/me/segments/strava").json()] == ["route"]
+    assert [f["kind"] for f in p.get("/api/athletes/me/segments/strava").json()["found"]] == ["route"]
 
 
 def test_without_strava_the_name_given_is_used(make_user):

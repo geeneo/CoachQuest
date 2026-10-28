@@ -26,7 +26,8 @@ log = logging.getLogger("coachquest.strava")
 AUTH_URL = "https://www.strava.com/oauth/authorize"
 TOKEN_URL = "https://www.strava.com/oauth/token"
 API = "https://www.strava.com/api/v3"
-SCOPE = "read,activity:read_all"
+# read_all: the athlete's private routes too (Strava saves routes private by default).
+SCOPE = "read,read_all,activity:read_all"
 INITIAL_DAYS = 180
 
 
@@ -131,9 +132,17 @@ def authorize_url(state: str, app: StravaApp) -> str:
     )
 
 
-def _store_tokens(conn: Connection, payload: dict, client_id: str) -> None:
+def _store_tokens(conn: Connection, payload: dict, client_id: str, scope: str | None = None) -> None:
+    """Keep the tokens; the scope granted is kept across refreshes (Strava only sends it on linking)."""
+    if scope is None and conn.token_enc:
+        scope = decrypt_json(conn.token_enc).get("scope")
     conn.token_enc = encrypt_json(
-        {"access_token": payload["access_token"], "refresh_token": payload["refresh_token"], "client_id": client_id}
+        {
+            "access_token": payload["access_token"],
+            "refresh_token": payload["refresh_token"],
+            "client_id": client_id,
+            "scope": scope,
+        }
     )
     conn.expires_at = datetime.fromtimestamp(payload["expires_at"], tz=UTC).replace(tzinfo=None)
 
@@ -169,7 +178,7 @@ async def exchange_code(db: DbSession, user: User, code: str, granted_scope: str
     conn.external_id = str(payload.get("athlete", {}).get("id", ""))
     conn.status = "active"
     conn.last_error = None
-    _store_tokens(conn, payload, app.client_id)
+    _store_tokens(conn, payload, app.client_id, granted_scope)
     db.commit()
     return conn
 
@@ -408,6 +417,11 @@ async def activity(db: DbSession, conn: Connection, activity_id: int) -> dict:
         "est_minutes": round(secs / 60) if secs else None,
         "sport": "run" if "Run" in (a.get("sport_type") or a.get("type") or "") else "ride",
     }
+
+
+def sees_private_routes(conn: Connection) -> bool:
+    """Whether the athlete let us read private routes (linked with read_all; earlier links weren't)."""
+    return "read_all" in (decrypt_json(conn.token_enc).get("scope") or "").split(",")
 
 
 async def favourites(db: DbSession, conn: Connection) -> list[dict]:

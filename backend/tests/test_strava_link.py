@@ -98,3 +98,13 @@ def test_401_authorization_error_means_wrong_secret(monkeypatch, user_with_app):
     with pytest.raises(strava.StravaLinkError) as exc:
         _exchange(user_with_app)
     assert exc.value.reason == "secret"
+
+
+def test_private_routes_need_read_all_and_survive_a_refresh(monkeypatch, user_with_app):
+    tokens = {"access_token": "a", "refresh_token": "r", "expires_at": 4102444800, "athlete": {"id": 5}}
+    _fake_strava(monkeypatch, 200, tokens)
+    assert not strava.sees_private_routes(_exchange(user_with_app))
+    conn = _exchange(user_with_app, scope="read,read_all,activity:read_all")
+    assert strava.sees_private_routes(conn)
+    strava._store_tokens(conn, tokens, "777")  # a refresh: Strava doesn't resend the scope
+    assert strava.sees_private_routes(conn)

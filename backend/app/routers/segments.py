@@ -43,7 +43,8 @@ def list_segments(athlete: str, user: User = Depends(current_user), db: DbSessio
 
 @router.get("/strava")
 async def from_strava(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    """The athlete's starred segments and routes on Strava that aren't favourites yet."""
+    """The athlete's starred segments and routes on Strava that aren't favourites yet, and whether
+    private routes are among them (links made before read_all was asked for only show public ones)."""
     athlete_id = _athlete_id(db, user, athlete)
     conn = _strava(db, athlete_id)
     if conn is None:
@@ -53,7 +54,10 @@ async def from_strava(athlete: str, user: User = Depends(current_user), db: DbSe
     except (httpx.HTTPError, LookupError, KeyError, TypeError, ValueError):
         raise HTTPException(status_code=502, detail="Strava didn't answer; try again in a minute") from None
     have = {(s.kind, s.strava_id) for s in segments.for_athlete(db, athlete_id)}
-    return [f for f in found if (f["kind"], f["strava_id"]) not in have]
+    return {
+        "found": [f for f in found if (f["kind"], f["strava_id"]) not in have],
+        "private_routes": strava.sees_private_routes(conn),
+    }
 
 
 class NewFavourite(BaseModel):

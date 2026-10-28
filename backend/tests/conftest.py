@@ -33,6 +33,9 @@ class Proxy:
         self.cookie = None
 
     def _identity(self) -> dict:
+        # Only this user's cookie: a test's own client.post (register, login) leaves its cookie in the
+        # shared client, which would otherwise win over ours.
+        self.client.cookies.clear()
         if not self.cookie:
             return {}
         r = self.client.get(
