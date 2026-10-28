@@ -42,7 +42,7 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 `weekday_preferences` disagree, the weekday preferences win.
 - `favourites` are the athlete's own Strava routes and segments, the places they train. Plan outdoor \
 sessions on them whenever one fits, so the plan says where to ride, and put its `id` in that session's \
-`segment_id` (null when none fits; only ids from `favourites`):
+`segment_id` (0 when none fits; only ids from `favourites`):
   - A `route` (`kind`) is a whole ride: use it for outdoor rides whose length matches its `distance_km` \
 and `est_minutes` and whose purpose matches its `uses` (e.g. a "long ride" route for the long ride, a \
 "recovery" route for an easy spin), and set the session's `duration_min` from it. Name it in the \
@@ -53,9 +53,9 @@ easy back down").
   - Follow their `uses` and `notes`. On indoor days, give the matching indoor efforts (same duration and \
 power) and name the segment or route for reference. Vary them across weeks when several fit.
 - Every "Strength" session (main or extra) gets a structured `strength` session; other sessions have \
-`strength` null. Use only exercise `id`s from `strength.exercises` (they fit the athlete's equipment \
-and level) and follow `strength.options`: their `sports`, `minutes` per session, `sessions_per_week` \
-and `limits` (and any athlete notes on injuries). For cyclists and runners:
+`strength` with an empty `focus` and no `exercises`. Use only exercise `id`s from `strength.exercises` \
+(they fit the athlete's equipment and level) and follow `strength.options`: their `sports`, `minutes` per session, \
+`sessions_per_week` and `limits` (and any athlete notes on injuries). For cyclists and runners:
   - Base and build phases: heavy strength twice a week, 3-5 exercises for legs and hips (squat or \
 leg-press pattern, hinge such as deadlift or hip thrust, single-leg work such as split squat or \
 step-up, calves), 3-4 sets of 4-6 reps at a heavy load (RPE 8, 2-3 reps in reserve), 2-3 min rest, plus \
@@ -337,7 +337,7 @@ async def ask_claude(
         raise CoachError("The AI coach is busy, try again in a minute.", 429) from None
     except anthropic.APIStatusError as exc:
         status = f"api_{exc.status_code}"
-        log.warning("Anthropic error %s request_id=%s", exc.status_code, exc.request_id)
+        log.warning("Anthropic error %s request_id=%s: %s", exc.status_code, exc.request_id, exc.message)
         raise CoachError("The AI coach failed, try again later.") from exc
     except anthropic.APIConnectionError:
         status = "connection"
@@ -389,34 +389,31 @@ STEP_SCHEMA = {
 }
 WORKOUT_SCHEMA = _obj({"name": {"type": "string"}, "steps": {"type": "array", "items": STEP_SCHEMA}}, ["name", "steps"])
 # A day's other sessions (plan_tracker.extras): no structured workout, never Rest.
-# A saved Strava segment for the session (segments.py), or null.
-SEGMENT_ID = {"anyOf": [{"type": "null"}, {"type": "integer"}]}
-# A strength session (strength.py): exercises from `strength.exercises`, or null on other sessions.
-STRENGTH_SCHEMA = {
-    "anyOf": [
-        {"type": "null"},
-        _obj(
-            {
-                "focus": {"type": "string"},
-                "exercises": {
-                    "type": "array",
-                    "items": _obj(
-                        {
-                            "id": {"type": "string"},
-                            "sets": {"type": "integer"},
-                            "reps": {"type": "string"},
-                            "effort": {"type": "string"},
-                            "rest_s": {"type": "integer"},
-                            "note": {"type": "string"},
-                        },
-                        ["id", "sets", "reps", "effort", "rest_s", "note"],
-                    ),
+# Unions (anyOf, nullable) make the schema expensive to compile: past a point Anthropic answers
+# 400 "Schema is too complex for compilation". So "none" is a value here, not null.
+# A saved Strava segment for the session (segments.py), or 0.
+SEGMENT_ID = {"type": "integer"}
+# A strength session (strength.py): exercises from `strength.exercises`; no exercises on other sessions.
+STRENGTH_SCHEMA = _obj(
+    {
+        "focus": {"type": "string"},
+        "exercises": {
+            "type": "array",
+            "items": _obj(
+                {
+                    "id": {"type": "string"},
+                    "sets": {"type": "integer"},
+                    "reps": {"type": "string"},
+                    "effort": {"type": "string"},
+                    "rest_s": {"type": "integer"},
+                    "note": {"type": "string"},
                 },
-            },
-            ["focus", "exercises"],
-        ),
-    ]
-}
+                ["id", "sets", "reps", "effort", "rest_s", "note"],
+            ),
+        },
+    },
+    ["focus", "exercises"],
+)
 EXTRA_SESSION_SCHEMA = _obj(
     {
         "type": {"type": "string", "enum": [t for t in SESSION_TYPES if t != "Rest"]},
