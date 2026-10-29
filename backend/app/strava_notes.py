@@ -50,6 +50,9 @@ def duration_text(seconds: int) -> str:
     return f"{h}h {m:02d}m" if h else f"{m}m"
 
 
+# How a session type reads on Strava, where it differs from CoachQuest's name for it.
+LABELS = {"Zwift / indoor": "Indoor"}
+
 # Eight bar heights, low to high: Z1 recovery up to above VO2max (fractions of FTP).
 BARS = "▁▂▃▄▅▆▇█"
 PROFILE_WIDTH = 30
@@ -130,7 +133,7 @@ def note_for(db: DbSession, athlete: User, act: Activity, today: date | None = N
         return None
     minutes = plan_tracker.day_minutes(planned)
     what = _first_sentence(planned.get("description", ""))
-    head = f"{START} {planned['type']}" + (f" · {what}" if what else "")
+    head = f"{START} {LABELS.get(planned['type'], planned['type'])}" + (f" · {what}" if what else "")
     if minutes:
         head += f" ({duration_text(minutes * 60)})"
     extras = [

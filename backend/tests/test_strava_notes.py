@@ -69,7 +69,7 @@ def test_preview_and_write_keep_the_athletes_text(athlete):
     act = _ride(aid, 60)
     url = f"/api/me/activities/{act}/strava-note"
     note = p.post(url + "?preview=true").json()["note"].splitlines()
-    assert note[0] == "🎯 Planned: Zwift / indoor · Tempo (1h 00m)"
+    assert note[0] == "🎯 Planned: Indoor · Tempo (1h 00m)"
     assert note[1].startswith("📊 ") and set(note[1][2:]) <= set(strava_notes.BARS)  # the workout's shape
     assert note[2:] == ["✅ Goal met", "📋 Training plan by CoachQuest · testserver"]
     r = p.post(url)  # Strava not linked

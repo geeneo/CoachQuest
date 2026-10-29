@@ -44,7 +44,7 @@ export default function StravaNotes() {
         changes.
       </p>
       <pre className="strava-note-example">
-        {`🎯 Planned: Zwift / indoor · Sweet spot 3×10 (1h 05m)\n📊 ▂▂▃▃▄▆▆▆▃▂▅▆▆▅▂▃▆▆▆▄▂▃▂▂▁\n✅ Goal met\n📋 Training plan by CoachQuest · ${s.host}`}
+        {`🎯 Planned: Indoor · Sweet spot 3×10 (1h 05m)\n📊 ▂▂▃▃▄▆▆▆▃▂▅▆▆▅▂▃▆▆▆▄▂▃▂▂▁\n✅ Goal met\n📋 Training plan by CoachQuest · ${s.host}`}
       </pre>
       <div className="chips" role="radiogroup" aria-label="Plan on Strava">
         {MODES.map(([value, label]) => (
