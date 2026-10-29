@@ -2,6 +2,46 @@
 
 ## Next up
 
+- [ ] **URGENT to decide: Strava API Agreement (effective 1 June 2026) vs
+      how CoachQuest uses Strava data.** Found while researching the
+      write-back below (strava.com/legal/api_policy):
+      - 5.3: Strava data may not be used "directly or indirectly" in
+        developing or operating an AI application, also derived,
+        aggregated or anonymised data, grounding and retrieval. The AI
+        coach sends recent activities, load and volume to Claude, and these
+        can come from Strava. Only the Strava MCP (3.5) is allowed for AI,
+        and not for commercial or third-party use.
+      - 2.3 / 6.1: a user's Strava data may be shown only to that user,
+        unless the app's athlete capacity is 9,999 or less. CoachQuest
+        shows it to coaches and friends (with consent); our Strava app is
+        far below that limit, so 6.1 likely covers it for now.
+      - Options: (a) email developers@strava.com describing CoachQuest
+        and ask for written OK; (b) a super admin switch "Send Strava
+        data to the AI coach" (off: Strava-sourced activities are left
+        out of AI facts; Garmin, Intervals.icu and manual data still go);
+        (c) make Garmin or Intervals.icu the main activity source for AI
+        users. Not legal advice: check with a lawyer for the company.
+
+- [ ] **Write back to Strava: the plan in the activity description,
+      "powered by coachquest.mmc24.com".** When an activity matches a plan
+      day, CoachQuest updates its Strava description, e.g.
+      "🎯 Planned: Sweet spot 2×10 (Z3-Z4) · ✅ Goal met — CoachQuest
+      training plan · coachquest.mmc24.com".
+      - Possible: Strava's API has Update Activity (PUT /activities/{id})
+        for name, description and more; it needs the activity:write scope
+        (and activity:read_all for "Only me" activities), so athletes
+        connect Strava again and agree.
+      - Opt in per athlete (Profile → Strava: "Add my plan to Strava
+        descriptions"), off by default; keep their own text and add ours
+        below it once (never twice, never over theirs); undo removes it.
+      - Write it from CoachQuest's own plan, not with the AI from Strava
+        data (see the agreement item above), and keep it short and
+        factual: the API policy bans unsolicited promotion (5.12) and
+        Strava decides; using the Strava name or logo has to follow the
+        brand guidelines and must not suggest Strava endorses CoachQuest.
+        Ask developers@strava.com before going live.
+      - Mind the rate limits (an update per activity; batch on sync).
+
 - [x] **Health conditions in Profile (checkboxes with presets), with a
       medical disclaimer.** Athletes tick what applies; the AI coach plans
       around it (and the strength options' "limits" stay for free text).
