@@ -786,16 +786,16 @@ function Actual({ day, tags, save, readOnly }) {
   );
   switch (day.status) {
     case "goal_met":
-      return <div className="actual ok-text">✓ Goal met {logged}</div>;
+      return <div className="actual ok-text">✅ Goal met {logged}</div>;
     case "partial":
-      return <div className="actual warn-text">◐ Partly done {logged}</div>;
+      return <div className="actual warn-text">⚠️ Partly done {logged}</div>;
     case "extra":
-      return <div className="actual muted">+ Trained on a rest day {logged}</div>;
+      return <div className="actual muted">💪 Trained on a rest day {logged}</div>;
     case "missed":
-      if (readOnly) return <div className="actual bad-text">✗ Not logged{day.missed_reason ? ` · ${day.missed_reason}` : ""}</div>;
+      if (readOnly) return <div className="actual bad-text">❌ Not logged{day.missed_reason ? ` · ${day.missed_reason}` : ""}</div>;
       return (
         <div className="actual bad-text row tight">
-          ✗ Not logged
+          ❌ Not logged
           <select
             aria-label="Why missed"
             value={day.missed_reason || ""}

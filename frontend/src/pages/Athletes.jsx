@@ -13,7 +13,8 @@ const SORTS = {
   form: ["Form (most tired first)", (a, b) => (a.load?.tsb ?? 999) - (b.load?.tsb ?? 999)],
 };
 const READINESS = { go: ["Go", "ok"], easy: ["Easy", "warn"], rest: ["Rest", "bad"] };
-const WORKOUT_STATUS = { done: "✓", partial: "◐", missed: "✗", today: "•", planned: "•", skipped: "–", cancelled: "–" };
+// Same emoji as the calendar and plan days (TrainingCalendar STATUS, lib/dayStatus.js).
+const WORKOUT_STATUS = { done: "✅", partial: "⚠️", missed: "❌", today: "🎯", planned: "•", skipped: "⏭️", cancelled: "🚫" };
 
 // My athletes: every athlete's training week on one page (coach dashboard).
 export default function Athletes() {

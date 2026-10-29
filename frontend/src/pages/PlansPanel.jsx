@@ -6,6 +6,7 @@ import { api } from "../lib/api.js";
 import { dateTime, formatDate } from "../lib/format.js";
 import { MAX_WEEKS, weeksToEvent } from "../lib/planWeeks.js";
 import { localToday } from "../lib/workout.js";
+import { DAY_STATUS } from "../lib/dayStatus.js";
 import { useReadOnly } from "../lib/readOnly.js";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -139,12 +140,20 @@ export default function PlansPanel({ id, athlete }) {
           </div>
           <div className="mini-week">
             {thisWeek.days.map((d) => (
-              <div key={d.date} className={`mini-day status-${d.status} ${d.is_today ? "today" : ""}`}>
+              <div
+                key={d.date}
+                className={`mini-day ${DAY_STATUS[d.status]?.cls || ""} ${d.is_today ? "today" : ""}`}
+              >
                 <span className="muted small">{d.weekday.slice(0, 1).toUpperCase() + d.weekday.slice(1)}</span>
                 <strong>{d.type}</strong>
-                <span className="small mini-status">
-                  {{ goal_met: "✓", partial: "◐", missed: "✗", extra: "+" }[d.status] || ""}
-                </span>
+                {DAY_STATUS[d.status] && d.status !== "today" && (
+                  <span className="small mini-status">
+                    <span className="mini-badge" role="img" aria-hidden="true">
+                      {DAY_STATUS[d.status].emoji}
+                    </span>{" "}
+                    {DAY_STATUS[d.status].label}
+                  </span>
+                )}
               </div>
             ))}
           </div>

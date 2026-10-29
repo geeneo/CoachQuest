@@ -1044,11 +1044,37 @@ label.inline.grow input {
 .mini-day.today {
   outline: 2px solid var(--c1);
 }
-.mini-day.status-goal_met .mini-status {
-  color: var(--accent);
+/* How the day went: tinted like the calendar's workout cards, with an emoji and a word. */
+.mini-day.good {
+  background: color-mix(in srgb, var(--ok) 16%, var(--panel-2));
+  box-shadow: inset 3px 0 0 var(--ok);
 }
-.mini-day.status-missed .mini-status {
+.mini-day.warn {
+  background: color-mix(in srgb, var(--warn) 14%, var(--panel-2));
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+.mini-day.bad {
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel-2));
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.mini-status {
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-day.good .mini-status {
+  color: var(--ok);
+}
+.mini-day.warn .mini-status {
+  color: var(--warn);
+}
+.mini-day.bad .mini-status {
   color: var(--danger);
+}
+.mini-badge {
+  font-size: 1rem;
+  vertical-align: -1px;
 }
 @media (max-width: 768px) {
   .day {
