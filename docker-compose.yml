@@ -13,7 +13,8 @@ services:
     environment:
       DATA_DIR: /data
     volumes:
-      - ${DATA_PATH:-./data}:/data
+      # :Z relabels the folder for SELinux (Fedora / RHEL hosts); ignored where SELinux is off.
+      - ${DATA_PATH:-./data}:/data:Z
     networks: [internal]
     # No ports: the API is reachable only through the proxy.
 
@@ -28,7 +29,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-coachquest}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes:
-      - ${PG_DATA_PATH:-./pgdata}:/var/lib/postgresql/data
+      - ${PG_DATA_PATH:-./pgdata}:/var/lib/postgresql/data:Z
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-coachquest} -d ${POSTGRES_DB:-coachquest}"]
       interval: 10s
