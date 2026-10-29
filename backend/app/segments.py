@@ -78,6 +78,7 @@ def segment_out(s: Segment) -> dict:
         "city": s.city,
         "uses": s.uses or [],
         "notes": s.notes,
+        "shared": bool(s.shared),
     }
 
 

@@ -2092,3 +2092,19 @@ ul.segments li {
   padding: 0.35rem 0;
   justify-content: flex-start;
 }
+.chip.static {
+  cursor: default;
+}
+label.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 260px;
+}
+label.search input {
+  flex: 1;
+}
+.share-toggle {
+  display: block;
+  margin-top: 4px;
+}

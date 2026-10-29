@@ -341,3 +341,53 @@ def test_long_route_ids_survive_the_browser(make_user, monkeypatch):
     added = p.post("/api/athletes/me/segments/from-strava", json=body).json()["added"]
     assert [a["strava_id"] for a in added] == [str(rid)]
     assert added[0]["url"].endswith(f"/routes/{rid}")
+
+
+def test_share_routes_with_everyone(make_user):
+    a = make_user("rider@example.com")
+    b = make_user("other@example.com")
+    url = "/api/athletes/me/segments"
+    climb = a.post(
+        url, json={"link": LINK, "name": "Helshoogte", "uses": ["hill repeats"], "notes": "4-8 times"}
+    ).json()
+    loop = a.post(url, json={"link": ROUTE, "name": "Franschhoek loop", "uses": ["long ride"]}).json()
+    assert climb["shared"] is False
+    assert b.get("/api/shared-routes").json() == []  # nothing shared yet
+
+    assert a.patch(f"{url}/{climb['id']}", json={"shared": True}).json()["shared"] is True
+    a.patch(f"{url}/{loop['id']}", json={"shared": True})
+    shared = b.get("/api/shared-routes").json()
+    rider = a.get("/api/auth/me").json()["display_name"]
+    assert [(s["name"], s["shared_by"], s["have"]) for s in shared] == [
+        ("Franschhoek loop", [rider], False),
+        ("Helshoogte", [rider], False),
+    ]
+    assert [s["name"] for s in b.get("/api/shared-routes?kind=segment").json()] == ["Helshoogte"]
+    assert [s["name"] for s in b.get("/api/shared-routes?q=long").json()] == ["Franschhoek loop"]
+
+    # b adds the climb to their favourites: details, uses and notes come along; not shared by b.
+    copy = b.post(f"{url}/copy", json={"segment_id": climb["id"]}).json()
+    assert (copy["name"], copy["uses"], copy["notes"], copy["shared"]) == (
+        "Helshoogte",
+        ["hill repeats"],
+        "4-8 times",
+        False,
+    )
+    assert b.post(f"{url}/copy", json={"segment_id": climb["id"]}).status_code == 409
+    assert next(s for s in b.get("/api/shared-routes").json() if s["name"] == "Helshoogte")["have"] is True
+    # Shared by two people: listed once, with both names.
+    b.patch(f"{url}/{copy['id']}", json={"shared": True})
+    helshoogte = [s for s in a.get("/api/shared-routes").json() if s["name"] == "Helshoogte"]
+    assert len(helshoogte) == 1 and helshoogte[0]["shared_count"] == 2
+
+    # Unsharing: no longer offered; copies stay.
+    a.patch(f"{url}/{loop['id']}", json={"shared": False})
+    assert "Franschhoek loop" not in [s["name"] for s in b.get("/api/shared-routes").json()]
+    assert b.post(f"{url}/copy", json={"segment_id": loop["id"]}).status_code == 404
+
+    # An admin takes a shared one off the list for everyone; others can't.
+    assert b.delete(f"/api/shared-routes/{climb['id']}").status_code == 403
+    boss = make_user("admin@example.com")
+    assert boss.delete(f"/api/shared-routes/{climb['id']}").json() == {"ok": True}
+    assert a.get("/api/shared-routes").json() == []
+    assert len(b.get(url).json()["favourites"]) == 1

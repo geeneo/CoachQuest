@@ -5,7 +5,7 @@ import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { duration } from "../lib/format.js";
 
-const KIND = {
+export const KIND = {
   route: [
     "Routes",
     "🗺",
@@ -14,7 +14,7 @@ const KIND = {
   segment: ["Segments", "⛰", "Climbs and stretches for efforts: hill repeats, intervals, sprints."],
 };
 
-function stats(f) {
+export function stats(f) {
   return [
     f.distance_m && `${(f.distance_m / 1000).toFixed(f.kind === "route" ? 0 : 1)} km`,
     f.kind === "ride" && "from a ride",
@@ -27,7 +27,7 @@ function stats(f) {
 }
 
 // Favourite Strava routes and segments (backend segments.py): the AI coach plans rides on them.
-export default function Segments({ id, readOnly }) {
+export default function Segments({ id, readOnly, canShare }) {
   const url = `/api/athletes/${id}/segments`;
   const res = useApi(url);
   const [draft, setDraft] = useState({ link: "", name: "", notes: "", uses: [] });
@@ -125,6 +125,22 @@ export default function Segments({ id, readOnly }) {
                       ))}
                     </div>
                     {f.notes && <div className="small muted">{f.notes}</div>}
+                    {canShare && !readOnly ? (
+                      <label className="check small share-toggle">
+                        <input
+                          type="checkbox"
+                          checked={f.shared}
+                          onChange={(e) => call(`/${f.id}`, "PATCH", { shared: e.target.checked })}
+                        />{" "}
+                        Share with everyone in CoachQuest (with your name)
+                        {f.shared && f.kind === "route" && (
+                          <span className="muted"> · make it public on Strava so others can open it</span>
+                        )}
+                        {f.shared && f.kind === "ride" && <span className="muted"> · others see your ride on Strava</span>}
+                      </label>
+                    ) : (
+                      f.shared && <div className="small muted">Shared with everyone</div>
+                    )}
                   </span>
                   {!readOnly && (
                     <button

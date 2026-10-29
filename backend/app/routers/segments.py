@@ -4,14 +4,14 @@ The athlete and coaches with the plans scope; friends only look.
 """
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import segments
 from ..db import Activity, Connection, Segment, User, get_db
-from ..deps import current_user, require_scope, resolve_athlete_id
+from ..deps import admin_user, current_user, require_scope, resolve_athlete_id
 from ..providers import strava
 
 router = APIRouter(prefix="/api/athletes/{athlete}/segments", tags=["segments"])
@@ -188,6 +188,7 @@ class FavouriteEdit(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     notes: str | None = Field(default=None, max_length=300)
     uses: list[str] | None = Field(default=None, max_length=8)
+    shared: bool | None = None
 
 
 def _own(db: DbSession, athlete_id: int, segment_id: int) -> Segment:
@@ -209,6 +210,8 @@ def edit_segment(
     changes = body.model_dump(exclude_none=True)
     if "uses" in changes:
         s.uses = segments.clean_uses(changes.pop("uses"))
+    if "shared" in changes:
+        s.shared = changes.pop("shared")
     for k, v in changes.items():
         setattr(s, k, v.strip())
     db.commit()
@@ -219,5 +222,88 @@ def edit_segment(
 def delete_segment(athlete: str, segment_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     """Plan days that named it keep their text; the link just stops showing."""
     db.delete(_own(db, _athlete_id(db, user, athlete), segment_id))
+    db.commit()
+    return {"ok": True}
+
+
+class CopyShared(BaseModel):
+    segment_id: int
+
+
+# Details a copy of a shared route or segment takes over; uses and notes are the sharer's, as a start.
+COPIED = ("kind", "strava_id", "name", "distance_m", "avg_grade", "elevation_m", "city", "est_minutes", "sport")
+
+
+@router.post("/copy")
+def copy_shared(athlete: str, body: CopyShared, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Add a route or segment someone shared (Routes page) to the athlete's favourites."""
+    athlete_id = _athlete_id(db, user, athlete)
+    src = db.get(Segment, body.segment_id)
+    if src is None or not src.shared:
+        raise HTTPException(status_code=404, detail="That route isn't shared (any more)")
+    if db.scalar(select(Segment).where(Segment.athlete_id == athlete_id, Segment.strava_id == src.strava_id)):
+        raise HTTPException(status_code=409, detail=f"That {src.kind} is already a favourite")
+    s = Segment(
+        athlete_id=athlete_id,
+        added_by=user.id,
+        uses=list(src.uses or []),
+        notes=src.notes,
+        **{k: getattr(src, k) for k in COPIED},
+    )
+    db.add(s)
+    db.commit()
+    return segments.segment_out(s)
+
+
+# Routes and segments athletes shared with everyone in CoachQuest (the Routes page).
+shared_router = APIRouter(prefix="/api/shared-routes", tags=["segments"])
+
+
+@shared_router.get("")
+def list_shared(
+    q: str = Query(default="", max_length=60),
+    kind: str | None = Query(default=None, pattern="^(route|segment)$"),
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Every shared route and segment once (by Strava id), with who shared it and whether it's yours already."""
+    rows = db.execute(
+        select(Segment, User.display_name)
+        .join(User, User.id == Segment.athlete_id)
+        .where(Segment.shared.is_(True))
+        .order_by(Segment.created_at)
+    ).all()
+    mine = {s.strava_id for s in segments.for_athlete(db, user.id)}
+    words = q.lower().split()
+    out: dict[int, dict] = {}
+    for s, name in rows:
+        is_route = s.kind != "segment"
+        if kind and (kind == "route") != is_route:
+            continue
+        if not all(w in f"{s.name} {s.city} {' '.join(s.uses or [])}".lower() for w in words):
+            continue
+        if s.strava_id in out:
+            f = out[s.strava_id]
+            f["shared_count"] += 1
+            if name not in f["shared_by"]:
+                f["shared_by"].append(name)
+            continue
+        out[s.strava_id] = {
+            **segments.segment_out(s),
+            "shared_by": [name],
+            "shared_count": 1,
+            "have": s.strava_id in mine,
+        }
+    return sorted(out.values(), key=lambda f: f["name"].lower())[:300]
+
+
+@shared_router.delete("/{segment_id}")
+def unshare(segment_id: int, _: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Admin: take a route or segment off the shared list (for everyone who shared it). Favourites stay."""
+    s = db.get(Segment, segment_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    for other in db.scalars(select(Segment).where(Segment.strava_id == s.strava_id, Segment.shared.is_(True))):
+        other.shared = False
     db.commit()
     return {"ok": True}

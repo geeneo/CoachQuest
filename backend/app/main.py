@@ -119,6 +119,7 @@ for r in (
     athlete_notes.router,
     posts.router,
     segments.router,
+    segments.shared_router,
     exercises.router,
 ):
     app.include_router(r)

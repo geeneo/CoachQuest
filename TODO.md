@@ -2,6 +2,70 @@
 
 ## Next up
 
+- [ ] **Health conditions in Profile (checkboxes with presets), with a
+      medical disclaimer.** Athletes tick what applies; the AI coach plans
+      around it (and the strength options' "limits" stay for free text).
+      - Presets, grouped, each with an optional side (left / right / both)
+        and a short note:
+        - Heart: heart condition, high blood pressure, arrhythmia (e.g.
+          atrial fibrillation), pacemaker / ICD, on beta blockers (heart
+          rate zones less reliable: plan by power or feel).
+        - Joints: knee, hip, ankle, shoulder, lower back, neck, wrist.
+        - Muscles and tendons: Achilles, hamstring, calf, plantar fasciitis,
+          IT band.
+        - Other: asthma, diabetes (type 1 / 2), osteoporosis / low bone
+          density, pregnancy / postpartum, recent surgery, concussion,
+          recent illness (e.g. COVID), and "other" with a text box.
+        - Per condition: current or past, and "my doctor cleared me for
+          training" (yes / no).
+      - The AI coach gets them as facts with rules: e.g. heart conditions
+        or beta blockers → no max efforts without clearance, use power or
+        RPE instead of heart rate; knee → no deep squats or jumps, easy
+        gears; lower back → core work, careful with heavy hinges;
+        osteoporosis → impact and loaded strength as cleared; pregnancy →
+        keep it conversational, no lying on the back after the first
+        trimester. A current condition without clearance → the plan stays
+        easy and says to see a doctor first.
+      - Disclaimer, shown in Profile next to the conditions, on plans, in
+        the AI coach, and once when ticking a heart condition (must
+        confirm): "CoachQuest is not medical advice. Always consult a
+        doctor or other qualified health professional before starting or
+        changing training, especially with a medical condition or injury.
+        Stop and get help if you feel chest pain, dizziness, unusual
+        shortness of breath or pain." Also in the sign-up terms.
+      - Privacy: health data is special personal information (POPIA /
+        GDPR): opt in, coaches see it only with the plans scope (friends
+        never), and it's part of account export and delete.
+
+- [ ] **Maintain fitness when not training for an event.** Today a plan
+      needs a goal (free text) and the event date is optional, so plans
+      without an event still build like a race block. Suggestions:
+      - A plan type on "New plan": "Training for an event" or "Maintain /
+        general fitness" (and maybe "Build base" or "Lose weight"). For
+        maintain: no event date, rolling blocks of 4 weeks (3 normal + 1
+        easy) that renew themselves, instead of base → build → peak →
+        taper.
+      - What maintain means to the AI coach: keep fitness (CTL) roughly
+        where it is (within ±5), mostly endurance (Z2) with one quality
+        session a week (sweet spot, threshold or VO2 rotating), strength
+        twice a week, and variety (group ride, gravel, a new route from
+        Routes) so it stays fun. Hours follow the athlete's weekday
+        preferences.
+      - A "maintain target": hold current CTL, or a gentle +1-2 CTL a
+        month; the Progress chart shows the band instead of a race-day
+        target.
+      - When a new block is due, CoachQuest re-plans the next 4 weeks
+        automatically from recent training (or asks first), and suggests
+        an event if the athlete adds one on Races.
+      - Optional "fitness check" every 6-8 weeks (FTP test or a known
+        segment from Routes) to update zones.
+
+- [x] **Routes page: favourites and routes shared by athletes.** A Routes
+      menu item with your favourite routes and segments (moved from My
+      training → Plans) and "Shared by athletes": share a favourite with
+      everyone (your name shows), search and filter shared ones, add one
+      to your favourites in one click; admins can take one off the list.
+
 - [x] **Guide (News & guides): link Intervals.icu with Zwift so plan workouts show in Zwift.**
       A how-to post (posts_seed.py, like the routes & segments guide):
       CoachQuest → Intervals.icu calendar → Zwift.

@@ -610,6 +610,8 @@ class Segment(Base):
     # What it's for (segments.USES), and how it's used, for the AI coach ("4-8 times, easy back down").
     uses: Mapped[list | None] = mapped_column(JSON, nullable=True)
     notes: Mapped[str] = mapped_column(String(300), default="")
+    # Shared with everyone in CoachQuest (Routes page): others can add it to their own favourites.
+    shared: Mapped[bool] = mapped_column(Boolean, default=False)
     added_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -714,6 +716,7 @@ _ADDED_COLUMNS = {
         "est_minutes": "INTEGER",
         "sport": "VARCHAR(10) NOT NULL DEFAULT 'ride'",
         "uses": "JSON",
+        "shared": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "ai_calls": {
         "kind": "VARCHAR(12) NOT NULL DEFAULT ''",

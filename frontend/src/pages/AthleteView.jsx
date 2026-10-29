@@ -90,7 +90,16 @@ export default function AthleteView({ self }) {
         <>
           <CoachInstructions id={id} isMe={!!self} />
           <AthleteNotes id={id} isMe={!!self} />
-          <Segments id={id} readOnly={s.view_only || s.admin_view} />
+          {self ? (
+            <section className="card">
+              <p className="small">
+                Your favourite routes and segments, and the ones other athletes share, are on{" "}
+                <Link to="/routes">Routes</Link>.
+              </p>
+            </section>
+          ) : (
+            <Segments id={id} readOnly={s.view_only || s.admin_view} />
+          )}
           {!self && <TrainingPreferences id={id} />}
           <PlansPanel id={id} athlete={s} />
         </>

@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Link2,
   LogOut,
+  Map as MapIcon,
   Menu,
   Newspaper,
   Settings,
@@ -21,6 +22,7 @@ import ThemeToggle from "./ThemeToggle.jsx";
 const NAV = [
   { to: "/", label: "My training", icon: LayoutDashboard, end: true },
   { to: "/workouts", label: "Workouts", icon: Dumbbell },
+  { to: "/routes", label: "Routes", icon: MapIcon },
   { to: "/races", label: "Races", icon: Flag },
   { to: "/connections", label: "Connections", icon: Link2 },
   { to: "/sharing", label: "Sharing", icon: Share2 },
