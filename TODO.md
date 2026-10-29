@@ -11,6 +11,10 @@
       menu.sh option 11) runs deploy.sh. No Docker socket or root for the
       web app. Later: an email to super admins when new commits arrive;
       roll back to the previous version with one click.
+      - [ ] Review the lock-down later (fine for testing now: super admin
+        plus password): e.g. a second factor (TOTP) for updates, an email
+        to all super admins when one starts, only allow it from certain
+        IPs, or deploy only signed / tagged releases.
 
 - [x] **Deleting a user deletes all their data.** accounts.delete_account
       follows every foreign key to users (tables added later are covered
