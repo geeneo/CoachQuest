@@ -2,6 +2,52 @@
 
 ## Next up
 
+- [ ] **Multi-day events (stage races): each day its own line, with totals,
+      so the AI coach plans for the whole event.** E.g. Sani2c / Wines2Whales
+      (3 days), Tankwa Trek (4), Cape Epic (8, with a prologue), Joberg2c (9).
+      Today a race has one distance and climbing for the whole event and a
+      "days" number; the AI can't see that day 2 is the long, hilly one.
+      Research (29 Oct): stage races need specific preparation for riding
+      hard on consecutive days: back-to-back long rides at weekends to build
+      fatigue resistance, 3-week blocks with a recovery week, sessions
+      ordered to train riding tired; a short taper focused on recovery
+      (fitness can't be added in race week); and between stages: refuel
+      straight after (carbohydrate and protein), easy spin, sleep or a nap,
+      and eating on the bike with the next day in mind (Bicycling SA 8-week
+      stage race plan; RideAndRace Cape Epic plans; Cycle-Smart, Fast Talk
+      Labs, Biogen Tankwa Trek guide).
+      Suggested build:
+      - **Stages under a race** (new table): number, date, name, distance,
+        climbing, terrain, start time, kind (prologue, stage, time trial,
+        marathon, rest day), notes, and optionally a route from Routes (its
+        profile from Strava). On Races: a "Multi-day event" switch shows a
+        stage table with "Add day" and a totals row (days, km, metres,
+        longest and hardest day); dates follow from the first day.
+      - **Totals for everything that uses the race today:** days to go to
+        the first stage, plan length up to the last, the target fitness
+        (CTL) for the whole event (higher than for one day of the same
+        length), and progress.
+      - **What the AI coach gets:** each stage and the totals, the longest and
+        hardest days, and rules: in the build phase, back-to-back long rides
+        and 2-3 day blocks shaped like the event (e.g. 6-10 weeks out, and a
+        dress-rehearsal weekend 3-4 weeks out); a recovery week after each
+        block; a short taper; in race week, each stage as a Race day with its
+        own pacing (hold back on day 1, ride the hardest stage by effort, not
+        ego), fuelling per hour from the stage's expected time, and recovery
+        between stages; then a recovery week after the event.
+      - **On the plan and calendar:** each stage shows as its own day, and
+        rides are matched to stages; afterwards, a summary of the event
+        (per day and total).
+      - **Easier entry later:** paste the organiser's stage list, or import
+        from their GPX files.
+      - Check with an athlete who has done one (e.g. your Double Century,
+        Cape Epic riders) what they'd want to see per stage.
+      Sources: bicycling.co.za/training/8-weeks-first-stage-race;
+      trainingpeaks.com RideAndRace Cape Epic plans;
+      cycle-smart.com/library/2017/4/14/multi-day-race-recovery;
+      fasttalklabs.com/recovery/how-to-maximize-recovery-during-multi-day-events;
+      biogen.co.za/events/tankwa-trek-survival-guide.
+
 - [x] **Update CoachQuest from the admin page.** Admin → Update CoachQuest
       (super admins): running version, newest on GitHub, the new commits,
       "Check now", and "Update now" (everything / backend / frontend, with
