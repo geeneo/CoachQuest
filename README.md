@@ -358,7 +358,8 @@ certificates added to the nginx config. Then turn on the HSTS line in
 `nginx/templates/default.conf.template`.
 
 Day-to-day: `bash deploy.sh [all|backend|frontend]`, or `bash menu.sh` for
-version check, logs, backups (rotated, keeps 14) and cleanup. All state lives
+version check, logs, backups (`backup.sh`, rotated, keeps 14; option 10 turns
+a nightly backup on or off) and cleanup. All state lives
 in `DATA_PATH` (default `./data`): SQLite by default, or Postgres in its own
 container. [docs/postgres.md](docs/postgres.md) moves the data across with
 `python -m app.movedb` (the SQLite file is only read) and back again.

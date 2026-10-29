@@ -93,12 +93,10 @@ Use the same terminal as step 4 above: it loaded `.env`, which the commands belo
 
 ## 3. Backups on Postgres
 
-Menu option 7 now makes `backups/coachquest-pg-<date>.sql.gz` with `pg_dump` (the last 14
-are kept). For the nightly cron job, use:
-
-```
-17 2 * * * cd /root/coachquest && set -a && . ./.env && set +a && mkdir -p backups && docker compose -p "$COMPOSE_PROJECT" -f docker-compose.yml exec -T db pg_dump -U coachquest coachquest | gzip > backups/coachquest-pg-$(date +\%Y\%m\%d).sql.gz
-```
+`bash backup.sh` (menu option 7) makes `backups/coachquest-pg-<date>.sql.gz` with
+`pg_dump`, keeping the last 14. **Menu option 10** turns a nightly backup at 02:17 on or off:
+it adds or removes one line in root's crontab, makes a backup straight away to test, and logs
+each run to `backups/backup.log`. The menu shows whether it's on and the latest backup.
 
 To restore one into an empty database:
 

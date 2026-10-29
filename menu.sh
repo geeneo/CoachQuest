@@ -6,6 +6,17 @@ set -a; source .env; set +a
 DATA=${DATA_PATH:-./data}
 BACKUPS=${BACKUP_PATH:-./backups}
 DC="docker compose -p $COMPOSE_PROJECT -f docker-compose.yml"
+# Marks this folder's nightly backup line in root's crontab (option 10).
+CRON_TAG="# coachquest-backup:$PWD"
+nightly_installed() { crontab -l 2>/dev/null | grep -qF "$CRON_TAG"; }
+nightly_status() {
+  if nightly_installed; then
+    last=$(ls -1t "$BACKUPS"/coachquest-*.gz 2>/dev/null | head -1)
+    echo "ON (last: $([[ -n $last ]] && basename "$last" || echo "none yet")) - choose to remove"
+  else
+    echo "OFF - choose to install"
+  fi
+}
 
 while true; do
   cat <<MENU
@@ -14,8 +25,9 @@ CoachQuest ($COMPOSE_PROJECT) — commit on disk: $(git rev-parse --short HEAD)
  1) Version check (disk / remote / running)
  2) Deploy all        3) Deploy backend      4) Deploy frontend
  5) Logs: api         6) Logs: proxy
- 7) Back up data (keeps last 14)
+ 7) Back up data now (keeps last 14)
  8) Status            9) Docker cleanup (dangling images)
+10) Nightly backup at 02:17: $(nightly_status)
  q) Quit
 MENU
   read -rp "> " choice
@@ -27,17 +39,22 @@ MENU
     4) bash deploy.sh frontend ;;
     5) $DC logs --tail 200 -f api ;;
     6) $DC logs --tail 200 -f proxy ;;
-    7) mkdir -p "$BACKUPS"
-       if [[ ${DATABASE_URL:-} == postgresql* ]]; then
-         f="$BACKUPS/coachquest-pg-$(date +%Y%m%d-%H%M%S).sql.gz"
-         $DC exec -T db pg_dump -U "${POSTGRES_USER:-coachquest}" "${POSTGRES_DB:-coachquest}" | gzip > "$f"
-         ls -1t "$BACKUPS"/coachquest-pg-*.sql.gz | tail -n +15 | xargs -r rm --; echo "Saved $f"
-       else
-         f="$BACKUPS/coachquest-$(date +%Y%m%d-%H%M%S).db"
-         sqlite3 "$DATA/coachquest.db" ".backup '$f'" 2>/dev/null || cp "$DATA/coachquest.db" "$f"
-         gzip "$f"; ls -1t "$BACKUPS"/coachquest-*.db.gz | tail -n +15 | xargs -r rm --; echo "Saved $f.gz"
-       fi ;;
+    7) bash backup.sh ;;
     8) $DC ps ;;
+    10) if ! command -v crontab >/dev/null; then
+          echo "cron isn't installed: dnf install -y cronie && systemctl enable --now crond (apt: cron)"
+        elif nightly_installed; then
+          read -rp "Remove the nightly backup? [y/N] " yn
+          if [[ $yn == [yY] ]]; then
+            { crontab -l 2>/dev/null | grep -vF "$CRON_TAG" || true; } | crontab -
+            echo "Removed. Backups already made stay in $BACKUPS."
+          fi
+        else
+          mkdir -p "$BACKUPS"
+          { crontab -l 2>/dev/null || true; echo "17 2 * * * cd $PWD && bash backup.sh >> $BACKUPS/backup.log 2>&1 $CRON_TAG"; } | crontab -
+          echo "Installed: every night at 02:17 (server time), log in $BACKUPS/backup.log. Making one now to test:"
+          bash backup.sh
+        fi ;;
     9) docker image prune -f ;;
     q) exit 0 ;;
   esac
