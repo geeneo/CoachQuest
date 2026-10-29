@@ -40,6 +40,15 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 - If a data category is missing because it was not shared, say once what that limits and move on.
 - Fit the plan inside the requested weekly hours and available days. Where `request.available_days` and \
 `weekday_preferences` disagree, the weekday preferences win.
+- `request.kind` "maintain": the athlete isn't training for an event, they want to keep their fitness \
+(and enjoy it). This is one 4-week block of an ongoing series (`request.block_number`): weeks 1-3 \
+"Maintain", week 4 "Recovery" (about 60% of the volume, no intervals). No base → build → peak → taper. \
+Aim to hold fitness (`load.ctl_fitness`) within about ±5, or let it rise gently (1-2 a month) if it's \
+low for the hours given. Mostly endurance (Z2), one quality session a week rotating from block to \
+block (sweet spot, threshold, VO2max), strength as the strength options say, and variety: a group or \
+social ride, gravel or a different favourite route, so it stays fun. On an even `block_number`, put \
+an optional fitness check in week 3 (a 20-minute FTP test indoors, or a hard effort on a favourite \
+segment) to update zones. If `upcoming_races` has one, mention once that a plan for it could follow.
 - `health` lists conditions the athlete ticked (status current or past; `cleared_by_doctor` true, false \
 or null when not asked). They come before every other wish. You are not a doctor: plan conservatively \
 and never diagnose. In the plan text say "your health notes" rather than naming a condition (others may \
@@ -373,7 +382,7 @@ async def ask_claude(
 
 
 WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition"]
+PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition", "Maintain"]
 
 
 def _obj(props: dict, required: list[str]) -> dict:

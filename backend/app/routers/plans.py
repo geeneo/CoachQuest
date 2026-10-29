@@ -1,7 +1,9 @@
 """Training plans written by the AI coach, tracked day by day against what was logged."""
 
 import copy
+import re
 from datetime import date, datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import Response
@@ -48,6 +50,11 @@ class PlanRequest(BaseModel):
     coach_notes: str = Field(default="", max_length=2000)
     # Indoor days become structured workouts on the calendar (and go to the athlete's platforms).
     structured_workouts: bool = True
+    # "event": building to the goal or event date; "maintain": keep fitness, in 4-week blocks that renew.
+    kind: Literal["event", "maintain"] = "event"
+
+
+MAINTAIN_WEEKS = 4
 
 
 def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = None, viewer: User | None = None) -> dict:
@@ -64,6 +71,10 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
         "approval": p.approval or plan_approval.APPROVED,
         "has_pending": bool(p.pending),
     }
+    if (p.request or {}).get("kind") == "maintain" and p.start_date:
+        # Maintain plans renew in 4-week blocks: when the next one starts, and whether it's planned.
+        planned = db.scalar(select(Plan.id).where(Plan.athlete_id == p.athlete_id, Plan.start_date >= _block_end(p)))
+        out["next_block"] = {"start": _next_block_start(db, p), "ends": _block_end(p), "planned": planned is not None}
     if full:
         athlete = db.get(User, p.athlete_id)
         today = today or localtime.today(athlete)
@@ -270,7 +281,11 @@ async def create_plan(
             },
         )
     monday = plan_tracker.first_week_start(body.start_date, localtime.today(target), target.week_start or 0)
+    if body.kind == "maintain":
+        body.weeks, body.event_date = MAINTAIN_WEEKS, None
     request = body.model_dump(mode="json", exclude={"title", "without_data"})
+    if body.kind == "maintain":
+        request["block_number"] = _maintain_blocks(db, athlete_id) + 1
     if not request["coach_notes"]:
         del request["coach_notes"]
     request["start_date"] = monday.isoformat()
@@ -301,6 +316,55 @@ async def create_plan(
         plan_approval.ask_coaches(db, background, plan, "new training plan")
     _workouts(db, plan, background)
     return plan_out(plan, db, full=True, viewer=user)
+
+
+def _block_end(p: Plan) -> date:
+    """The day after a plan's last week."""
+    return p.start_date + timedelta(days=7 * (len(p.weeks or []) or (p.request or {}).get("weeks", 4)))
+
+
+def _next_block_start(db: DbSession, p: Plan) -> date:
+    """Right after the block, or next week if the block ended a while ago."""
+    athlete = db.get(User, p.athlete_id)
+    soonest = plan_tracker.first_week_start(None, localtime.today(athlete), athlete.week_start or 0)
+    return max(_block_end(p), soonest)
+
+
+def _maintain_blocks(db: DbSession, athlete_id: int) -> int:
+    """How many maintain plans the athlete has had (the series' block number so far)."""
+    rows = db.scalars(select(Plan.request).where(Plan.athlete_id == athlete_id)).all()
+    return sum(1 for r in rows if (r or {}).get("kind") == "maintain")
+
+
+@router.post("/{plan_id}/next-block")
+async def next_block(
+    athlete: str,
+    plan_id: int,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """A maintain plan's next 4 weeks: the same settings, starting the day after it ends."""
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "plans")
+    p = db.get(Plan, plan_id)
+    if p is None or p.athlete_id != athlete_id:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    req = p.request or {}
+    if req.get("kind") != "maintain" or not p.start_date:
+        raise HTTPException(status_code=409, detail="Only a maintain plan has a next block")
+    start = _next_block_start(db, p)
+    if db.scalar(select(Plan.id).where(Plan.athlete_id == athlete_id, Plan.start_date >= _block_end(p))):
+        raise HTTPException(status_code=409, detail="The next block is planned already")
+    base = re.sub(r" · block \d+$", "", p.title)
+    body = PlanRequest(
+        **{k: v for k, v in req.items() if k in PlanRequest.model_fields and k not in ("start_date", "coach_notes")},
+        title=f"{base} · block {_maintain_blocks(db, athlete_id) + 1}"[:200],
+        start_date=start,
+        without_data=True,
+        coach_notes=req.get("coach_notes", "") if user.id != athlete_id else "",
+    )
+    return await create_plan(athlete, body, background, user, db)
 
 
 def _check_coach_notes(user: User, athlete_id: int, notes: str) -> None:

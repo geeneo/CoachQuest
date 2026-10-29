@@ -12,7 +12,7 @@ import PlanComments from "./PlanComments.jsx";
 import WorkoutChart from "./WorkoutChart.jsx";
 import { useReadOnly } from "../lib/readOnly.js";
 
-const PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition"];
+const PHASES = ["Base", "Build", "Recovery", "Peak", "Taper", "Race", "Transition", "Maintain"];
 const DAY_LABEL = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 const fmtDate = shortDate;
 

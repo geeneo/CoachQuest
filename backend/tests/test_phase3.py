@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from app import assessments, coach, compliance
+from app import assessments, coach, compliance, plan_tracker
 from app.db import Activity, ScheduledWorkout, SessionLocal, User
 
 STEADY = [{"kind": "steady", "duration_s": 3600, "power": 0.8}]
@@ -369,3 +369,47 @@ def test_download_workouts_from_the_plan(make_user, planner):
     assert p.get(f"{base}/weeks/9/workouts.zip").status_code == 404
     other = make_user("b@example.com")
     assert other.get(f"/api/athletes/{_uid(p)}/plans/{plan['id']}/days/{tue}/zwo").status_code == 404
+
+
+def test_maintain_plans_run_in_4_week_blocks(make_user, planner, monkeypatch):
+    p = make_user("m@example.com")
+    planner["value"] = [_week(), _week(), _week(), _week()]
+    seen = []
+
+    async def fake_generate(db, viewer, athlete, facts):
+        seen.append(facts["request"])
+        return {"summary_md": "Plan", "weeks": planner["value"]}, "claude-test"
+
+    monkeypatch.setattr("app.routers.plans.generate_plan", fake_generate)
+    plan = _create(p, kind="maintain", weeks=9, event_date="2030-01-01", goal="Maintain fitness")
+    assert seen[-1]["kind"] == "maintain" and seen[-1]["block_number"] == 1
+    assert seen[-1]["weeks"] == 4 and seen[-1]["event_date"] is None  # always 4 weeks, no event
+    assert len(plan["weeks"]) == 4
+    start = date.fromisoformat(plan["start_date"])
+    end = (start + timedelta(days=28)).isoformat()
+    assert plan["next_block"] == {"start": end, "ends": end, "planned": False}
+
+    nxt = p.post(f"/api/athletes/me/plans/{plan['id']}/next-block").json()
+    assert nxt["start_date"] == (start + timedelta(days=28)).isoformat()
+    assert nxt["title"] == "Block · block 2" and seen[-1]["block_number"] == 2
+    assert p.get(f"/api/athletes/me/plans/{plan['id']}").json()["next_block"]["planned"] is True
+    assert p.post(f"/api/athletes/me/plans/{plan['id']}/next-block").status_code == 409
+    # Its own next block is block 3, named from the series.
+    third = p.post(f"/api/athletes/me/plans/{nxt['id']}/next-block").json()
+    assert third["title"] == "Block · block 3"
+    # Event plans have no next block.
+    ev = _create(p, start_date=(start - timedelta(days=200)).isoformat())
+    assert "next_block" not in ev
+    assert p.post(f"/api/athletes/me/plans/{ev['id']}/next-block").status_code == 409
+
+
+def test_next_block_after_an_ended_block_starts_next_week(make_user, planner):  # noqa: F811
+    p = make_user("m2@example.com")
+    planner["value"] = [_week(), _week(), _week(), _week()]
+    old = _next_monday() - timedelta(days=56)  # ended four weeks ago
+    plan = _create(p, kind="maintain", start_date=old.isoformat())
+    assert plan["next_block"]["ends"] == (old + timedelta(days=28)).isoformat()
+    soonest = plan_tracker.first_week_start(None, date.today()).isoformat()  # today on a Monday
+    assert plan["next_block"]["start"] == soonest
+    nxt = p.post(f"/api/athletes/me/plans/{plan['id']}/next-block").json()
+    assert nxt["start_date"] == soonest

@@ -28,7 +28,9 @@ export default function PlansPanel({ id, athlete }) {
     notes: "",
     coach_notes: "",
     structured_workouts: true,
+    kind: "event", // or "maintain": keep fitness in 4-week blocks, no event
   });
+  const maintain = form.kind === "maintain";
   // Training days start from the weekday preferences (any day not set to Rest), when there are any.
   const prefs = useApi(`/api/athletes/${id}/preferences`);
   useEffect(() => {
@@ -54,7 +56,7 @@ export default function PlansPanel({ id, athlete }) {
   const races = useApi(`/api/athletes/${id}/races`);
   const upcomingRaces = (races.data || []).filter((r) => r.active && r.target_date && r.days_to_go >= 0);
   const weekStart = prefs.data?.week_start ?? 0;
-  const fit = form.event_date ? weeksToEvent(form.event_date, form.start_date, localToday(), weekStart) : null;
+  const fit = form.event_date && !maintain ? weeksToEvent(form.event_date, form.start_date, localToday(), weekStart) : null;
   const [weeksByHand, setWeeksByHand] = useState(false);
   // Weeks away when the start week was moved later to fit the 16 weeks (kept after the start date is set).
   const [movedAway, setMovedAway] = useState(null);
@@ -102,10 +104,11 @@ export default function PlansPanel({ id, athlete }) {
     try {
       const body = {
         ...form,
-        weeks: Number(form.weeks),
+        weeks: maintain ? 4 : Number(form.weeks),
         hours_per_week: Number(form.hours_per_week),
-        event_date: form.event_date || null,
+        event_date: (!maintain && form.event_date) || null,
         start_date: form.start_date || null,
+        goal: form.goal.trim() || (maintain ? "Maintain fitness" : ""),
       };
       let plan;
       try {
@@ -130,6 +133,15 @@ export default function PlansPanel({ id, athlete }) {
   };
 
   const cur = current.data;
+  // No current plan, but a maintain block ended in the last 4 weeks: offer its next block.
+  const ended =
+    !cur &&
+    (plans.data || []).find(
+      (p) =>
+        p.next_block &&
+        !p.next_block.planned &&
+        (new Date(localToday()) - new Date(p.next_block.ends)) / 86400000 <= 28,
+    );
   const thisWeek = cur?.weeks?.find((w) => w.is_current) || cur?.weeks?.[0];
   return (
     <>
@@ -139,6 +151,7 @@ export default function PlansPanel({ id, athlete }) {
             <h2>Current plan: {cur.title}</h2>
             <Link to={`/athletes/${athlete.id}/plans/${cur.id}`}>Open the full plan →</Link>
           </div>
+          {!ro && <NextBlock plan={cur} athleteId={athlete.id} apiBase={`/api/athletes/${id}/plans`} />}
           <div className="mini-week">
             {thisWeek.days.map((d) => (
               <div
@@ -158,6 +171,12 @@ export default function PlansPanel({ id, athlete }) {
               </div>
             ))}
           </div>
+        </section>
+      )}
+      {ended && !ro && (
+        <section className="card week current">
+          <h2>🔁 {ended.title}</h2>
+          <NextBlock plan={ended} athleteId={athlete.id} apiBase={`/api/athletes/${id}/plans`} />
         </section>
       )}
       {!ro && (
@@ -209,15 +228,53 @@ export default function PlansPanel({ id, athlete }) {
               </p>
             ))}
           <form className="grid-form" onSubmit={generate}>
+            <fieldset className="wide">
+              <legend>What's the plan for?</legend>
+              <div className="chips" role="group">
+                {[
+                  ["event", "🏁 Training for an event"],
+                  ["maintain", "🔁 Maintain fitness"],
+                ].map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={form.kind === k}
+                    className={`chip ${form.kind === k ? "on" : ""}`}
+                    onClick={() => setForm({ ...form, kind: k })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {maintain && (
+                <span className="hint">
+                  No event: the AI coach keeps your fitness where it is (or nudges it up), mostly endurance with one
+                  harder session a week, strength and variety. 4 weeks at a time, the last one easier; when a block
+                  ends, plan the next one with one click.
+                </span>
+              )}
+            </fieldset>
             <label>
               Title
-              <input value={form.title} onChange={set("title")} required maxLength={200} placeholder="Base block 1" />
+              <input
+                value={form.title}
+                onChange={set("title")}
+                required
+                maxLength={200}
+                placeholder={maintain ? "Stay fit" : "Base block 1"}
+              />
             </label>
             <label>
-              Goal
-              <input value={form.goal} onChange={set("goal")} required maxLength={500} placeholder="160 km gran fondo" />
+              {maintain ? "Anything specific? (optional)" : "Goal"}
+              <input
+                value={form.goal}
+                onChange={set("goal")}
+                required={!maintain}
+                maxLength={500}
+                placeholder={maintain ? "e.g. keep up with the Saturday group ride" : "160 km gran fondo"}
+              />
             </label>
-            {upcomingRaces.length > 0 && (
+            {!maintain && upcomingRaces.length > 0 && (
               <label>
                 Race
                 <select value="" onChange={(e) => pickRace(e.target.value)}>
@@ -230,6 +287,7 @@ export default function PlansPanel({ id, athlete }) {
                 </select>
               </label>
             )}
+            {!maintain && (
             <label>
               Event date
               <input
@@ -242,6 +300,7 @@ export default function PlansPanel({ id, athlete }) {
                 }}
               />
             </label>
+            )}
             <label>
               Start week
               <input
@@ -254,6 +313,13 @@ export default function PlansPanel({ id, athlete }) {
               />
               <span className="hint">Starts on the first day of that week (Profile → My week starts on). Empty: next week.</span>
             </label>
+            {maintain ? (
+              <label>
+                Weeks
+                <input value={4} disabled />
+                <span className="hint">Maintain plans run 4 weeks at a time.</span>
+              </label>
+            ) : (
             <label>
               Weeks
               <input
@@ -283,6 +349,7 @@ export default function PlansPanel({ id, athlete }) {
                 </span>
               )}
             </label>
+            )}
             <label>
               Hours per week
               <input type="number" min={1} max={30} step={0.5} value={form.hours_per_week} onChange={set("hours_per_week")} />
@@ -352,6 +419,7 @@ export default function PlansPanel({ id, athlete }) {
             {plans.data.map((p) => (
               <li key={p.id}>
                 <Link to={`/athletes/${athlete.id}/plans/${p.id}`}>{p.title}</Link>
+                {p.request?.kind === "maintain" && <span className="badge">🔁 maintain</span>}
                 {p.approval === "awaiting" && <span className="badge warn">waiting for coach</span>}
                 {p.approval === "sent_back" && <span className="badge bad">sent back</span>}
                 {p.has_pending && <span className="badge warn">re-plan waiting for coach</span>}
@@ -371,5 +439,38 @@ export default function PlansPanel({ id, athlete }) {
         )}
       </section>
     </>
+  );
+}
+
+// A maintain plan's last week: offer its next 4 weeks (POST next-block), same settings.
+function NextBlock({ plan, athleteId, apiBase }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const nb = plan.next_block;
+  if (!nb || nb.planned) return null;
+  const daysLeft = Math.round((new Date(nb.ends) - new Date(localToday())) / 86400000);
+  if (daysLeft > 7) return null;
+  const go = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await api(`${apiBase}/${plan.id}/next-block`, { method: "POST" });
+      navigate(`/athletes/${athleteId}/plans/${next.id}`);
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="row wrap next-block">
+      <span className="small">
+        🔁 {daysLeft > 0 ? `This block ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.` : "This block has ended."}
+      </span>
+      <button type="button" className="btn primary small" disabled={busy} onClick={go}>
+        {busy ? "Writing the next block…" : `Plan the next 4 weeks (from ${formatDate(nb.start)})`}
+      </button>
+      {error && <span className="error-text small">{error}</span>}
+    </div>
   );
 }

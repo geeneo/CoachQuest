@@ -2137,3 +2137,7 @@ label.search input {
 .health-list {
   padding-left: 1.2rem;
 }
+.next-block {
+  margin: 0 0 0.6rem;
+  align-items: center;
+}

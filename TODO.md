@@ -37,7 +37,7 @@
         GDPR): opt in, coaches see it only with the plans scope (friends
         never), and it's part of account export and delete.
 
-- [ ] **Maintain fitness when not training for an event.** Today a plan
+- [x] **Maintain fitness when not training for an event.** Today a plan
       needs a goal (free text) and the event date is optional, so plans
       without an event still build like a race block. Suggestions:
       - A plan type on "New plan": "Training for an event" or "Maintain /
