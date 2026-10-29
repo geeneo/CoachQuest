@@ -67,7 +67,7 @@ def segment_out(s: Segment) -> dict:
     return {
         "id": s.id,
         "kind": s.kind,
-        "strava_id": s.strava_id,
+        "strava_id": str(s.strava_id),  # text: route ids are longer than a browser number keeps
         "name": s.name,
         "url": url(s),
         "distance_m": s.distance_m,

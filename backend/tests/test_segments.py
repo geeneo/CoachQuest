@@ -323,3 +323,21 @@ def test_add_several_from_strava_at_once(make_user, monkeypatch):
     assert [(a["name"], a["uses"]) for a in added] == [("Franschhoek Pass", ["intervals"])]
     assert len(p.get("/api/athletes/me/segments").json()["favourites"]) == 3
     assert p.post(url, json={"items": [{"kind": "ride", "strava_id": 1}]}).status_code == 422
+
+
+def test_long_route_ids_survive_the_browser(make_user, monkeypatch):
+    """Strava route ids have 19 digits, more than a JavaScript number keeps: they go out and come back as text."""
+    p = make_user("rider@example.com")
+    _strava(p.get("/api/auth/me").json()["id"])
+    rid = 3234567890123456789
+
+    async def fake_favourites(db, conn):
+        return [{"kind": "route", "strava_id": rid, "name": "Long loop", "distance_m": 121000}]
+
+    monkeypatch.setattr(strava, "favourites", fake_favourites)
+    found = p.get("/api/athletes/me/segments/strava").json()["found"]
+    assert found[0]["strava_id"] == str(rid)
+    body = {"items": [{"kind": "route", "strava_id": found[0]["strava_id"]}]}
+    added = p.post("/api/athletes/me/segments/from-strava", json=body).json()["added"]
+    assert [a["strava_id"] for a in added] == [str(rid)]
+    assert added[0]["url"].endswith(f"/routes/{rid}")

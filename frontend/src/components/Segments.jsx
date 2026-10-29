@@ -325,7 +325,14 @@ function StravaPicker({ found, uses, add, close, note }) {
         <button type="button" className="link-btn small" onClick={close}>
           Close
         </button>
-        {done != null && <span className="ok-text small">Added {done}.</span>}
+        {done != null &&
+          (done ? (
+            <span className="ok-text small">Added {done}.</span>
+          ) : (
+            <span className="bad-text small">
+              None added: they're already favourites, or Strava doesn't list them any more. Close and open again.
+            </span>
+          ))}
       </div>
     </div>
   );

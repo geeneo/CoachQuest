@@ -55,7 +55,8 @@ async def from_strava(athlete: str, user: User = Depends(current_user), db: DbSe
         raise HTTPException(status_code=502, detail="Strava didn't answer; try again in a minute") from None
     have = {(s.kind, s.strava_id) for s in segments.for_athlete(db, athlete_id)}
     return {
-        "found": [f for f in found if (f["kind"], f["strava_id"]) not in have],
+        # Strava ids as text: route ids are longer than a browser number keeps exactly.
+        "found": [{**f, "strava_id": str(f["strava_id"])} for f in found if (f["kind"], f["strava_id"]) not in have],
         "private_routes": strava.sees_private_routes(conn),
     }
 
@@ -113,7 +114,7 @@ async def add_segment(
 
 class StravaPick(BaseModel):
     kind: str = Field(pattern="^(route|segment)$")
-    strava_id: int
+    strava_id: int  # sent as text by the browser (see from_strava); read as a whole number
 
 
 class FromStrava(BaseModel):
