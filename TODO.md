@@ -2,33 +2,15 @@
 
 ## Next up
 
-- [ ] **A shareable information page (not the sign-in page), hidden from
-      bots and search engines.** A page you can send people to that explains
-      CoachQuest before they sign up.
-      - Content: what it does (AI training plans, calendar and workouts to
-        Zwift / MyWhoosh through Intervals.icu, routes and segments,
-        strength, health conditions, coach and friend sharing, news &
-        guides); screenshots of the main pages; "how it works" in simple
-        steps with a diagram of the integrations (Strava, Garmin,
-        Intervals.icu → CoachQuest → AI coach → plan → calendar → Zwift /
-        MyWhoosh / Garmin), what data comes from where and who sees it,
-        the medical disclaimer, and a "Request access" / "Sign up" button.
-      - Editable by admins (like News & guides), so text and screenshots
-        can change without a deploy; screenshots stored with the app.
-      - Kept away from bots and crawlers, in layers (no single one stops
-        every bot):
-        - a private link with a secret part (e.g. /welcome/x7Kq…), which the
-          admin can change, so an old link stops working; nothing on the
-          public site links to it;
-        - "noindex, nofollow" (a meta tag and an X-Robots-Tag header) and a
-          robots.txt that disallows it, so well-behaved search engines and
-          AI crawlers skip it;
-        - optionally an invite code or a simple "I'm human" check before
-          the page shows, and rate limiting in nginx;
-        - if the site sits behind Cloudflare: its bot protection on that
-          path.
-      - Also: robots.txt and noindex for the whole app (sign-in and
-        everything behind it), which has none today.
+- [x] **A shareable information page, hidden from bots.** /welcome/<secret>
+      (Admin → Information page: on/off, copy link, new link, Markdown text
+      with a built-in "how it works" diagram, screenshots), default text and
+      three screenshots from demo data; Sign up / Request access and Sign in
+      buttons. noindex (header, meta tag, robots.txt) for the whole site,
+      nginx rate limit on the page. docs/welcome-page.md has the Cloudflare
+      settings (Bot Fight Mode, block AI crawlers, a Managed Challenge rule
+      on /welcome/). Later: more screenshots (calendar, routes, health,
+      coach view), an invite code if needed.
 
 - [ ] **Multi-day events (stage races): each day its own line, with totals,
       so the AI coach plans for the whole event.** E.g. Sani2c / Wines2Whales

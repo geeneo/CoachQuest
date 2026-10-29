@@ -8,6 +8,7 @@ import { useAuth } from "../lib/auth.jsx";
 import { dateTime, duration, formatDate } from "../lib/format.js";
 import { AdminSignIns } from "../components/SignInLog.jsx";
 import UpdateCoachQuest from "../components/UpdateCoachQuest.jsx";
+import WelcomeAdmin from "../components/WelcomeAdmin.jsx";
 import { Backfill } from "./Connections.jsx";
 
 const SOURCE = { web: "set here", env: "from .env", unset: "not set" };
@@ -27,6 +28,7 @@ export default function Admin() {
       </p>
       {me?.is_super_admin && <UpdateCoachQuest />}
       <Settings />
+      <WelcomeAdmin />
       <Users onChange={() => setRev((r) => r + 1)} />
       <PlatformWorkouts />
       <AiUsage rev={rev} />

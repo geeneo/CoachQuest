@@ -644,6 +644,21 @@ class Post(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class WelcomePage(Base):
+    """The shareable information page (welcome.py): one row, edited by admins, shown at /welcome/<key>."""
+
+    __tablename__ = "welcome_page"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # The secret part of the link; a new one makes old links stop working.
+    key: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(200), default="")
+    body_md: Mapped[str] = mapped_column(Text, default="")
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class AppSetting(Base):
     """Settings an admin changed in the web UI. Values are Fernet-encrypted."""
 

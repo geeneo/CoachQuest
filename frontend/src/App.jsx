@@ -14,6 +14,7 @@ import Profile from "./pages/Profile.jsx";
 import Races from "./pages/Races.jsx";
 import RoutesPage from "./pages/Routes.jsx";
 import Sharing from "./pages/Sharing.jsx";
+import Welcome from "./pages/Welcome.jsx";
 import Workouts from "./pages/Workouts.jsx";
 
 export default function App() {
@@ -27,12 +28,14 @@ export default function App() {
       <Routes>
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/register" element={<AuthPage mode="register" />} />
+        <Route path="/welcome/:key" element={<Welcome />} />
         <Route path="*" element={<AuthPage mode="login" />} />
       </Routes>
     );
   }
   return (
     <Routes>
+      <Route path="/welcome/:key" element={<Welcome />} />
       <Route element={<Layout />}>
         <Route index element={<AthleteView self />} />
         <Route path="connections" element={<Connections />} />

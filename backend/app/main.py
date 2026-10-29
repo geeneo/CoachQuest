@@ -29,6 +29,7 @@ from .routers import (
     preferences,
     races,
     segments,
+    welcome,
     workouts,
 )
 from .routers.connections import run_sync
@@ -122,6 +123,8 @@ for r in (
     segments.router,
     segments.shared_router,
     health.router,
+    welcome.public,
+    welcome.admin,
     exercises.router,
 ):
     app.include_router(r)

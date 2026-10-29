@@ -2178,3 +2178,104 @@ td.row-actions {
   overflow: auto;
   padding-left: 1.2rem;
 }
+/* ---- the information page (pages/Welcome.jsx) ---- */
+.welcome {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 1.5rem 16px 3rem;
+}
+.welcome-hero {
+  text-align: center;
+  padding: 1rem 0 1.5rem;
+}
+.welcome-hero .logo {
+  width: min(320px, 70vw);
+  height: auto;
+}
+.welcome-hero h1 {
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  margin: 0.8rem 0 1rem;
+}
+.welcome-actions {
+  justify-content: center;
+}
+.welcome-body {
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+.welcome-body h2 {
+  margin-top: 2rem;
+}
+.welcome-shot {
+  margin: 1.2rem 0;
+}
+.welcome-shot img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.welcome-shot figcaption {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 0.4rem;
+}
+.welcome-foot {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.how-it-works {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.4rem;
+  margin: 1rem 0 1.4rem;
+}
+.hiw-step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1 1 150px;
+}
+.hiw-box {
+  flex: 1;
+  height: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.7rem;
+  font-size: 0.88rem;
+}
+.hiw-box ul {
+  margin: 0.3rem 0;
+  padding-left: 1rem;
+}
+.hiw-arrow {
+  color: var(--accent);
+  font-size: 1.3rem;
+}
+@media (max-width: 768px) {
+  .how-it-works {
+    flex-direction: column;
+  }
+  .hiw-step {
+    flex-direction: column;
+    flex-basis: auto;
+  }
+  .hiw-box {
+    width: 100%;
+  }
+  .hiw-arrow {
+    transform: rotate(90deg);
+  }
+}
+textarea.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+.file-btn {
+  cursor: pointer;
+}

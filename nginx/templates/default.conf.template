@@ -17,6 +17,8 @@ map $request_method $cq_ai_key {
     default "";
 }
 limit_req_zone $cq_ai_key zone=cq_ai:10m rate=6r/m;
+# The information page behind its private link (no sign-in): the page and its screenshots.
+limit_req_zone $binary_remote_addr zone=cq_public:10m rate=30r/m;
 limit_req_status 429;
 
 upstream cq_api {
@@ -48,6 +50,8 @@ server {
     add_header Referrer-Policy "same-origin" always;
     add_header Permissions-Policy "geolocation=(), camera=(), microphone=()" always;
     add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    # Nothing here is for search engines or AI crawlers (also robots.txt and a meta tag in index.html).
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
     # Turn on once the site is only reachable over HTTPS:
     # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
@@ -78,6 +82,14 @@ server {
     }
 
     location ~ ^/api/(auth/logout|auth/notice|health)$ {
+        include /etc/nginx/conf.d/cq_proxy.inc;
+        proxy_set_header X-Auth-User-Id "";
+        proxy_pass http://cq_api;
+    }
+
+    # ---- the information page behind its private link: no session, a tight rate limit ----
+    location ~ ^/api/welcome/ {
+        limit_req zone=cq_public burst=20 nodelay;
         include /etc/nginx/conf.d/cq_proxy.inc;
         proxy_set_header X-Auth-User-Id "";
         proxy_pass http://cq_api;
@@ -122,6 +134,18 @@ server {
         proxy_pass http://cq_api;
     }
 
+    # ---- admin: screenshots for the information page ----
+    location = /api/admin/welcome/images {
+        auth_request /_auth;
+        auth_request_set $cq_user_id $upstream_http_x_auth_user_id;
+        error_page 401 = @unauthorized;
+        limit_req zone=cq_api burst=10 nodelay;
+        client_max_body_size 8m;
+        include /etc/nginx/conf.d/cq_proxy.inc;
+        proxy_set_header X-Auth-User-Id $cq_user_id;
+        proxy_pass http://cq_api;
+    }
+
     # ---- everything else under /api requires a valid session ----
     location /api/ {
         auth_request /_auth;
@@ -144,12 +168,14 @@ server {
         expires 1y;
         add_header Cache-Control "public, immutable" always;
         add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
         try_files $uri =404;
     }
 
     location / {
         add_header Cache-Control "no-cache" always;
         add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
         add_header X-Frame-Options "DENY" always;
         add_header Referrer-Policy "same-origin" always;
         add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
