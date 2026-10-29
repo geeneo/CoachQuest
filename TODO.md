@@ -2,6 +2,32 @@
 
 ## Next up
 
+- [ ] **Deleting a user deletes all their data.** Today (accounts.
+      delete_account, Admin → Users → delete, and "delete my account")
+      removes their activities, wellness, plans, workouts, races, notes,
+      instructions, comments about them, AI calls and chats, sharing, sign-in
+      sessions and connections; what they wrote for others stays, unsigned.
+      Gaps found (29 Oct):
+      - Favourite routes and segments (`segments`) aren't in the list. On
+        Postgres the database's own ON DELETE CASCADE removes them; on
+        SQLite they stay behind, and shared ones still show on Routes.
+        Add them, and null `segments.added_by`, `platform_workouts.added_by`,
+        `posts.author_id` and `app_settings.updated_by` the same way.
+      - Their Strava, Garmin and Intervals.icu links aren't revoked at the
+        provider: deauthorize Strava (POST /oauth/deauthorize; the Strava API
+        Agreement also asks to delete their data when they disconnect), revoke
+        the Intervals.icu token, and remove workouts CoachQuest sent to their
+        Intervals.icu calendar (or say they stay).
+      - The sign-in log keeps their email until the log retention removes
+        it (kept for security). Say so in the privacy notice.
+      - Backups keep their data until rotated out (14 days). Say so too.
+      - A test that creates a user with data in every table, deletes them, and
+        checks no row anywhere still points at them (on SQLite and Postgres).
+      - An admin confirmation that names what will be deleted (counts), and
+        an email to the user that their account and data are gone.
+      - Part of POPIA/GDPR: "delete my account and data" and "export my
+        data" for the athlete themselves (see the Later list).
+
 - [ ] **Wellness: tiles showed "–", and when Garmin data comes in.** The
       five tiles (resting HR, HRV, sleep, sleep score, Body Battery) took
       today's row, which is empty until the next sync, so they showed "–"
