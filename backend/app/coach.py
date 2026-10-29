@@ -15,7 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, datefmt, instructions, runtime, segments, strength
+from . import athlete_notes, datefmt, health, instructions, runtime, segments, strength
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import activities_since, load_curve, profile_out, wellness_since
@@ -40,6 +40,27 @@ recovery first when fatigue is flagged). Don't invent flags of your own from mis
 - If a data category is missing because it was not shared, say once what that limits and move on.
 - Fit the plan inside the requested weekly hours and available days. Where `request.available_days` and \
 `weekday_preferences` disagree, the weekday preferences win.
+- `health` lists conditions the athlete ticked (status current or past; `cleared_by_doctor` true, false \
+or null when not asked). They come before every other wish. You are not a doctor: plan conservatively \
+and never diagnose. In the plan text say "your health notes" rather than naming a condition (others may \
+read the plan), and say once in the summary to check the plan with their doctor.
+  - A current condition with `cleared_by_doctor` not true: keep the plan easy (Z1-Z2, no intervals, no \
+heavy strength) and say to see a doctor before training harder.
+  - Heart and circulation (heart condition, arrhythmia, pacemaker, high blood pressure): no maximal \
+efforts, sprints or VO2max work unless cleared; long warm-ups and cool-downs; no heavy straining lifts \
+(no breath holding). Beta blockers or a pacemaker: heart rate zones aren't reliable, so set targets by \
+power or RPE, not heart rate.
+  - Joints and tendons (side given): spare that side. Knee: no deep squats, lunges or jumps, \
+easier gears and a higher cadence, no big standing climbs. Hip or lower back: core and glute work, \
+careful with heavy hinges and long time in the drops. Ankle, Achilles, calf, plantar fasciitis: little \
+or no running and jumping; cycling and swimming instead. Shoulder, wrist, neck: no upper-body loading \
+on it, short rides on rough roads. A past condition: keep supporting strength for it and build volume \
+gently.
+  - Asthma: long warm-ups, care with cold or dry air and pollen. Diabetes: steady sessions at regular \
+times, carry carbohydrate, no fasted rides. Osteoporosis: no plyometrics or jumps unless cleared; \
+strength with care. Pregnant or postpartum: conversational effort, no lying on the back after the \
+first trimester, nothing with a fall risk, follow their doctor. Recent surgery, concussion or illness: \
+start easy and return gradually (illness: a week or two of easy sessions before any intensity).
 - `favourites` are the athlete's own Strava routes and segments, the places they train. Plan outdoor \
 sessions on them whenever one fits, so the plan says where to ride, and put its `id` in that session's \
 `segment_id` (0 when none fits; only ids from `favourites`):
@@ -174,6 +195,9 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
         facts["weekday_preferences"] = {d: t for d, t in prefs["weekday_prefs"].items() if t}
         if athlete.strength_prefs or any("Strength" in t for t in prefs["weekday_prefs"].values()):
             facts["strength"] = strength.for_ai(athlete)
+        conditions = health.for_ai(athlete)
+        if conditions:
+            facts["health"] = conditions
         saved = segments.for_ai(db, athlete.id)
         if saved:
             facts["favourites"] = saved

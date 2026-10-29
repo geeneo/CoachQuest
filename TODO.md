@@ -2,7 +2,7 @@
 
 ## Next up
 
-- [ ] **Health conditions in Profile (checkboxes with presets), with a
+- [x] **Health conditions in Profile (checkboxes with presets), with a
       medical disclaimer.** Athletes tick what applies; the AI coach plans
       around it (and the strength options' "limits" stay for free text).
       - Presets, grouped, each with an optional side (left / right / both)

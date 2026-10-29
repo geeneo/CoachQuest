@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from .. import (
     comments,
+    health,
     library,
     localtime,
     plan_approval,
@@ -66,7 +67,10 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
     if full:
         athlete = db.get(User, p.athlete_id)
         today = today or localtime.today(athlete)
-        out.update(content_md=p.content_md, facts=p.facts, history=p.history or [])
+        facts = p.facts
+        if facts and "health" in facts and not (viewer and health.can_see(db, viewer, p.athlete_id)):
+            facts = {k: v for k, v in facts.items() if k != "health"}  # health data: athlete and coaches only
+        out.update(content_md=p.content_md, facts=facts, history=p.history or [])
         if p.pending:
             out["pending"] = {k: v for k, v in p.pending.items() if k != "fresh"}
         if viewer is not None:

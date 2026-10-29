@@ -6,6 +6,7 @@ import { dateTime, formatDate } from "../lib/format.js";
 import Markdown from "./Markdown.jsx";
 import { Stat } from "./WellnessPanel.jsx";
 import { CommentsToggle } from "./PlanComments.jsx";
+import { MedicalDisclaimer } from "./HealthConditions.jsx";
 import { useReadOnly } from "../lib/readOnly.js";
 
 const VERDICT = {
@@ -49,6 +50,7 @@ export default function AiCoach({ id, isMe }) {
         onRun={ro ? null : () => generate("weekly")}
       />
       {isMe && d.ai_settings && <Schedule settings={d.ai_settings} />}
+      <MedicalDisclaimer />
     </>
   );
 }

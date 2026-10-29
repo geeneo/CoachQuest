@@ -22,6 +22,7 @@ from .routers import (
     connections,
     exercises,
     grants,
+    health,
     instructions,
     plans,
     posts,
@@ -120,6 +121,7 @@ for r in (
     posts.router,
     segments.router,
     segments.shared_router,
+    health.router,
     exercises.router,
 ):
     app.include_router(r)

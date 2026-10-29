@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import TrainingPreferences from "../components/TrainingPreferences.jsx";
+import HealthConditions from "../components/HealthConditions.jsx";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { DATE_FORMATS, dateTime, formatDate } from "../lib/format.js";
@@ -164,6 +165,7 @@ export default function Profile() {
         }}
       />
       <TrainingPreferences />
+      <HealthConditions />
       <Appearance />
       <ChangePassword />
       <section className="card">

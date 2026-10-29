@@ -7,6 +7,7 @@ import PlanTracker from "../components/PlanTracker.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../lib/auth.jsx";
 import { ReadOnly } from "../lib/readOnly.js";
+import { MedicalDisclaimer } from "../components/HealthConditions.jsx";
 import { dateTime, formatDate } from "../lib/format.js";
 
 export default function PlanView() {
@@ -52,6 +53,7 @@ export default function PlanView() {
           <Markdown>{p.content_md}</Markdown>
         </article>
       )}
+      <MedicalDisclaimer />
       <details className="card">
         <summary>Data sent to the AI coach</summary>
         <pre className="facts">{JSON.stringify(p.facts, null, 2)}</pre>

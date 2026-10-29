@@ -7,6 +7,7 @@ import { dateTime, formatDate } from "../lib/format.js";
 import { MAX_WEEKS, weeksToEvent } from "../lib/planWeeks.js";
 import { localToday } from "../lib/workout.js";
 import { DAY_STATUS } from "../lib/dayStatus.js";
+import { MedicalDisclaimer } from "../components/HealthConditions.jsx";
 import { useReadOnly } from "../lib/readOnly.js";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -166,7 +167,8 @@ export default function PlansPanel({ id, athlete }) {
           </h2>
           <p className="muted small">
             Claude gets only the data {athlete.is_me ? "you have" : `${athlete.display_name} has`} shared, plus load and
-            readiness facts computed by CoachQuest. Generating can take a minute or two.
+            readiness facts computed by CoachQuest, and health conditions ticked in Profile. Generating can take a
+            minute or two.
             {athlete.is_me && " If you have a coach, plans you generate wait for their approval before workouts go to your calendar."}
           </p>
           {approval.data?.has_coach &&
@@ -340,6 +342,7 @@ export default function PlansPanel({ id, athlete }) {
               {busy ? "Writing your plan…" : "Generate plan"}
             </button>
           </form>
+          <MedicalDisclaimer />
         </section>
       )}
       <section className="card">

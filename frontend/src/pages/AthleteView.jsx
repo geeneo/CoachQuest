@@ -13,6 +13,7 @@ import { useApi } from "../hooks/useApi.js";
 import { dateTime, formLabel } from "../lib/format.js";
 import Segments from "../components/Segments.jsx";
 import TrainingPreferences from "../components/TrainingPreferences.jsx";
+import HealthConditions from "../components/HealthConditions.jsx";
 import { ReadOnly } from "../lib/readOnly.js";
 import PlansPanel from "./PlansPanel.jsx";
 
@@ -101,6 +102,7 @@ export default function AthleteView({ self }) {
             <Segments id={id} readOnly={s.view_only || s.admin_view} />
           )}
           {!self && <TrainingPreferences id={id} />}
+          {!self && <HealthConditions id={id} />}
           <PlansPanel id={id} athlete={s} />
         </>
       )}

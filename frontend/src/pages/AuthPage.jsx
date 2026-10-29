@@ -74,6 +74,12 @@ export default function AuthPage({ mode }) {
         )}
         {error && <div className="error">{error}</div>}
         {pending && <div className="ok">{pending}</div>}
+        {isRegister && (
+          <p className="small muted">
+            ⚕️ CoachQuest is not medical advice. Always consult a doctor before starting or changing training,
+            especially with a medical condition or injury.
+          </p>
+        )}
         <button className="btn primary" disabled={busy}>
           {busy ? "…" : isRegister ? "Create account" : "Sign in"}
         </button>
