@@ -2,44 +2,24 @@
 
 import logging
 import secrets
-from datetime import timedelta
+from datetime import date, timedelta
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import and_, delete, func, not_, or_, select, update
 from sqlalchemy.orm import Session as DbSession
 
 from . import mailer, runtime
 from .config import settings
 from .db import (
-    AccessLog,
-    Activity,
-    AiCall,
-    Assessment,
-    AthleteNote,
-    AuthEvent,
-    CoachChat,
-    CoachInstruction,
-    Comment,
+    Base,
     Connection,
-    DeletedActivity,
     ExternalWorkout,
-    Grant,
-    NoteSuggestion,
-    OAuthState,
     PasswordReset,
-    PendingMfa,
-    Plan,
-    Race,
     ScheduledWorkout,
     Session,
-    SyncJob,
-    SyncLog,
     User,
-    UserStravaApp,
-    WellnessDay,
-    Workout,
     utcnow,
 )
-from .security import hash_password, hash_token
+from .security import decrypt_json, hash_password, hash_token
 
 log = logging.getLogger("coachquest.accounts")
 
@@ -131,58 +111,128 @@ def enable(db: DbSession, user: User) -> None:
     db.commit()
 
 
-def delete_account(db: DbSession, user: User) -> None:
-    """Remove the user and everything that belongs to them.
+# Labels for the delete preview (tables not listed show their table name).
+TABLE_LABELS = {
+    "activities": "Activities",
+    "wellness_days": "Wellness days",
+    "plans": "Training plans",
+    "scheduled_workouts": "Calendar workouts",
+    "workouts": "Workout library",
+    "races": "Races",
+    "segments": "Favourite routes and segments",
+    "comments": "Comments",
+    "grants": "Sharing (coaches and friends)",
+    "connections": "Linked apps (Strava, Garmin, Intervals.icu)",
+    "assessments": "AI coach reviews",
+    "coach_chats": "AI coach chats",
+    "ai_calls": "AI usage records",
+    "athlete_notes": "Notes",
+    "coach_instructions": "Coach instructions",
+    "sessions": "Sign-in sessions",
+    "access_log": "Access log entries",
+    "auth_events": "Sign-in log entries",
+}
 
-    Deleted explicitly rather than through ON DELETE CASCADE, because SQLite
-    only enforces foreign keys when asked to.
-    """
+
+def _plan(table, where, steps: list, depth: int = 0) -> None:
+    """What deleting `table` rows matching `where` does, following every foreign key that points at
+    them (children first): ("delete", table, where) or ("unsign", table, column, ids)."""
+    if depth > 5:
+        raise RuntimeError(f"Foreign keys loop through {table.name}")
+    for child in Base.metadata.sorted_tables:
+        for fk in child.foreign_keys:
+            if fk.column.table is not table or child is table:
+                continue
+            if fk.ondelete == "SET NULL":
+                steps.append(("unsign", child, fk.parent, fk.parent.in_(select(fk.column).where(where))))
+            else:  # CASCADE (or no rule): the rows belong to what's deleted
+                _plan(child, fk.parent.in_(select(fk.column).where(where)), steps, depth + 1)
+    steps.append(("delete", table, None, where))
+
+
+def _steps(user_id: int) -> list:
+    users = User.__table__
+    steps: list = []
+    _plan(users, users.c.id == user_id, steps)
+    return steps
+
+
+def deletion_preview(db: DbSession, user: User) -> dict:
+    """Row counts deleting this user removes, and rows they wrote for others that stay, unsigned."""
+    deleted: dict[str, int] = {}
+    kept: dict[str, int] = {}
+    steps = _steps(user.id)
+    gone: dict[str, list] = {}
+    for action, table, _column, where in steps:
+        if action == "delete":
+            gone.setdefault(table.name, []).append(where)
+    for action, table, _column, where in steps:
+        # Users itself, and the sign-in log (kept with the email for security), aren't "for others".
+        if table.name in ("users", "auth_events"):
+            continue
+        if action == "unsign" and table.name in gone:
+            where = and_(where, not_(or_(*gone[table.name])))  # their own rows go anyway
+        n = db.scalar(select(func.count()).select_from(table).where(where))
+        if n:
+            label = TABLE_LABELS.get(table.name, table.name.replace("_", " ").capitalize())
+            target = deleted if action == "delete" else kept
+            target[label] = target.get(label, 0) + n
+    return {"deleted": deleted, "kept_unsigned": kept}
+
+
+def delete_account(db: DbSession, user: User) -> None:
+    """Remove the user and everything that belongs to them, following every foreign key to users
+    (so tables added later are covered too): rows that belong to them are deleted; rows they wrote
+    for others (a coach's plans and comments, posts, settings changed) stay, unsigned.
+
+    Done here rather than left to ON DELETE CASCADE, because SQLite only enforces foreign keys when
+    asked to. The sign-in log keeps the email until its retention removes it (security audit).
+    Call revoke_links first to tell Strava and Intervals.icu."""
     uid = user.id
-    # Comments about their own training go; comments they wrote for other athletes stay, unsigned.
-    db.execute(delete(Comment).where(Comment.athlete_id == uid))
-    db.execute(update(Comment).where(Comment.author_id == uid).values(author_id=None))
-    # The sign-in log keeps the email until the retention removes it, for the audit trail.
-    db.execute(update(AuthEvent).where(AuthEvent.user_id == uid).values(user_id=None))
-    db.execute(update(Comment).where(Comment.edited_by == uid).values(edited_by=None))
-    # Notes about them go; notes they wrote about other athletes stay, unsigned.
-    db.execute(delete(NoteSuggestion).where(NoteSuggestion.athlete_id == uid))
-    db.execute(update(NoteSuggestion).where(NoteSuggestion.asked_by == uid).values(asked_by=None))
-    db.execute(update(NoteSuggestion).where(NoteSuggestion.decided_by == uid).values(decided_by=None))
-    db.execute(delete(AthleteNote).where(AthleteNote.athlete_id == uid))
-    db.execute(update(AthleteNote).where(AthleteNote.author_id == uid).values(author_id=None))
-    db.execute(update(AthleteNote).where(AthleteNote.updated_by == uid).values(updated_by=None))
-    # Instructions for their own training go; ones they wrote for other athletes stay, unsigned.
-    db.execute(delete(CoachInstruction).where(CoachInstruction.athlete_id == uid))
-    db.execute(update(CoachInstruction).where(CoachInstruction.author_id == uid).values(author_id=None))
-    db.execute(update(CoachInstruction).where(CoachInstruction.updated_by == uid).values(updated_by=None))
-    for model, column in (
-        (Activity, Activity.user_id),
-        (DeletedActivity, DeletedActivity.user_id),
-        (WellnessDay, WellnessDay.user_id),
-        (Connection, Connection.user_id),
-        (UserStravaApp, UserStravaApp.user_id),
-        (OAuthState, OAuthState.user_id),
-        (PendingMfa, PendingMfa.user_id),
-        (Session, Session.user_id),
-        (PasswordReset, PasswordReset.user_id),
-        (Plan, Plan.athlete_id),
-        (Race, Race.user_id),
-        (Assessment, Assessment.athlete_id),
-        (ScheduledWorkout, ScheduledWorkout.athlete_id),
-        (Workout, Workout.owner_id),
-        (ExternalWorkout, ExternalWorkout.athlete_id),
-        (SyncJob, SyncJob.athlete_id),
-        (SyncLog, SyncLog.athlete_id),
-    ):
-        db.execute(delete(model).where(column == uid))
-    db.execute(delete(Grant).where(or_(Grant.athlete_id == uid, Grant.coach_id == uid)))
-    db.execute(delete(AccessLog).where(or_(AccessLog.athlete_id == uid, AccessLog.viewer_id == uid)))
-    db.execute(delete(AiCall).where(or_(AiCall.user_id == uid, AiCall.athlete_id == uid)))
-    db.execute(delete(CoachChat).where(or_(CoachChat.athlete_id == uid, CoachChat.viewer_id == uid)))
-    # Plans this user wrote for other athletes stay with those athletes.
-    db.execute(update(Plan).where(Plan.author_id == uid).values(author_id=None))
-    # Workouts this user assigned to others stay on their calendars.
-    db.execute(update(ScheduledWorkout).where(ScheduledWorkout.assigned_by == uid).values(assigned_by=None))
-    db.delete(user)
+    db.expunge(user)
+    for action, table, column, where in _steps(uid):
+        if action == "unsign":
+            db.execute(update(table).where(where).values({column.name: None}))
+        else:
+            db.execute(delete(table).where(where))
     db.commit()
     log.info("Deleted user %s", uid)
+
+
+async def revoke_links(db: DbSession, user: User) -> list[str]:
+    """Before deleting an account: take CoachQuest's future workouts off their Intervals.icu calendar,
+    and revoke CoachQuest's access at Strava and Intervals.icu. Best effort: the local tokens go anyway.
+    Returns what was done, for the admin."""
+    from .delivery import intervals_icu
+    from .providers import strava
+
+    done = []
+    today = date.today()
+    for conn in db.scalars(select(Connection).where(Connection.user_id == user.id)):
+        try:
+            token = decrypt_json(conn.token_enc) if conn.token_enc else {}
+        except Exception:  # noqa: BLE001 - a token that can't be read can't be revoked
+            token = {}
+        if conn.provider == "strava":
+            await strava.deauthorize(conn)
+            done.append("Strava access revoked")
+        elif conn.provider == "intervals_icu" and token:
+            future = db.scalars(
+                select(ExternalWorkout.external_id)
+                .join(ScheduledWorkout, ScheduledWorkout.id == ExternalWorkout.scheduled_workout_id)
+                .where(
+                    ExternalWorkout.athlete_id == user.id,
+                    ExternalWorkout.provider == "intervals_icu",
+                    ScheduledWorkout.day >= today,
+                )
+            ).all()
+            removed = 0
+            for external_id in future:
+                try:
+                    await intervals_icu.IntervalsIcu().delete(token, external_id)
+                    removed += 1
+                except Exception as exc:  # noqa: BLE001
+                    log.info("Intervals.icu delete %s failed: %s", external_id, exc)
+            await intervals_icu.IntervalsIcu().revoke(token)
+            done.append(f"Intervals.icu: {removed} upcoming workout(s) removed, access revoked")
+    return done

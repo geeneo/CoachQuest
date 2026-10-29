@@ -1,5 +1,5 @@
 import { CheckCircle2, KeyRound, XCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
@@ -919,10 +919,26 @@ function ManageUser({ u, reload }) {
       setLink(r.link);
       done(`Reset link created (valid 24 hours, works once). ${r.emailed}`);
     }, fail);
+  // What deleting removes, shown once the email is typed (GET delete-preview).
+  const [preview, setPreview] = useState(null);
+  const typed = confirmEmail.trim().toLowerCase() === u.email;
+  useEffect(() => {
+    if (!typed) return setPreview(null);
+    api(`/api/admin/users/${u.id}/delete-preview`).then(setPreview, fail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typed, u.id]);
   const remove = (e) => {
     e.preventDefault();
     if (!confirm(`Delete ${u.display_name} and all their data? This cannot be undone.`)) return;
-    api(`/api/admin/users/${u.id}`, { method: "DELETE", body: { confirm_email: confirmEmail } }).then(reload, fail);
+    api(`/api/admin/users/${u.id}`, { method: "DELETE", body: { confirm_email: confirmEmail } }).then((r) => {
+      const n = Object.values(r.deleted || {}).reduce((a, b) => a + b, 0);
+      alert(
+        `${u.display_name} is deleted: ${n} rows of their data removed.` +
+          (r.revoked?.length ? `\n${r.revoked.join("\n")}` : "") +
+          `\n${r.emailed}`,
+      );
+      reload();
+    }, fail);
   };
 
   return (
@@ -957,10 +973,36 @@ function ManageUser({ u, reload }) {
           onChange={(e) => setConfirmEmail(e.target.value)}
           autoComplete="off"
         />
-        <button className="btn danger" disabled={confirmEmail.trim().toLowerCase() !== u.email}>
+        <button className="btn danger" disabled={!typed}>
           Delete user and all data
         </button>
       </form>
+      {preview && (
+        <div className="delete-preview small">
+          <strong>This deletes:</strong>{" "}
+          {Object.entries(preview.deleted)
+            .map(([k, n]) => `${k} ${n}`)
+            .join(" · ") || "only the account"}
+          {preview.linked_apps.length > 0 && (
+            <div>
+              CoachQuest's access is revoked at {preview.linked_apps.join(", ")}; upcoming workouts it sent to
+              Intervals.icu are removed there.
+            </div>
+          )}
+          {Object.keys(preview.kept_unsigned).length > 0 && (
+            <div className="muted">
+              Stays for others, without their name:{" "}
+              {Object.entries(preview.kept_unsigned)
+                .map(([k, n]) => `${k} ${n}`)
+                .join(" · ")}
+            </div>
+          )}
+          <div className="muted">
+            They're emailed that their account is gone. The sign-in log keeps their email until it's cleared
+            (security), and backups until they rotate out (14 days).
+          </div>
+        </div>
+      )}
       {msg?.ok && <div className="ok small">{msg.ok}</div>}
       {msg?.error && <div className="error small">{msg.error}</div>}
     </div>

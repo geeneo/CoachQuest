@@ -2141,3 +2141,13 @@ label.search input {
   margin: 0 0 0.6rem;
   align-items: center;
 }
+.delete-preview {
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.4rem;
+}
+.delete-preview div {
+  margin-top: 0.25rem;
+}

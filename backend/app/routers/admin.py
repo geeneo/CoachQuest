@@ -364,20 +364,45 @@ class DeleteUser(BaseModel):
     confirm_email: str
 
 
+@router.get("/users/{user_id}/delete-preview")
+def admin_delete_preview(user_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """What deleting this user removes (row counts) and what stays, unsigned, before the admin confirms."""
+    user = _manageable(db, user_id, admin)
+    links = [c.provider for c in db.scalars(select(Connection).where(Connection.user_id == user.id))]
+    return {**accounts.deletion_preview(db, user), "linked_apps": links}
+
+
 @router.delete("/users/{user_id}")
-def admin_delete_user(
+async def admin_delete_user(
     user_id: int, body: DeleteUser, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
 ):
+    """Delete the user and all their data: revoke CoachQuest's access at Strava and Intervals.icu
+    (removing upcoming workouts it sent there), delete every row that belongs to them, and email them."""
     user = _manageable(db, user_id, admin)
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="You can't delete your own account")
     if body.confirm_email.strip().lower() != user.email:
         raise HTTPException(status_code=400, detail="Type the user's email exactly to confirm")
-    email = user.email
+    email, name = user.email, user.display_name
+    preview = accounts.deletion_preview(db, user)
+    revoked = await accounts.revoke_links(db, user)
     accounts.delete_account(db, user)
     auth_log.admin_action(db, request, "admin_deleted", admin, None, email)
     log.info("Admin %s deleted user %s", admin.id, user_id)
-    return {"ok": True}
+    try:
+        await mailer.send(
+            email,
+            "Your CoachQuest account has been deleted",
+            f"Hi {name},\n\nYour CoachQuest account and its data (activities, wellness, plans, workouts, "
+            "races, routes, notes and links to other apps) have been deleted by an administrator. "
+            "CoachQuest no longer has access to your Strava or Intervals.icu account.\n\n"
+            "Copies in our backups are removed as the backups rotate out (within 14 days). "
+            "Reply to this email if you have questions.\n",
+        )
+        emailed = f"Emailed {email}."
+    except mailer.MailError as exc:
+        emailed = f"Not emailed: {exc}"
+    return {"ok": True, "deleted": preview["deleted"], "revoked": revoked, "emailed": emailed}
 
 
 @router.get("/storage")
