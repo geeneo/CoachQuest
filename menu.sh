@@ -9,6 +9,11 @@ DC="docker compose -p $COMPOSE_PROJECT -f docker-compose.yml"
 # Marks this folder's nightly backup line in root's crontab (option 10).
 CRON_TAG="# coachquest-backup:$PWD"
 nightly_installed() { crontab -l 2>/dev/null | grep -qF "$CRON_TAG"; }
+# Option 11: the deploy agent (deploy-agent.sh) runs each minute and carries out updates asked for on
+# the admin page. The web app only leaves a request file; it never gets Docker or root.
+AGENT_TAG="# coachquest-deploy-agent:$PWD"
+agent_installed() { crontab -l 2>/dev/null | grep -qF "$AGENT_TAG"; }
+agent_status() { agent_installed && echo "ON - choose to remove" || echo "OFF - choose to install"; }
 nightly_status() {
   if nightly_installed; then
     last=$(ls -1t "$BACKUPS"/coachquest-*.gz 2>/dev/null | head -1)
@@ -28,6 +33,7 @@ CoachQuest ($COMPOSE_PROJECT) — commit on disk: $(git rev-parse --short HEAD)
  7) Back up data now (keeps last 14)
  8) Status            9) Docker cleanup (dangling images)
 10) Nightly backup at 02:17: $(nightly_status)
+11) Updates from Admin → Update CoachQuest: $(agent_status)
  q) Quit
 MENU
   read -rp "> " choice
@@ -41,6 +47,19 @@ MENU
     6) $DC logs --tail 200 -f proxy ;;
     7) bash backup.sh ;;
     8) $DC ps ;;
+    11) if ! command -v crontab >/dev/null; then
+          echo "cron isn't installed: dnf install -y cronie && systemctl enable --now crond (apt: cron)"
+        elif agent_installed; then
+          read -rp "Stop updates from the admin page? [y/N] " yn
+          if [[ $yn == [yY] ]]; then
+            { crontab -l 2>/dev/null | grep -vF "$AGENT_TAG" || true; } | crontab -
+            echo "Removed. Deploy here with option 2 as before."
+          fi
+        else
+          { crontab -l 2>/dev/null || true; echo "* * * * * cd $PWD && bash deploy-agent.sh $AGENT_TAG"; } | crontab -
+          bash deploy-agent.sh
+          echo "Installed: super admins can now check for and deploy updates under Admin → Update CoachQuest."
+        fi ;;
     10) if ! command -v crontab >/dev/null; then
           echo "cron isn't installed: dnf install -y cronie && systemctl enable --now crond (apt: cron)"
         elif nightly_installed; then

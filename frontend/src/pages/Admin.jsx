@@ -7,6 +7,7 @@ import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { dateTime, duration, formatDate } from "../lib/format.js";
 import { AdminSignIns } from "../components/SignInLog.jsx";
+import UpdateCoachQuest from "../components/UpdateCoachQuest.jsx";
 import { Backfill } from "./Connections.jsx";
 
 const SOURCE = { web: "set here", env: "from .env", unset: "not set" };
@@ -16,6 +17,7 @@ export default function Admin() {
   const [rev, setRev] = useState(0);
   const stats = useApi(`/api/admin/stats?rev=${rev}`);
   const version = useApi("/api/admin/version");
+  const { user: me } = useAuth();
   const s = stats.data;
   return (
     <>
@@ -23,6 +25,7 @@ export default function Admin() {
       <p className="muted small">
         API build {version.data?.commit} {version.data?.built} · frontend build {import.meta.env.VITE_BUILD_COMMIT || "dev"}
       </p>
+      {me?.is_super_admin && <UpdateCoachQuest />}
       <Settings />
       <Users onChange={() => setRev((r) => r + 1)} />
       <PlatformWorkouts />

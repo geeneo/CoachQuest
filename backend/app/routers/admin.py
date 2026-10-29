@@ -15,7 +15,17 @@ from sqlalchemy import text as sql
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
-from .. import accounts, activity_delete, admin_users, auth_log, backfill, mailer, platform_catalog, runtime
+from .. import (
+    accounts,
+    activity_delete,
+    admin_users,
+    auth_log,
+    backfill,
+    deploy_requests,
+    mailer,
+    platform_catalog,
+    runtime,
+)
 from ..config import settings
 from ..db import (
     AccessLog,
@@ -34,6 +44,7 @@ from ..db import (
 )
 from ..delivery import intervals_icu
 from ..deps import admin_user
+from ..security import verify_password
 from . import connections
 
 log = logging.getLogger("coachquest.admin")
@@ -620,3 +631,53 @@ def delete_platform_workout(workout_id: int, admin: User = Depends(admin_user), 
     db.delete(w)
     db.commit()
     return {"ok": True}
+
+
+# ---- Update CoachQuest (deploy_requests.py, deploy-agent.sh on the server) ----
+
+
+def _super(admin: User) -> None:
+    if not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only super admins update CoachQuest")
+
+
+@router.get("/update")
+def update_state(admin: User = Depends(admin_user)):
+    """What's running, what's new on GitHub, and the current or last deploy with its log."""
+    _super(admin)
+    return deploy_requests.state()
+
+
+@router.post("/update/check")
+def update_check(admin: User = Depends(admin_user)):
+    _super(admin)
+    if not deploy_requests.state()["pending"]:
+        deploy_requests.request("check", admin.email)
+    return deploy_requests.state()
+
+
+class DeployIn(BaseModel):
+    target: str = "all"
+    password: str = Field(min_length=1, max_length=256)
+
+
+@router.post("/update/deploy")
+def update_deploy(body: DeployIn, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Ask the server to pull and redeploy. Needs the admin's password again; recorded in the sign-in log."""
+    _super(admin)
+    if not verify_password(body.password, admin.password_hash):
+        raise HTTPException(status_code=403, detail="Wrong password")
+    now = deploy_requests.state()
+    if not now["agent"]["alive"]:
+        raise HTTPException(
+            status_code=409, detail="The update agent isn't running on the server: install it with menu.sh option 11"
+        )
+    if now["pending"] or (now["status"] or {}).get("state") == "running":
+        raise HTTPException(status_code=409, detail="An update is already waiting or running")
+    try:
+        deploy_requests.request("deploy", admin.email, body.target)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    auth_log.admin_action(db, request, "admin_deploy", admin, None, f"{body.target}")
+    log.info("Admin %s asked to deploy %s", admin.id, body.target)
+    return deploy_requests.state()

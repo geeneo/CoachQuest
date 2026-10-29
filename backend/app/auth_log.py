@@ -36,6 +36,7 @@ EVENTS = {
     "paused_self": "Paused their own account",
     "admin_enabled": "Enabled by an admin",
     "admin_deleted": "Deleted by an admin",
+    "admin_deploy": "Update deployed from the admin page",
     "admin_emails_off": "Emails turned off by an admin",
     "admin_emails_on": "Emails turned on by an admin",
     "admin_ai_off": "AI coach turned off by an admin",

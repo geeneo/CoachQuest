@@ -2,6 +2,16 @@
 
 ## Next up
 
+- [x] **Update CoachQuest from the admin page.** Admin → Update CoachQuest
+      (super admins): running version, newest on GitHub, the new commits,
+      "Check now", and "Update now" (everything / backend / frontend, with
+      the admin's password), live log and earlier updates; recorded in the
+      sign-in log. Safe by design: the API only writes a request file in
+      DATA_PATH/deploy; deploy-agent.sh on the server (cron each minute,
+      menu.sh option 11) runs deploy.sh. No Docker socket or root for the
+      web app. Later: an email to super admins when new commits arrive;
+      roll back to the previous version with one click.
+
 - [x] **Deleting a user deletes all their data.** accounts.delete_account
       follows every foreign key to users (tables added later are covered
       too): rows that belong to them are deleted, what they wrote for others

@@ -359,7 +359,11 @@ certificates added to the nginx config. Then turn on the HSTS line in
 
 Day-to-day: `bash deploy.sh [all|backend|frontend]`, or `bash menu.sh` for
 version check, logs, backups (`backup.sh`, rotated, keeps 14; option 10 turns
-a nightly backup on or off) and cleanup. All state lives
+a nightly backup on or off) and cleanup. Option 11 installs `deploy-agent.sh`
+(cron, each minute): then super admins update from **Admin → Update
+CoachQuest** (new commits on GitHub, deploy with their password, live log).
+The web app only leaves a request file in `DATA_PATH/deploy`; the agent runs
+`deploy.sh` on the server, so the API never gets Docker or root. All state lives
 in `DATA_PATH` (default `./data`): SQLite by default, or Postgres in its own
 container. [docs/postgres.md](docs/postgres.md) moves the data across with
 `python -m app.movedb` (the SQLite file is only read) and back again.
