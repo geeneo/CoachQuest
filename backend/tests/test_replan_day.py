@@ -79,3 +79,17 @@ def test_past_locked_and_waiting_replans(setup):
         db.commit()
     r = athlete.post(f"{base}/days/{(mon + timedelta(days=1)).isoformat()}/replan", json={})
     assert r.status_code == 409 and "waiting" in r.json()["detail"]
+
+
+def test_the_route_picked_goes_to_the_ai_and_wins(setup):
+    athlete, aid, plan, seen = setup
+    link = "https://www.strava.com/routes/3234567890123456789"
+    fav = athlete.post("/api/athletes/me/segments", json={"link": link, "name": "Loop B"}).json()
+    sat = (_next_monday() + timedelta(days=5)).isoformat()
+    base = f"/api/athletes/me/plans/{plan['id']}"
+    athlete.patch(f"{base}/days/{sat}", json={"type": "Road", "segment_id": fav["id"]})
+    athlete.post(f"{base}/days/{sat}/replan", json={"note": "Ride Loop B"})
+    assert seen["facts"]["request"]["replan_day"]["current"]["segment_id"] == fav["id"]
+    from app.coach import DAY_RULES
+
+    assert "current.segment_id" in DAY_RULES and "win over `weekday_preferences`" in DAY_RULES

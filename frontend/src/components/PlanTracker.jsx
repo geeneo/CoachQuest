@@ -282,6 +282,8 @@ function Day({ day, ctx }) {
   const [editing, setEditing] = useState(false);
   const [replanning, setReplanning] = useState(null); // null = closed, else {note, coach_notes, busy}
   const [pickRoute, setPickRoute] = useState(false);
+  // A route picked whose name isn't in the day's text: the text still describes the old ride.
+  const [routeHint, setRouteHint] = useState(null);
   const canRoute = !ctx.ro && takesRoute(day.type) && ctx.segments.length > 0;
   const save = (body) => ctx.editDay(day.date, body);
   const canReplan = !ctx.ro && !day.locked && day.date >= new Date().toISOString().slice(0, 10);
@@ -361,6 +363,27 @@ function Day({ day, ctx }) {
         </div>
       </div>
       <div className="day-body">
+        {routeHint && day.segment?.id === routeHint.id && !replanning && (
+          <div className="hint route-hint">
+            The text still describes the old ride.{" "}
+            {canReplan && (
+              <button
+                type="button"
+                className="link-btn small"
+                onClick={() => {
+                  setReplanning({ note: `Ride ${routeHint.name} on this day.`, coach_notes: "" });
+                  setRouteHint(null);
+                }}
+              >
+                Re-plan this day for {routeHint.name}
+              </button>
+            )}{" "}
+            or click the text to change it yourself.{" "}
+            <button type="button" className="link-btn small" onClick={() => setRouteHint(null)}>
+              Keep it
+            </button>
+          </div>
+        )}
         {pickRoute && canRoute && (
           <label className="inline small route-pick">
             Ride
@@ -368,8 +391,11 @@ function Day({ day, ctx }) {
               autoFocus
               value={day.segment ? String(day.segment.id) : ""}
               onChange={(e) => {
-                save({ segment_id: e.target.value ? Number(e.target.value) : null });
+                const picked = ctx.segments.find((s) => String(s.id) === e.target.value);
+                save({ segment_id: picked ? picked.id : null });
                 setPickRoute(false);
+                const text = (day.description || "").toLowerCase();
+                setRouteHint(picked && !text.includes(picked.name.toLowerCase()) ? picked : null);
               }}
             >
               <option value="">– no route –</option>

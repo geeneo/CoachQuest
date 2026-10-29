@@ -653,7 +653,7 @@ async def replan_day(
         raise HTTPException(status_code=409, detail="That day is locked 🔒: unlock it first")
     if not has_data(db, p.athlete_id):
         raise HTTPException(status_code=409, detail="No activities or wellness synced yet: connect Strava or Garmin")
-    keys = ("weekday", "type", "description", "duration_min", "intensity", "extra_sessions")
+    keys = ("weekday", "type", "description", "duration_min", "intensity", "segment_id", "extra_sessions")
     day_comments = [
         c for c in comments.for_plan(db, p, limit=40) if c["day"] == day.isoformat() or day.isoformat() in c["about"]
     ]

@@ -533,7 +533,14 @@ DAY_RULES = """Re-planning ONE day: `request.replan_day` holds the day to rewrit
 about this day (`comments`), and why it's being re-planned (`note`, `coach_notes`). Return only that day in
 `day` (its `weekday` must be `request.replan_day.weekday`), fitting the week around it, the races and the
 flags. Follow the coach's comments and notes unless the flags make that unsafe. In `why`, one or two
-sentences on what changed and why, mentioning the comment or note you followed."""
+sentences on what changed and why, mentioning the comment or note you followed.
+For this one day, what the athlete or coach asked comes first, after `health` and `flags`: `note`,
+`coach_notes`, the day's `comments`, and the route or segment they picked (`current.segment_id`, an id
+from `favourites`). These win over `weekday_preferences` and the plan's original `request.notes`;
+say so in `why` when they differ. Keep the picked route or segment in `segment_id` and write the
+session for it (its distance, climbing and time from `favourites`) unless the note asks for another or
+for indoors (then 0). If `current.description` names a different route, it's out of date: follow
+`current.segment_id`."""
 
 
 def day_schema() -> dict:
