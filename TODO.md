@@ -64,6 +64,13 @@
         (c) make Garmin or Intervals.icu the main activity source for AI
         users. Not legal advice: check with a lawyer for the company.
 
+- [x] **Done (29 Oct):** Profile → "Your plan on Strava": Off (default) /
+      Per activity (a 🎯 button on each Strava activity, preview first) /
+      Automatically (after each Strava sync, recent activities only, when
+      the lines change); "Allow on Strava" asks for activity:write.
+      Written from the plan, never by the AI; own text kept, lines replaced
+      not repeated. Still to do: ask developers@strava.com before many
+      athletes use it.
 - [ ] **Write back to Strava: the plan in the activity description,
       "powered by coachquest.mmc24.com".** When an activity matches a plan
       day, CoachQuest updates its Strava description, e.g.

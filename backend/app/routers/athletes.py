@@ -11,12 +11,12 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import activity_delete, dashboard, localtime, profile_sync, runtime, sync_options
+from .. import activity_delete, dashboard, localtime, profile_sync, runtime, strava_notes, sync_options
 from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
 from ..deps import active_grant, allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
-from ..providers import garmin
+from ..providers import garmin, strava
 from ..queries import (
     activities_since,
     activity_out,
@@ -46,6 +46,8 @@ class ProfileUpdate(BaseModel):
     birth_date: date | None = None
     date_format: Literal[DATE_FORMATS] | None = None
     time_format: Literal[TIME_FORMATS] | None = None
+    # Your plan in your Strava activity descriptions (strava_notes.py).
+    strava_notes: Literal["off", "manual", "auto"] | None = None
 
     @field_validator("birth_date")
     @classmethod
@@ -271,3 +273,30 @@ def wellness(
     athlete_id = resolve_athlete_id(athlete, user)
     require_scope(db, user, athlete_id, "wellness")
     return [wellness_out(w) for w in wellness_since(db, athlete_id, date.today() - timedelta(days=days))]
+
+
+@router.get("/me/strava-notes")
+def strava_notes_status(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """The Profile → Strava card: the mode, and whether Strava lets CoachQuest write descriptions."""
+    conn = db.scalar(select(Connection).where(Connection.user_id == user.id, Connection.provider == "strava"))
+    return {
+        "mode": user.strava_notes or "off",
+        "connected": conn is not None,
+        "can_write": conn is not None and strava.can_write(conn),
+        "host": strava_notes._host(),
+    }
+
+
+@router.post("/me/activities/{activity_id}/strava-note")
+async def strava_note(
+    activity_id: int, preview: bool = False, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """Write (or preview) the plan lines in one of your Strava activities' description. Only your own:
+    coaches never write to an athlete's Strava."""
+    act = db.get(Activity, activity_id)
+    if act is None or act.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    try:
+        return await strava_notes.write(db, user, act, preview=preview)
+    except strava_notes.NoteError as exc:
+        raise HTTPException(status_code=exc.status, detail={"code": exc.code, "message": str(exc)}) from exc

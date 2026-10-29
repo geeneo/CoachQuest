@@ -2151,3 +2151,16 @@ label.search input {
 .delete-preview div {
   margin-top: 0.25rem;
 }
+.strava-note-example {
+  background: var(--panel-2);
+  border-left: 3px solid var(--strava);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  margin: 0.5rem 0;
+}
+td.row-actions {
+  white-space: nowrap;
+}

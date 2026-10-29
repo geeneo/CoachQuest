@@ -148,6 +148,7 @@ def activity_out(a: Activity) -> dict:
         "relative_effort": a.relative_effort,
         "race_id": a.race_id,
         "note_tag": a.note_tag,
+        "strava_note": bool(a.strava_note),  # the plan is in its Strava description (strava_notes.py)
     }
 
 

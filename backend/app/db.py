@@ -82,6 +82,8 @@ class User(Base):
     platform_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Strength options from Profile (strength.py): equipment, level, sports, sessions, minutes, limits.
     strength_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Your plan in your Strava activity descriptions (strava_notes.py): off, manual (per activity) or auto.
+    strava_notes: Mapped[str] = mapped_column(String(10), default="off")
     # Health conditions from Profile (health.py), and when the athlete accepted the medical disclaimer.
     health_conditions: Mapped[list | None] = mapped_column(JSON, nullable=True)
     health_disclaimer_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -198,6 +200,8 @@ class Activity(Base):
     type_override: Mapped[str | None] = mapped_column(String(40), nullable=True)
     race_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     note_tag: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # The plan lines CoachQuest last wrote into this activity's Strava description (strava_notes.py).
+    strava_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class DeletedActivity(Base):
@@ -689,6 +693,7 @@ _ADDED_COLUMNS = {
         "indoor": "BOOLEAN NOT NULL DEFAULT 0",
         "is_race": "BOOLEAN NOT NULL DEFAULT 0",
         "type_override": "VARCHAR(40)",
+        "strava_note": "TEXT",
         "race_id": "INTEGER",
         "note_tag": "VARCHAR(40)",
     },
@@ -709,6 +714,7 @@ _ADDED_COLUMNS = {
         "platform_prefs": "JSON",
         "strength_prefs": "JSON",
         "health_conditions": "JSON",
+        "strava_notes": "VARCHAR(10) NOT NULL DEFAULT 'off'",
         "health_disclaimer_at": "DATETIME",
         "date_format": "VARCHAR(10)",
         "ai_disabled": "BOOLEAN NOT NULL DEFAULT 0",

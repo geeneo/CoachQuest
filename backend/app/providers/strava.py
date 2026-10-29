@@ -115,7 +115,8 @@ def redirect_uri() -> str:
     return f"{settings.public_base_url}/api/connections/strava/callback"
 
 
-def authorize_url(state: str, app: StravaApp) -> str:
+def authorize_url(state: str, app: StravaApp, write: bool = False) -> str:
+    """`write`: also ask to change activities (activity:write), for plan notes (strava_notes.py)."""
     return (
         AUTH_URL
         + "?"
@@ -125,7 +126,7 @@ def authorize_url(state: str, app: StravaApp) -> str:
                 "redirect_uri": redirect_uri(),
                 "response_type": "code",
                 "approval_prompt": "auto",
-                "scope": SCOPE,
+                "scope": SCOPE + (",activity:write" if write else ""),
                 "state": state,
             }
         )
@@ -279,6 +280,10 @@ async def sync(db: DbSession, conn: Connection) -> int:
         conn.last_error = f"{type(exc).__name__}: {exc}"[:500]
         log.warning("Strava sync failed for user %s: %s", conn.user_id, exc)
     db.commit()
+    if conn.status == "active":
+        from .. import strava_notes  # here, not at the top: strava_notes imports this module
+
+        await strava_notes.auto(db, conn)
     return count
 
 
@@ -417,6 +422,28 @@ async def activity(db: DbSession, conn: Connection, activity_id: int) -> dict:
         "est_minutes": round(secs / 60) if secs else None,
         "sport": "run" if "Run" in (a.get("sport_type") or a.get("type") or "") else "ride",
     }
+
+
+def can_write(conn: Connection) -> bool:
+    """Whether the athlete let CoachQuest change their activities (linked with activity:write)."""
+    return "activity:write" in (decrypt_json(conn.token_enc).get("scope") or "").split(",")
+
+
+async def get_activity(db: DbSession, conn: Connection, activity_id: str) -> dict:
+    return await _get(db, conn, f"/activities/{activity_id}")
+
+
+async def update_activity(db: DbSession, conn: Connection, activity_id: str, changes: dict) -> dict:
+    """PUT /activities/{id} (needs activity:write)."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        token = await _access_token(db, conn, client)
+        resp = await client.put(
+            f"{API}/activities/{activity_id}", json=changes, headers={"Authorization": f"Bearer {token}"}
+        )
+        if resp.status_code == 404:
+            raise LookupError("Not on Strava (deleted, or not yours)")
+        resp.raise_for_status()
+        return resp.json()
 
 
 def sees_private_routes(conn: Connection) -> bool:

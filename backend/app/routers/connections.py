@@ -106,7 +106,8 @@ def remove_strava_app(user: User = Depends(current_user), db: DbSession = Depend
 
 
 @router.post("/strava/authorize")
-def strava_authorize(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+def strava_authorize(write: bool = False, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """`write`: also ask to change activities, for the plan in Strava descriptions (Profile → Strava)."""
     app = strava.app_for(db, user.id)
     if app is None:
         raise HTTPException(status_code=503, detail="Add your Strava API app first")
@@ -114,7 +115,7 @@ def strava_authorize(user: User = Depends(current_user), db: DbSession = Depends
     state = secrets.token_urlsafe(24)
     db.add(OAuthState(state=state, user_id=user.id, provider="strava"))
     db.commit()
-    return {"url": strava.authorize_url(state, app)}
+    return {"url": strava.authorize_url(state, app, write=write)}
 
 
 @router.get("/strava/callback")

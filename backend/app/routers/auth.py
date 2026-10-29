@@ -57,6 +57,7 @@ def user_out(user: User) -> dict:
         "notify_comments": user.notify_comments,
         "timezone": user.timezone,
         "emails_disabled": user.emails_disabled,
+        "strava_notes": user.strava_notes or "off",
         "date_format": datefmt.date_format(user),
         "time_format": datefmt.time_format(user),
         "birth_date": user.birth_date,

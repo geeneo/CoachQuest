@@ -1,7 +1,8 @@
-import { Trash2, Undo2 } from "lucide-react";
+import { Target, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
 import { dateTime, duration, formatDate, shortDate } from "../lib/format.js";
 
 const RANGES = [
@@ -104,6 +105,21 @@ export default function Activities({ id, editable }) {
       setCleaned(r.removed ? `Removed ${r.removed} duplicate${r.removed === 1 ? "" : "s"}.` : "No duplicates found.");
       res.reload();
       deleted.reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  // The plan in an activity's Strava description (Profile → Your plan on Strava; strava_notes.py).
+  const { user } = useAuth();
+  const notesOn = editable && user?.strava_notes && user.strava_notes !== "off";
+  const toStrava = async (row) => {
+    setError(null);
+    const url = `/api/me/activities/${row.id}/strava-note`;
+    try {
+      const { note } = await api(`${url}?preview=true`, { method: "POST" });
+      if (!confirm(`Add this to "${row.name}" on Strava, under your own description?\n\n${note}`)) return;
+      await api(url, { method: "POST" });
+      setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, strava_note: true } : r)));
     } catch (err) {
       setError(err.message);
     }
@@ -355,7 +371,21 @@ export default function Activities({ id, editable }) {
                     )}
                   </td>
                   {editable && (
-                    <td>
+                    <td className="row-actions">
+                      {notesOn && a.source === "strava" && (
+                        <button
+                          className={`icon-btn ${a.strava_note ? "active" : ""}`}
+                          title={
+                            a.strava_note
+                              ? "Your plan is in its Strava description (click to update)"
+                              : "Add your plan to its Strava description"
+                          }
+                          aria-label="Plan to Strava"
+                          onClick={() => toStrava(a)}
+                        >
+                          <Target size={15} />
+                        </button>
+                      )}
                       <button className="icon-btn" title="Delete from CoachQuest" aria-label="Delete" onClick={() => remove([a.id])}>
                         <Trash2 size={15} />
                       </button>
