@@ -3,15 +3,22 @@ import { shortDate } from "../lib/format.js";
 
 export default function WellnessPanel({ rows }) {
   if (!rows?.length) return <p className="muted">No Garmin wellness data yet.</p>;
-  const last = rows[rows.length - 1];
+  // Each tile: the newest day that has that value. Today's row is often still empty (last night's
+  // sleep and HRV come with the next Garmin sync), and some watches never send some values.
+  const today = rows[rows.length - 1].day;
+  const latest = (key) => {
+    const r = [...rows].reverse().find((x) => x[key] != null);
+    return r ? { value: r[key], sub: r.day === today ? null : shortDate(r.day) } : { value: null, sub: "no data yet" };
+  };
+  const tile = (label, key, unit) => <Stat label={label} unit={unit} {...latest(key)} />;
   return (
     <>
       <div className="stats">
-        <Stat label="Resting HR" value={last.resting_hr} unit="bpm" />
-        <Stat label="HRV (night)" value={last.hrv_ms} unit="ms" />
-        <Stat label="Sleep" value={last.sleep_h} unit="h" />
-        <Stat label="Sleep score" value={last.sleep_score} />
-        <Stat label="Body Battery max" value={last.body_battery_max} />
+        {tile("Resting HR", "resting_hr", "bpm")}
+        {tile("HRV (night)", "hrv_ms", "ms")}
+        {tile("Sleep", "sleep_h", "h")}
+        {tile("Sleep score", "sleep_score")}
+        {tile("Body Battery max", "body_battery_max")}
       </div>
       <div className="chart">
         <ResponsiveContainer width="100%" height={220}>

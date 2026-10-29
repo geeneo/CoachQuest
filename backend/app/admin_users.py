@@ -76,10 +76,14 @@ def strava_apps(db: DbSession) -> dict[int, str | None]:
 
 
 def _table_bytes(db: DbSession) -> dict[str, int]:
-    """Bytes on disk per table (its indexes not counted), or {} when dbstat isn't there."""
+    """Bytes on disk per table (its indexes not counted), or {} when the database can't say."""
+    if db.get_bind().dialect.name == "postgresql":
+        sql = "SELECT relname, pg_relation_size(relid) FROM pg_catalog.pg_statio_user_tables"
+    else:
+        sql = "SELECT name, SUM(pgsize) FROM dbstat GROUP BY name"
     try:
-        rows = db.execute(text("SELECT name, SUM(pgsize) FROM dbstat GROUP BY name")).all()
-    except Exception:  # not SQLite, or SQLite built without dbstat
+        rows = db.execute(text(sql)).all()
+    except Exception:  # SQLite built without dbstat
         db.rollback()
         return {}
     return {name: int(size or 0) for name, size in rows}

@@ -17,6 +17,25 @@ services:
     networks: [internal]
     # No ports: the API is reachable only through the proxy.
 
+  # Postgres, only when DATABASE_URL points at it (docs/postgres.md). The "postgres" profile keeps it
+  # off otherwise; deploy.sh starts it when DATABASE_URL is postgresql.
+  db:
+    image: postgres:16-alpine
+    profiles: [postgres]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-coachquest}
+      POSTGRES_USER: ${POSTGRES_USER:-coachquest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - ${PG_DATA_PATH:-./pgdata}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-coachquest} -d ${POSTGRES_DB:-coachquest}"]
+      interval: 10s
+      retries: 6
+    networks: [internal]
+    # No ports: only the API reaches it.
+
   proxy:
     image: ${APP_NAME:-coachquest}-proxy:latest
     pull_policy: never

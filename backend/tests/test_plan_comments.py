@@ -1,3 +1,4 @@
+import os
 from datetime import date, timedelta
 
 import pytest
@@ -211,6 +212,9 @@ def test_ai_reads_comments(setup):
     }
 
 
+@pytest.mark.skipif(
+    not os.environ["DATABASE_URL"].startswith("sqlite"), reason="a one-off move on old SQLite installs only"
+)
 def test_old_plan_comments_move_to_the_new_table(setup):
     from sqlalchemy import text
 

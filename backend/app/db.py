@@ -1,5 +1,6 @@
 """SQLAlchemy models and session handling."""
 
+import time
 from datetime import UTC, date, datetime
 
 from sqlalchemy import (
@@ -19,6 +20,7 @@ from sqlalchemy import (
     inspect,
     text,
 )
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from .config import settings
@@ -649,8 +651,14 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
-_connect_args = {"check_same_thread": False} if settings.db_url.startswith("sqlite") else {}
-engine = create_engine(settings.db_url, connect_args=_connect_args)
+# SQLite (one file in DATA_DIR, the default) or Postgres (DATABASE_URL=postgresql+psycopg://...;
+# docs/postgres.md moves the data across with app.movedb and back again).
+_sqlite = settings.db_url.startswith("sqlite")
+engine = create_engine(
+    settings.db_url,
+    connect_args={"check_same_thread": False} if _sqlite else {},
+    pool_pre_ping=not _sqlite,  # Postgres: drop connections the server closed (restart, idle timeout)
+)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
@@ -731,7 +739,31 @@ _ADDED_COLUMNS = {
 }
 
 
+def _column_sql(sql_type: str, dialect: str) -> str:
+    """The column types above are written for SQLite; Postgres wants TIMESTAMP and true/false defaults."""
+    if dialect != "postgresql":
+        return sql_type
+    sql_type = sql_type.replace("DATETIME", "TIMESTAMP")
+    if sql_type.startswith("BOOLEAN"):
+        sql_type = sql_type.replace("DEFAULT 0", "DEFAULT false").replace("DEFAULT 1", "DEFAULT true")
+    return sql_type
+
+
+def wait_for_db(seconds: int = 60) -> None:
+    """Postgres may still be starting when the API does (docker compose): wait for it a while."""
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            with engine.connect():
+                return
+        except OperationalError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(2)
+
+
 def init_db() -> None:
+    wait_for_db()
     Base.metadata.create_all(engine)
     existing = inspect(engine)
     with engine.begin() as conn:
@@ -739,6 +771,7 @@ def init_db() -> None:
             have = {c["name"] for c in existing.get_columns(table)}
             for name, sql_type in columns.items():
                 if name not in have:
+                    sql_type = _column_sql(sql_type, engine.dialect.name)
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"))
         # Plan comments briefly had their own table; move them into comments once.
         if existing.has_table("plan_comments"):

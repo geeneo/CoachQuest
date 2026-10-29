@@ -13,6 +13,10 @@ case $TARGET in
   frontend) SERVICES=proxy ;;
   *) SERVICES="api proxy" ;;
 esac
+# On Postgres (docs/postgres.md), make sure the database container runs too.
+if [[ ${DATABASE_URL:-} == postgresql* && $TARGET != frontend ]]; then
+  SERVICES="db $SERVICES"
+fi
 # Same project name Portainer uses, or you get a second, disconnected stack.
 docker compose -p "$COMPOSE_PROJECT" -f docker-compose.yml up -d --no-deps $SERVICES
 docker compose -p "$COMPOSE_PROJECT" -f docker-compose.yml ps

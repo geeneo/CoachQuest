@@ -11,6 +11,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, or_, select
+from sqlalchemy import text as sql
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
@@ -401,6 +402,9 @@ def storage(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
             path = Path(url.database + suffix)
             if path.exists():
                 files[path.name] = path.stat().st_size
+    elif url.get_backend_name() == "postgresql":
+        name = db.scalar(sql("SELECT current_database()"))
+        files[f"Postgres database {name}"] = db.scalar(sql("SELECT pg_database_size(current_database())"))
     disk = shutil.disk_usage(settings.data_dir if Path(settings.data_dir).exists() else ".")
     return {
         "database_bytes": sum(files.values()),

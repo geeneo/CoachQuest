@@ -3,6 +3,8 @@
 .env.*
 !.env.example
 data/
+pgdata/
+backups/
 # ...except the exercise library that ships with the app (backend/app/strength.py)
 !backend/app/data/
 *.db

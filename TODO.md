@@ -2,6 +2,35 @@
 
 ## Next up
 
+- [ ] **Wellness: tiles showed "–", and when Garmin data comes in.** The
+      five tiles (resting HR, HRV, sleep, sleep score, Body Battery) took
+      today's row, which is empty until the next sync, so they showed "–"
+      while the chart had data. Fixed: each tile shows the newest day with
+      a value (with its date when it isn't today), "no data yet" if none.
+      Still to do:
+      - Garmin syncs at 06:15 and 18:15 UTC (08:15 and 20:15 in South
+        Africa); Strava and Intervals.icu every 6 hours. Show "last synced"
+        and "next sync" on the wellness card, and a "Sync now" button.
+      - Check which source sends sleep and Body Battery (Garmin direct
+        does; Intervals.icu may not), and say so when a value never comes.
+      - Maybe sync Garmin wellness once more mid-morning, after most
+        watches have uploaded the night.
+
+- [ ] **Monitor the database size.** Admin → Storage already shows the
+      database size, per-table rows and free disk (per user under Admin →
+      Users). Add:
+      - a size history (one reading a day) with a small chart, so growth
+        shows;
+      - a warning to super admins (banner and email) when free disk drops
+        below, say, 2 GB or the database grows unusually fast;
+      - the backup age: when the last backup was made (none yet on the
+        server!).
+
+- [x] **Postgres option, with a lossless move and the way back.**
+      docs/postgres.md: a db container (profile "postgres"), app.movedb
+      copies every table SQLite → Postgres (source only read, counts
+      checked, fixes reported), and back. Backups with pg_dump (menu 7).
+
 - [ ] **URGENT to decide: Strava API Agreement (effective 1 June 2026) vs
       how CoachQuest uses Strava data.** Found while researching the
       write-back below (strava.com/legal/api_policy):

@@ -5,7 +5,8 @@ from cryptography.fernet import Fernet
 
 _tmp = tempfile.mkdtemp()
 os.environ.update(
-    DATABASE_URL=f"sqlite:///{_tmp}/test.db",
+    # TEST_DATABASE_URL=postgresql+psycopg://... runs the suite on Postgres (an empty database).
+    DATABASE_URL=os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{_tmp}/test.db",
     PROXY_SHARED_SECRET="test-secret-" + "x" * 40,
     TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode(),
     PUBLIC_BASE_URL="http://testserver",

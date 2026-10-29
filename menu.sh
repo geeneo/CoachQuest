@@ -27,9 +27,16 @@ MENU
     4) bash deploy.sh frontend ;;
     5) $DC logs --tail 200 -f api ;;
     6) $DC logs --tail 200 -f proxy ;;
-    7) mkdir -p "$BACKUPS"; f="$BACKUPS/coachquest-$(date +%Y%m%d-%H%M%S).db"
-       sqlite3 "$DATA/coachquest.db" ".backup '$f'" 2>/dev/null || cp "$DATA/coachquest.db" "$f"
-       gzip "$f"; ls -1t "$BACKUPS"/coachquest-*.db.gz | tail -n +15 | xargs -r rm --; echo "Saved $f.gz" ;;
+    7) mkdir -p "$BACKUPS"
+       if [[ ${DATABASE_URL:-} == postgresql* ]]; then
+         f="$BACKUPS/coachquest-pg-$(date +%Y%m%d-%H%M%S).sql.gz"
+         $DC exec -T db pg_dump -U "${POSTGRES_USER:-coachquest}" "${POSTGRES_DB:-coachquest}" | gzip > "$f"
+         ls -1t "$BACKUPS"/coachquest-pg-*.sql.gz | tail -n +15 | xargs -r rm --; echo "Saved $f"
+       else
+         f="$BACKUPS/coachquest-$(date +%Y%m%d-%H%M%S).db"
+         sqlite3 "$DATA/coachquest.db" ".backup '$f'" 2>/dev/null || cp "$DATA/coachquest.db" "$f"
+         gzip "$f"; ls -1t "$BACKUPS"/coachquest-*.db.gz | tail -n +15 | xargs -r rm --; echo "Saved $f.gz"
+       fi ;;
     8) $DC ps ;;
     9) docker image prune -f ;;
     q) exit 0 ;;
