@@ -150,6 +150,13 @@ EDITABLE: dict[str, Editable] = {
         "photos first came from isn't documented; turn this off to hide them everywhere at once (the muscle map "
         "stays). Only super admins can change this.",
     ),
+    "strava_note_profile": Editable(
+        "Workout shape in Strava descriptions",
+        "Workouts",
+        choices=("on", "off"),
+        help="On: when an athlete adds their plan to a Strava activity (Profile → Your plan on Strava), an indoor "
+        "workout also gets its power profile drawn in text, e.g. ▂▃▆▆▃▆▆▃▆▆▂. Off: only the plan lines.",
+    ),
     "anthropic_model_short": Editable(
         "Model for notes, reviews and chat",
         "AI coach",

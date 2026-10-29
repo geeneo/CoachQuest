@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import localtime, plan_approval, plan_tracker
+from . import localtime, plan_approval, plan_tracker, runtime, workouts
 from .config import settings
 from .db import Activity, Connection, Plan, User
 from .providers import strava
@@ -48,6 +48,39 @@ def duration_text(seconds: int) -> str:
     """4h 55m, 45m."""
     h, m = divmod(round(seconds / 60), 60)
     return f"{h}h {m:02d}m" if h else f"{m}m"
+
+
+# Eight bar heights, low to high: Z1 recovery up to above VO2max (fractions of FTP).
+BARS = "▁▂▃▄▅▆▇█"
+PROFILE_WIDTH = 30
+_LEVELS = (0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.15)
+
+
+def profile(steps: list[dict], width: int = PROFILE_WIDTH) -> str:
+    """The workout's shape as text, time across, power up: e.g. ▂▃▆▆▆▃▆▆▆▃▆▆▆▂.
+
+    Each character is an equal slice of time at its average target power; free riding counts as easy."""
+    bl = workouts.blocks(steps)
+    total = sum(b["duration_s"] for b in bl)
+    if not bl or total <= 0:
+        return ""
+    width = max(4, min(width, total // 30))  # at least 30 seconds per character
+
+    def power_at(t: float) -> float:
+        for b in bl:
+            if b["start_s"] <= t < b["start_s"] + b["duration_s"]:
+                if b["power_start"] is None:
+                    return 0.5
+                share = (t - b["start_s"]) / b["duration_s"]
+                return b["power_start"] + (b["power_end"] - b["power_start"]) * share
+        return 0.5
+
+    out = []
+    for i in range(width):
+        start, end = total * i / width, total * (i + 1) / width
+        avg = sum(power_at(start + (end - start) * (k + 0.5) / 8) for k in range(8)) / 8
+        out.append(BARS[sum(avg >= level for level in _LEVELS)])
+    return "".join(out)
 
 
 def _host() -> str:
@@ -106,6 +139,12 @@ def note_for(db: DbSession, athlete: User, act: Activity, today: date | None = N
     ]
     if extras:
         head += " " + " ".join(extras)
+    shape = ""
+    workout = planned.get("workout")
+    if runtime.get("strava_note_profile") != "off" and workout and workout.get("steps"):
+        shape = profile(workout["steps"])
+    if shape:
+        head += f"\n📊 {shape}"
     if status == "goal_met":
         result = "✅ Goal met"
     else:

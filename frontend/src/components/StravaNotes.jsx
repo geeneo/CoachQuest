@@ -38,12 +38,13 @@ export default function StravaNotes() {
     <section className="card">
       <h2>Your plan on Strava</h2>
       <p className="muted small">
-        Add what was planned and how it went to your Strava activity's description, under your own text. Written
+        Add what was planned and how it went to your Strava activity's description, under your own text. Indoor
+        workouts also get their shape (📊), if your admin left that on. Written
         from your CoachQuest plan; your own words stay, and the lines are replaced (never added twice) if the day
         changes.
       </p>
       <pre className="strava-note-example">
-        {`🎯 Planned: Road · Long ride on the Sillos route (4h 55m)\n✅ Goal met\n📋 Training plan by CoachQuest · ${s.host}`}
+        {`🎯 Planned: Zwift / indoor · Sweet spot 3×10 (1h 05m)\n📊 ▂▂▃▃▄▆▆▆▃▂▅▆▆▅▂▃▆▆▆▄▂▃▂▂▁\n✅ Goal met\n📋 Training plan by CoachQuest · ${s.host}`}
       </pre>
       <div className="chips" role="radiogroup" aria-label="Plan on Strava">
         {MODES.map(([value, label]) => (

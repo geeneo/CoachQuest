@@ -68,12 +68,10 @@ def test_preview_and_write_keep_the_athletes_text(athlete):
     p, aid, remote, calls = athlete
     act = _ride(aid, 60)
     url = f"/api/me/activities/{act}/strava-note"
-    note = p.post(url + "?preview=true").json()["note"]
-    assert note.splitlines() == [
-        "🎯 Planned: Zwift / indoor · Tempo (1h 00m)",
-        "✅ Goal met",
-        "📋 Training plan by CoachQuest · testserver",
-    ]
+    note = p.post(url + "?preview=true").json()["note"].splitlines()
+    assert note[0] == "🎯 Planned: Zwift / indoor · Tempo (1h 00m)"
+    assert note[1].startswith("📊 ") and set(note[1][2:]) <= set(strava_notes.BARS)  # the workout's shape
+    assert note[2:] == ["✅ Goal met", "📋 Training plan by CoachQuest · testserver"]
     r = p.post(url)  # Strava not linked
     assert r.status_code == 409 and r.json()["detail"]["code"] == "no_strava"
     _strava(aid, write=False)
@@ -141,3 +139,23 @@ def test_authorize_asks_for_write_only_when_asked(make_user, monkeypatch):
     monkeypatch.setattr(strava, "app_for", lambda db, uid: strava.StravaApp("123", "s", False))
     assert "activity%3Awrite" not in p.post("/api/connections/strava/authorize").json()["url"]
     assert "activity%3Awrite" in p.post("/api/connections/strava/authorize?write=true").json()["url"]
+
+
+def test_profile_shape_and_admin_switch(athlete, make_user):
+    steps = [
+        {"kind": "warmup", "duration_s": 600, "power_start": 0.5, "power_end": 0.75},
+        {"kind": "intervals", "repeat": 3, "on_s": 600, "on_power": 0.9, "off_s": 300, "off_power": 0.55},
+        {"kind": "cooldown", "duration_s": 600, "power_start": 0.65, "power_end": 0.45},
+    ]
+    shape = strava_notes.profile(steps)
+    assert len(shape) == 30 and shape.count("▆") >= 9  # three sweet-spot blocks stand out
+    assert strava_notes.profile([{"kind": "steady", "duration_s": 2700, "power": 0.65}]) == "▃" * 30
+    assert strava_notes.profile([]) == ""
+    p, aid, remote, calls = athlete
+    act = _ride(aid, 60)
+    boss = make_user("admin@example.com")
+    off = {"values": {"strava_note_profile": "off"}}
+    assert boss.request("PUT", "/api/admin/settings", json=off).status_code == 200
+    note = p.post(f"/api/me/activities/{act}/strava-note?preview=true").json()["note"]
+    assert "📊" not in note and note.startswith("🎯 Planned:")
+    boss.request("PUT", "/api/admin/settings", json={"values": {"strava_note_profile": "on"}})

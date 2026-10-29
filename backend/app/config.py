@@ -75,6 +75,8 @@ class Settings:
     max_sessions_per_day: str = os.getenv("MAX_SESSIONS_PER_DAY", "3")
     # "on": strength exercises show start/end photos from the exercise library (strength.py).
     exercise_photos: str = os.getenv("EXERCISE_PHOTOS", "on")
+    # "on": the plan lines in Strava descriptions include the workout's shape as text (strava_notes.py).
+    strava_note_profile: str = os.getenv("STRAVA_NOTE_PROFILE", "on")
 
     smtp_host: str = os.getenv("SMTP_HOST", "")
     smtp_port: str = os.getenv("SMTP_PORT", "587")
