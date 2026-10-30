@@ -1,14 +1,14 @@
 """The weather page: the athlete's routes (rides grouped, and favourites) and the forecast along them."""
 
-from datetime import UTC, timedelta
+from datetime import UTC, date, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import geo, localtime, ride_routes, weather
-from ..db import Activity, Connection, Segment, User, get_db
+from .. import geo, localtime, plan_tracker, ride_routes, weather
+from ..db import Activity, Connection, Plan, Segment, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
 from ..providers import strava
 
@@ -132,23 +132,81 @@ async def route(
     return {"route": {k: v for k, v in r.items() if k != "polyline"}, "start": start, **fc}
 
 
+def _home_point(db: DbSession, athlete_id: int) -> geo.Point | None:
+    """Where the athlete usually starts: their latest outdoor ride's start."""
+    latest = db.scalar(
+        select(Activity.polyline)
+        .where(Activity.user_id == athlete_id, Activity.polyline.is_not(None))
+        .order_by(Activity.start_time.desc())
+        .limit(1)
+    )
+    points = geo.decode(latest) if latest else []
+    return points[0] if points else None
+
+
 @router.get("/home")
 async def home(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     """The forecast where the athlete usually starts (their latest outdoor ride's start), day by day."""
     a = _athlete(db, user, athlete)
-    latest = db.scalar(
-        select(Activity.polyline)
-        .where(Activity.user_id == a.id, Activity.polyline.is_not(None))
-        .order_by(Activity.start_time.desc())
-        .limit(1)
-    )
-    points = geo.decode(latest)
-    if not points:
+    point = _home_point(db, a.id)
+    if point is None:
         raise HTTPException(status_code=409, detail="No outdoor ride with a map line yet")
     try:
-        hourly = (await weather.forecast([points[0]]))[0]
+        hourly = (await weather.forecast([point]))[0]
     except weather.WeatherError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     today = localtime.today(a)
     days = [weather._daily(hourly, today + timedelta(days=n)) for n in range(weather.DAYS)]
     return {"days": [d for d in days if d]}
+
+
+async def _plan_day(db: DbSession, a: User, d: dict, start: str, today: date, home_at) -> dict | None:
+    """One outdoor plan day: along its route at riding time, else the whole day where the ride starts."""
+    day = date.fromisoformat(d["date"])
+    seg = db.get(Segment, d["segment_id"]) if d.get("segment_id") else None
+    if seg is not None and seg.athlete_id != a.id:
+        seg = None
+    if seg is not None and seg.kind != "segment" and await _line_for_favourite(db, a.id, seg):
+        minutes = d.get("duration_min") or seg.est_minutes or round((seg.distance_m or 0) / 1000 / 25 * 60)
+        fc = await weather.route_forecast(seg.polyline, minutes, start, today)
+        hit = next((x for x in fc["days"] if x["date"] == d["date"]), None)
+        if hit and hit["ride"]:
+            return weather.plan_summary(hit["ride"], seg.name, f"fav-{seg.id}")
+    points = geo.decode(seg.polyline) if seg is not None and seg.polyline else []
+    point = points[0] if points else home_at
+    if point is None:
+        return None
+    whole = weather._daily((await weather.forecast([point]))[0], day)
+    return weather.plan_summary(whole, seg.name if seg else None) if whole else None
+
+
+@router.get("/plan/{plan_id}")
+async def plan_days(athlete: str, plan_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """The weather for each outdoor day of a plan within the forecast (16 days), by date."""
+    a = _athlete(db, user, athlete)
+    plan = db.get(Plan, plan_id)
+    if plan is None or plan.athlete_id != a.id:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    today = localtime.today(a)
+    last = today + timedelta(days=weather.DAYS - 1)
+    days = [
+        d
+        for week in plan.weeks or []
+        for d in week["days"]
+        if today.isoformat() <= d["date"] <= last.isoformat()
+        and d.get("type") != "Rest"
+        and plan_tracker.takes_route(d.get("type"))
+    ]
+    out: dict[str, dict] = {}
+    if not days:
+        return {"days": out, "start": None}
+    start = _usual_start(db, a)
+    home_at = _home_point(db, a.id)
+    try:
+        for d in days:
+            w = await _plan_day(db, a, d, start, today, home_at)
+            if w:
+                out[d["date"]] = w
+    except weather.WeatherError as exc:
+        return {"days": out, "start": start, "error": str(exc)}
+    return {"days": out, "start": start}

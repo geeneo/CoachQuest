@@ -2488,3 +2488,19 @@ line.wind-calm {
     grid-template-columns: 1fr;
   }
 }
+
+/* Plan days: the day's weather (PlanTracker.jsx DayWeather). */
+.day-weather {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 0.85rem;
+}
+.day-weather.warn {
+  background: color-mix(in srgb, var(--danger) 10%, var(--bg));
+}

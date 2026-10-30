@@ -292,3 +292,39 @@ def direction_advice(ride: dict) -> str:
     if there < here:
         return f"Ride it the other way round: {there}% headwind instead of {here}%."
     return f"This way round is better: {here}% headwind instead of {there}% the other way."
+
+
+WET_CHANCE = 50  # % rain chance, or
+WET_MM = 1.0  # mm in an hour, counts as wet
+WINDY_KMH = 30
+GUSTY_KMH = 45
+
+
+def plan_summary(d: dict, place: str | None = None, route_key: str | None = None) -> dict:
+    """A plan day's weather in a line: along its route at riding time (`d` from _ride_day), or the whole
+    day where the athlete starts (`d` from _daily). With warnings for rain, wind, cold and heat."""
+    on_route = "share" in d
+    out = {
+        k: d.get(k)
+        for k in ("icon", "label", "temp_min", "temp_max", "rain_chance", "wind_kmh", "wind_from", "gusts_kmh")
+    }
+    out.update(
+        place=place,
+        route_key=route_key,
+        on_route=on_route,
+        start=d.get("start"),
+        finish=d.get("finish"),
+        headwind=d["share"]["head"] if on_route else None,
+        advice=direction_advice(d) if on_route else "",
+    )
+    warnings = []
+    if (d.get("rain_chance") or 0) >= WET_CHANCE or (d.get("rain_mm") or 0) >= WET_MM:
+        warnings.append("Rain likely")
+    if (d.get("wind_kmh") or 0) >= WINDY_KMH or (d.get("gusts_kmh") or 0) >= GUSTY_KMH:
+        warnings.append("Windy")
+    if d.get("temp_min") is not None and d["temp_min"] < 5:
+        warnings.append("Cold")
+    if d.get("temp_max") is not None and d["temp_max"] >= 32:
+        warnings.append("Hot")
+    out["warnings"] = warnings
+    return out

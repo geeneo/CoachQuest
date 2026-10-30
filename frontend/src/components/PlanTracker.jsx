@@ -18,6 +18,7 @@ const fmtDate = shortDate;
 
 export default function PlanTracker({ plan, athleteId, setPlan }) {
   const ro = useReadOnly();
+  const { user } = useAuth();
   const prefs = useApi(`/api/athletes/${athleteId}/preferences`);
   const segments = useApi(`/api/athletes/${athleteId}/segments`);
   const [swapFrom, setSwapFrom] = useState(null);
@@ -96,8 +97,19 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
     }
     return r;
   };
+  // The forecast on outdoor days in the next 16 days (backend routers/weather.py), fetched again when
+  // a day's type, route or length changes.
+  const weatherKey = plan.weeks
+    .flatMap((w) => w.days)
+    .filter((d) => d.date >= new Date().toISOString().slice(0, 10) && d.type !== "Rest" && takesRoute(d.type))
+    .slice(0, 16)
+    .map((d) => `${d.date}${d.type}${d.segment?.id || ""}${d.duration_min}`)
+    .join("|");
+  const weather = useApi(weatherKey ? `/api/athletes/${athleteId}/weather/plan/${plan.id}?v=${hash(weatherKey)}` : null);
   const ctx = {
     ro,
+    weather: weather.data?.days || {},
+    ownWeather: athleteId === "me" || String(user?.id) === String(athleteId), // the Weather page is your own
     prefs: prefs.data,
     editDay,
     swap,
@@ -450,6 +462,9 @@ function Day({ day, ctx }) {
             {day.route && <span className="badge">🗺 {day.route}</span>}
           </div>
         )}
+        {!editing && ctx.weather[day.date] && (
+          <DayWeather w={ctx.weather[day.date]} date={day.date} link={ctx.ownWeather} />
+        )}
         {!editing && day.workout?.steps?.length > 0 && (
           <WorkoutChart blocks={blocks(day.workout.steps)} height={90} />
         )}
@@ -637,6 +652,42 @@ function StrengthSession({ session }) {
 }
 
 // A favourite Strava route or segment on a session: opens it in Strava.
+function hash(text) {
+  let h = 0;
+  for (const c of text) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+// One line of weather on a plan day: along its route at the usual start time, or the whole day where
+// the athlete starts riding, with rain / wind / cold / heat warnings and a link to the Weather page.
+function DayWeather({ w, date, link }) {
+  const wind = w.wind_kmh != null && `💨 ${w.wind_kmh}km/h ${w.wind_from}${w.gusts_kmh ? ` (gusts ${w.gusts_kmh})` : ""}`;
+  const title = w.on_route
+    ? `On ${w.place}, riding ${w.start}–${w.finish}: the worst conditions anywhere on the route`
+    : w.place
+      ? `The whole day at the start of ${w.place}`
+      : "The whole day where your rides usually start";
+  return (
+    <div className={`day-weather ${w.warnings.length ? "warn" : ""}`} title={title}>
+      <span>
+        {w.icon} {w.label} · {w.temp_min}–{w.temp_max}°C · 💧 {w.rain_chance}% {wind && <>· {wind}</>}
+        {w.headwind != null && <> · {w.headwind}% headwind</>}
+      </span>
+      {w.warnings.map((x) => (
+        <span key={x} className="badge bad">
+          {x}
+        </span>
+      ))}
+      {w.advice && w.advice.startsWith("Ride it the other way") && <span className="muted small">{w.advice}</span>}
+      {link && (
+        <Link className="small" to={`/weather?route=${w.route_key || "home"}&day=${date}`}>
+          {w.on_route ? `${w.start} on ${w.place}` : "Forecast"} →
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function SegmentLink({ segment }) {
   const route = segment.kind !== "segment";
   return (

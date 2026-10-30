@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from app import geo, ride_routes, weather
-from app.db import Activity, SessionLocal
+from app.db import Activity, Plan, Segment, SessionLocal
 
 LOOP = [(-33.93, 18.86), (-33.90, 18.95), (-33.91, 19.12), (-33.80, 19.05), (-33.73, 18.96), (-33.93, 18.86)]
 OTHER = [(-34.10, 18.40), (-34.20, 18.45), (-34.30, 18.40), (-34.10, 18.40)]
@@ -113,3 +113,43 @@ def test_others_need_the_activities_scope(make_user):
     aid = p.get("/api/auth/me").json()["id"]
     other = make_user("b@example.com")
     assert other.get(f"/api/athletes/{aid}/weather/routes").status_code == 404
+
+
+def _day(d: date, kind: str, segment_id=None, minutes=120):
+    return {"date": d.isoformat(), "type": kind, "duration_min": minutes, "segment_id": segment_id}
+
+
+def test_plan_days_get_the_weather(make_user, monkeypatch):
+    async def wet(points):
+        return [_fake_hourly(rain=80) for _ in points]
+
+    monkeypatch.setattr(weather, "forecast", wet)
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    _ride(aid, OTHER, 2, name="Cape Point")  # where the athlete starts riding
+    today = date.today()
+    with SessionLocal() as db:
+        seg = Segment(athlete_id=aid, strava_id=1, kind="route", name="Loop", polyline=geo.encode(LOOP))
+        db.add(seg)
+        db.flush()
+        days = [
+            _day(today, "Road", seg.id),
+            _day(today + timedelta(days=1), "Road"),
+            _day(today + timedelta(days=2), "Rest"),
+            _day(today + timedelta(days=3), "Zwift / indoor"),
+            _day(today + timedelta(days=20), "Road"),
+        ]
+        plan = Plan(athlete_id=aid, author_id=aid, title="P", content_md="", model="m", weeks=[{"days": days}])
+        db.add(plan)
+        db.commit()
+        plan_id, seg_id = plan.id, seg.id
+    r = p.get(f"/api/athletes/me/weather/plan/{plan_id}").json()
+    assert set(r["days"]) == {today.isoformat(), (today + timedelta(days=1)).isoformat()}
+    on_route = r["days"][today.isoformat()]
+    assert on_route["on_route"] and on_route["place"] == "Loop" and on_route["route_key"] == f"fav-{seg_id}"
+    assert on_route["headwind"] is not None and "Rain likely" in on_route["warnings"]
+    home = r["days"][(today + timedelta(days=1)).isoformat()]
+    assert not home["on_route"] and home["place"] is None and home["temp_max"] == 18
+    other = make_user("b@example.com")
+    assert other.get(f"/api/athletes/{aid}/weather/plan/{plan_id}").status_code == 404
+    assert other.get(f"/api/athletes/me/weather/plan/{plan_id}").status_code == 404

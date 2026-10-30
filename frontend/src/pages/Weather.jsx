@@ -1,5 +1,6 @@
 import { CloudSun, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { duration, shortDate } from "../lib/format.js";
@@ -39,7 +40,9 @@ export default function Weather({ id = "me" }) {
   const [kind, setKind] = useState("all");
   const [dist, setDist] = useState("any");
   const [sort, setSort] = useState("ridden");
-  const [picked, setPicked] = useState(null); // route key, or "home"
+  // A plan day links here with ?route=<key>&day=<date> (PlanTracker.jsx).
+  const [params] = useSearchParams();
+  const [picked, setPicked] = useState(params.get("route")); // route key, or "home"
   const routes = list.data?.routes || [];
   const kindOk = (r) => KINDS.find(([k]) => k === kind)[2](r.category);
   const distOk = (r) => DISTANCES.find(([k]) => k === dist)[2](r.distance_km);
@@ -133,7 +136,14 @@ export default function Weather({ id = "me" }) {
           {current === "home" ? (
             <HomeForecast id={id} />
           ) : (
-            current && <RouteForecast id={id} routeKey={current} usualStart={list.data?.usual_start || "07:00"} />
+            current && (
+              <RouteForecast
+                id={id}
+                routeKey={current}
+                usualStart={list.data?.usual_start || "07:00"}
+                firstDay={current === params.get("route") ? params.get("day") : null}
+              />
+            )
           )}
         </div>
       </div>
@@ -154,11 +164,11 @@ function HomeForecast({ id }) {
   );
 }
 
-function RouteForecast({ id, routeKey, usualStart }) {
+function RouteForecast({ id, routeKey, usualStart, firstDay }) {
   const [start, setStart] = useState(usualStart);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [day, setDay] = useState(null);
+  const [day, setDay] = useState(firstDay);
   const load = async () => {
     setError(null);
     try {
