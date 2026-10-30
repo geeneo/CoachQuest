@@ -1,6 +1,6 @@
 import { CheckCircle2, KeyRound, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
@@ -13,27 +13,63 @@ import { Backfill } from "./Connections.jsx";
 
 const SOURCE = { web: "set here", env: "from .env", unset: "not set" };
 
+// Admin sections, one per tab, each at its own address (/admin/users, …) so back and bookmarks work.
+const ADMIN_TABS = [
+  ["overview", "Overview"],
+  ["users", "Users"],
+  ["settings", "Settings"],
+  ["workouts", "Platform workouts"],
+  ["info-page", "Information page"],
+  ["ai", "AI usage"],
+  ["storage", "Storage"],
+  ["sign-ins", "Sign-ins"],
+  ["update", "Update", "super"],
+];
+
 export default function Admin() {
+  const { tab } = useParams();
+  const navigate = useNavigate();
+  const { user: me } = useAuth();
   // Bumped when users change, so Storage and Usage show fresh numbers.
   const [rev, setRev] = useState(0);
-  const stats = useApi(`/api/admin/stats?rev=${rev}`);
-  const version = useApi("/api/admin/version");
-  const { user: me } = useAuth();
-  const s = stats.data;
+  const tabs = ADMIN_TABS.filter(([, , who]) => who !== "super" || me?.is_super_admin);
+  const current = tabs.find(([id]) => id === tab)?.[0] || "overview";
   return (
     <>
       <h1>Admin</h1>
-      <p className="muted small">
-        API build {version.data?.commit} {version.data?.built} · frontend build {import.meta.env.VITE_BUILD_COMMIT || "dev"}
-      </p>
-      {me?.is_super_admin && <UpdateCoachQuest />}
-      <Settings />
-      <WelcomeAdmin />
-      <Users onChange={() => setRev((r) => r + 1)} />
-      <PlatformWorkouts />
-      <AiUsage rev={rev} />
-      <Storage rev={rev} />
-      <AdminSignIns />
+      <div className="tabs admin-tabs" role="tablist">
+        {tabs.map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={current === id}
+            className={current === id ? "active" : ""}
+            onClick={() => navigate(id === "overview" ? "/admin" : `/admin/${id}`)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {current === "overview" && <Overview rev={rev} go={(id) => navigate(`/admin/${id}`)} />}
+      {current === "users" && <Users onChange={() => setRev((r) => r + 1)} />}
+      {current === "settings" && <Settings />}
+      {current === "workouts" && <PlatformWorkouts />}
+      {current === "info-page" && <WelcomeAdmin />}
+      {current === "ai" && <AiUsage rev={rev} />}
+      {current === "storage" && <Storage rev={rev} />}
+      {current === "sign-ins" && <AdminSignIns />}
+      {current === "update" && <UpdateCoachQuest />}
+    </>
+  );
+}
+
+// The first tab: the numbers at a glance, the build, and where to go next.
+function Overview({ rev, go }) {
+  const stats = useApi(`/api/admin/stats?rev=${rev}`);
+  const version = useApi("/api/admin/version");
+  const s = stats.data;
+  return (
+    <>
       <section className="card">
         <h2>Usage</h2>
         {stats.error && <div className="error">{stats.error.message}</div>}
@@ -48,6 +84,22 @@ export default function Admin() {
             <Stat label="AI tokens in / out" value={`${s.ai_tokens.input} / ${s.ai_tokens.output}`} />
           </div>
         )}
+        <p className="muted small">
+          API build {version.data?.commit} {version.data?.built} · frontend build{" "}
+          {import.meta.env.VITE_BUILD_COMMIT || "dev"}
+        </p>
+        <div className="row wrap">
+          {[
+            ["users", "Users and sign-ups"],
+            ["settings", "Settings"],
+            ["storage", "Storage"],
+            ["sign-ins", "Sign-in log"],
+          ].map(([id, label]) => (
+            <button key={id} type="button" className="btn small" onClick={() => go(id)}>
+              {label} →
+            </button>
+          ))}
+        </div>
       </section>
     </>
   );
@@ -62,12 +114,15 @@ function Settings() {
   const [mailTest, setMailTest] = useState(null);
   const [icuTest, setIcuTest] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [group, setGroup] = useState(null); // null: the first group
 
   if (res.loading) return <section className="card muted">Loading settings…</section>;
   if (res.error) return <div className="error">{res.error.message}</div>;
 
   const items = res.data.settings;
   const groups = [...new Set(items.map((i) => i.group))];
+  const shownGroup = groups.includes(group) || group === "all" ? group : groups[0];
+  const unsaved = (g) => items.some((i) => (g === "all" || i.group === g) && i.key in draft);
   const dirty = Object.keys(draft).length > 0;
   const set = (key, value) => setDraft({ ...draft, [key]: value });
 
@@ -122,7 +177,24 @@ function Settings() {
         Values saved here override <code>.env</code> and are stored encrypted. Saved keys are never shown again, only
         their last 4 characters. Clear a value to fall back to <code>.env</code>.
       </p>
-      {groups.map((g) => (
+      <div className="chips" role="tablist" aria-label="Settings group">
+        {[...groups, "all"].map((g) => (
+          <button
+            key={g}
+            type="button"
+            role="tab"
+            aria-selected={shownGroup === g}
+            className={`chip ${shownGroup === g ? "on" : ""}`}
+            onClick={() => setGroup(g)}
+          >
+            {g === "all" ? "All" : g}
+            {unsaved(g) && g !== "all" && " •"}
+          </button>
+        ))}
+      </div>
+      {groups
+        .filter((g) => shownGroup === "all" || g === shownGroup)
+        .map((g) => (
         <fieldset key={g} className="settings-group">
           <legend>{g}</legend>
           {items

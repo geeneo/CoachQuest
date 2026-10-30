@@ -513,7 +513,7 @@ function MatchStatus({ matching }) {
   if (!matching.enabled || !matching.indoor_days) return null;
   const fix = user.is_admin ? (
     <>
-      Add some under <Link to="/admin">Admin → Platform workouts</Link>.
+      Add some under <Link to="/admin/workouts">Admin → Platform workouts</Link>.
     </>
   ) : (
     "Ask your CoachQuest administrator to add some."

@@ -52,7 +52,7 @@ export default function App() {
         <Route path="news/:postId" element={<PostView />} />
         {user.is_admin && <Route path="news/new" element={<PostEditor />} />}
         {user.is_admin && <Route path="news/:postId/edit" element={<PostEditor />} />}
-        {user.is_admin && <Route path="admin" element={<Admin />} />}
+        {user.is_admin && <Route path="admin/:tab?" element={<Admin />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
