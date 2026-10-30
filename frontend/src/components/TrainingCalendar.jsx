@@ -220,6 +220,12 @@ export default function TrainingCalendar({ id, isMe }) {
           >
             <div className="cal-date">
               <span>{WEEKDAY[weekdayOf(d.date)]}</span> {fmtDay(d.date)}
+              {/* Rode on a day the plan has nothing (or rest) for: an extra, not a miss. */}
+              {d.activities.length > 0 && !d.workouts.length && (!d.plan || d.plan.status === "extra") && (
+                <span className="cal-extra small" title="Not planned: an extra session">
+                  ➕ Not planned
+                </span>
+              )}
             </div>
             {(raceOn[d.date] || []).map((r) => (
               <Link

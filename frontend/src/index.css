@@ -2566,3 +2566,9 @@ line.wind-calm {
 .cal-plan:has(> .cal-badge) {
   padding-right: 1.3rem;
 }
+.cal-date .cal-extra {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-weight: normal;
+}
