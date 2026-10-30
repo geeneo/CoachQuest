@@ -103,6 +103,8 @@ def test_rides_grouped_into_routes(make_user, fake_weather):
     key = next(x["key"] for x in r["routes"] if x["name"] == "Loop")
     d = p.get(f"/api/athletes/me/weather/routes/{key}?start=06:30").json()
     assert d["start"] == "06:30" and d["route"]["count"] == 3 and len(d["days"]) == weather.DAYS
+    assert d["route"]["strava_url"] == "https://www.strava.com/activities/Loop3"
+    assert d["route"]["rides"][1]["strava_url"] == "https://www.strava.com/activities/Loop30"
     assert p.get("/api/athletes/me/weather/routes/ride-999999").status_code == 404
     assert p.get(f"/api/athletes/me/weather/routes/{key}?start=7am").status_code == 422
     assert len(p.get("/api/athletes/me/weather/home").json()["days"]) == weather.DAYS

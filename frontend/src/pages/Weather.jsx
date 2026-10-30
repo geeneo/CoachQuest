@@ -365,11 +365,17 @@ function RouteForecast({ id, routeKey, usualStart, firstDay }) {
         <div className="route-head">
           <span className="small accent">{r.source === "favourite" ? "★ Favourite route" : r.category}</span>
           <h2>{r.name}</h2>
-          {r.count > 0 && (
-            <p className="muted small">
-              Ridden {r.count}× since {shortDate(r.first)} · last {shortDate(r.last)}
-            </p>
-          )}
+          <p className="muted small">
+            {r.count > 0 && `Ridden ${r.count}× since ${shortDate(r.first)} · last ${shortDate(r.last)}`}
+            {r.strava_url && (
+              <>
+                {r.count > 0 && " · "}
+                <a className="strava-link" href={r.strava_url} target="_blank" rel="noreferrer">
+                  View on Strava{r.count > 1 ? " (latest ride)" : ""} ↗
+                </a>
+              </>
+            )}
+          </p>
         </div>
         <div className="stats">
           <Tile label="Distance" value={`${r.distance_km}km`} />
@@ -423,6 +429,14 @@ function RouteForecast({ id, routeKey, usualStart, firstDay }) {
                   {shortDate(x.date)} · {x.name} · {duration(x.minutes * 60)}
                   {x.avg_power ? ` · ${Math.round(x.avg_power)}W` : ""}
                   {x.avg_hr ? ` · ${Math.round(x.avg_hr)}bpm` : ""}
+                  {x.strava_url && (
+                    <>
+                      {" · "}
+                      <a className="strava-link" href={x.strava_url} target="_blank" rel="noreferrer">
+                        View on Strava ↗
+                      </a>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

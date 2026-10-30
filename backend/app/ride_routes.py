@@ -12,7 +12,7 @@ from functools import lru_cache
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import geo
+from . import geo, segments
 from .activity_types import category, is_outdoor, is_ride
 from .db import Activity, Segment
 
@@ -43,6 +43,10 @@ def _same(a: dict, b: dict) -> bool:
     if geo.distance_m(a["shape"][0], b["shape"][0]) > START_M:
         return False
     return geo.mean_gap_m(a["shape"], b["shape"]) <= GAP_M and geo.mean_gap_m(b["shape"], a["shape"]) <= GAP_M
+
+
+def _strava_url(a: Activity) -> str | None:
+    return f"https://www.strava.com/activities/{a.external_id}" if a.source == "strava" else None
 
 
 def _avg(values: list) -> float | None:
@@ -77,6 +81,7 @@ def ride_groups(db: DbSession, athlete_id: int, today: date | None = None) -> li
                 "name": latest.name or "Ride",
                 "category": category(latest),
                 "polyline": latest.polyline,
+                "strava_url": _strava_url(latest),
                 "distance_km": round(_avg([r.distance_m for r in rides]) / 1000, 1),
                 "elevation_m": round(_avg([r.elevation_m for r in rides]) or 0),
                 "avg_minutes": round(_avg(times) / 60) if times else None,
@@ -96,6 +101,7 @@ def ride_groups(db: DbSession, athlete_id: int, today: date | None = None) -> li
                         "minutes": round(r.duration_s / 60),
                         "avg_power": r.avg_power,
                         "avg_hr": r.avg_hr,
+                        "strava_url": _strava_url(r),
                     }
                     for r in rides[:10]
                 ],
@@ -115,6 +121,7 @@ def favourites(db: DbSession, athlete_id: int) -> list[dict]:
             "name": s.name,
             "category": "Road" if s.sport != "run" else "Run",
             "polyline": s.polyline,
+            "strava_url": segments.url(s),
             "distance_km": round((s.distance_m or 0) / 1000, 1),
             "elevation_m": s.elevation_m or 0,
             "avg_minutes": s.est_minutes,

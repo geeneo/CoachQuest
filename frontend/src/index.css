@@ -2519,3 +2519,8 @@ line.wind-calm {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 0.4rem;
 }
+/* Strava's brand guidelines: "View on Strava" links in Strava orange. */
+.strava-link {
+  color: #fc5200;
+  font-weight: 600;
+}
