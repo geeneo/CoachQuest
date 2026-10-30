@@ -1,8 +1,8 @@
 """The weather page: the athlete's routes (rides grouped, and favourites) and the forecast along them."""
 
+import logging
 from datetime import date, timedelta
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -13,6 +13,7 @@ from ..db import Activity, Connection, Plan, Segment, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
 from ..providers import strava
 
+log = logging.getLogger("coachquest.weather")
 router = APIRouter(prefix="/api/athletes/{athlete}/weather", tags=["weather"])
 SUMMARY = (
     "key",
@@ -82,7 +83,8 @@ async def _line_for_favourite(db: DbSession, athlete_id: int, seg: Segment) -> s
     fetch = strava.activity if seg.kind == "ride" else strava.route
     try:
         details = await fetch(db, conn, seg.strava_id)
-    except (LookupError, httpx.HTTPError, KeyError, TypeError, ValueError):
+    except Exception as exc:  # not found, rate limited, a token or network problem: no line this time
+        log.info("No line for favourite %s from Strava: %r", seg.id, exc)
         return None
     seg.polyline = details.get("polyline")
     db.commit()
@@ -249,32 +251,54 @@ async def ride_details(
     ride_start = ride_routes.usual_start(db, a)
     speed = ride_info.recent_speed(db, a.id)
     home_at = ride_routes.home_point(db, a)
-    groups: list[dict] | None = None
+    groups: list = []  # the ridden routes, grouped once when a day needs them
     forecast_ok = True
     out = {}
     for day, d in sorted(_plan_days(db, a.id, start, end).items()):
         if d["type"] == "Rest" or not plan_tracker.takes_route(d["type"]):
             continue
-        seg = db.get(Segment, d["segment"]["id"]) if d.get("segment") else None
-        history = None
-        if seg is not None and seg.kind != "segment" and seg.polyline:
-            if groups is None:
-                groups = [g for g in _routes(db, a.id) if g["source"] == "rides"]
-            history = ride_info.route_history(groups, seg)
-        nums = ride_info.numbers(d, seg, history, speed, ride_start)
-        minutes = nums["ride_minutes"] or d["duration_min"] or 0
-        w = None
-        if forecast_ok and today <= date.fromisoformat(day) <= today + timedelta(days=weather.DAYS - 1):
-            session = {"date": day, "segment_id": seg.id if seg else None, "duration_min": minutes}
-            try:
-                w = await _plan_day(db, a, session, ride_start, today, home_at)
-            except weather.WeatherError:
-                forecast_ok = False  # don't wait on it again for every day
-        out[day] = {
-            "numbers": nums,
-            "fuel": ride_info.fuel(minutes, w.get("temp_max") if w else None) if minutes else None,
-            "pacing": ride_info.pacing(d.get("intensity"), a.ftp_watts),
-            "kit": ride_info.kit(w),
-            "weather": w,
-        }
+        try:
+            item, forecast_ok = await _ride_day(db, a, day, d, ride_start, speed, home_at, today, forecast_ok, groups)
+        except Exception:  # one odd day mustn't hide the others
+            log.exception("Ride details for athlete %s on %s failed", a.id, day)
+            continue
+        out[day] = item
     return {"days": out, "forecast_ok": forecast_ok}
+
+
+async def _ride_day(
+    db: DbSession,
+    a: User,
+    day: str,
+    d: dict,
+    ride_start: str,
+    speed: float | None,
+    home_at: geo.Point | None,
+    today: date,
+    forecast_ok: bool,
+    groups: list,
+) -> tuple[dict, bool]:
+    """One planned outdoor ride for ride_details, and whether the forecast still answers. `groups` holds
+    the ridden routes once a day needed them (grouping takes a moment)."""
+    seg = db.get(Segment, d["segment"]["id"]) if d.get("segment") else None
+    history = None
+    if seg is not None and seg.kind != "segment" and await _line_for_favourite(db, a.id, seg):
+        if not groups:
+            groups.append([g for g in _routes(db, a.id) if g["source"] == "rides"])
+        history = ride_info.route_history(groups[0], seg)
+    nums = ride_info.numbers(d, seg, history, speed, ride_start)
+    minutes = nums["ride_minutes"] or d["duration_min"] or 0
+    w = None
+    if forecast_ok and today <= date.fromisoformat(day) <= today + timedelta(days=weather.DAYS - 1):
+        session = {"date": day, "segment_id": seg.id if seg else None, "duration_min": minutes}
+        try:
+            w = await _plan_day(db, a, session, ride_start, today, home_at)
+        except weather.WeatherError:
+            forecast_ok = False  # don't wait on it again for every day
+    return {
+        "numbers": nums,
+        "fuel": ride_info.fuel(minutes, w.get("temp_max") if w else None) if minutes else None,
+        "pacing": ride_info.pacing(d.get("intensity"), a.ftp_watts),
+        "kit": ride_info.kit(w),
+        "weather": w,
+    }, forecast_ok

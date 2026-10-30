@@ -283,3 +283,41 @@ def test_calendar_ride_details(make_user, fake_weather):
         "Rain jacket and mudguards",
         "Windy: stay low, and deep wheels can be a handful",
     ]
+
+
+def test_calendar_ride_details_survive_strava_failing(make_user, fake_weather, monkeypatch):
+    """A favourite saved before lines were kept, while Strava refuses (e.g. rate limited)."""
+    from app.db import Connection
+    from app.providers import strava
+
+    async def refuse(db, conn, strava_id):
+        raise RuntimeError("Rate Limit Exceeded")
+
+    monkeypatch.setattr(strava, "route", refuse)
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    _ride(aid, OTHER, 2, name="Cape Point")
+    today = date.today()
+    with SessionLocal() as db:
+        db.add(Connection(user_id=aid, provider="strava", status="active", token_enc="x"))
+        seg = Segment(athlete_id=aid, strava_id=7, kind="route", name="Old favourite", distance_m=129000)
+        db.add(seg)
+        db.flush()
+        days = [_day(today, "Road", seg.id, 316), _day(today + timedelta(days=1), "Road", None, 25)]
+        db.add(
+            Plan(
+                athlete_id=aid,
+                author_id=aid,
+                title="P",
+                content_md="",
+                model="m",
+                start_date=today,
+                weeks=[{"phase": "Base", "days": days}],
+            )
+        )
+        db.commit()
+    r = p.get(f"/api/athletes/me/weather/rides?start={today}&end={today + timedelta(days=6)}")
+    assert r.status_code == 200, r.text
+    sat = r.json()["days"][today.isoformat()]
+    assert sat["numbers"]["distance_km"] == 129.0 and sat["weather"] and not sat["weather"]["on_route"]
+    assert r.json()["days"][(today + timedelta(days=1)).isoformat()]["weather"]

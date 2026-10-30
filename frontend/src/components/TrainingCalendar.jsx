@@ -170,6 +170,7 @@ export default function TrainingCalendar({ id, isMe }) {
 
       {error && <div className="error">{error}</div>}
       {cal.error && <div className="error">{cal.error.message}</div>}
+      {rides.error && <p className="small muted">Ride details didn't load: {rides.error.message}</p>}
       {cal.loading && !data && <p className="muted">Loading…</p>}
       <div className={view === "week" ? "cal-week" : "cal-day"}>
         {days.map((d) => (
