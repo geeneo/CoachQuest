@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, RefreshCw } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
@@ -34,6 +34,7 @@ export default function TrainingCalendar({ id, isMe }) {
   const [picked, setPicked] = useState(null); // a library workout chosen by tap, for touch screens
   const [selected, setSelected] = useState(null); // scheduled workout id shown below
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(null); // null, "busy", or what the refresh found
   const cal = useApi(`/api/athletes/${id}/calendar?start=${addDays(anchor, -7)}&end=${addDays(anchor, 7)}`);
   // More on planned outdoor rides: numbers, food, pacing, kit and weather (backend ride_info.py).
   const rides = useApi(`/api/athletes/${id}/weather/rides?start=${addDays(anchor, -7)}&end=${addDays(anchor, 7)}`);
@@ -47,6 +48,26 @@ export default function TrainingCalendar({ id, isMe }) {
   }
   const library = useApi(ro ? null : "/api/workouts");
   const platforms = useApi(`/api/athletes/${id}/platforms`);
+
+  // Refresh: your own calendar first pulls new activities from each connected source (Strava, Garmin,
+  // Intervals.icu; each at most every 5 minutes), then everything on the page loads again.
+  const refresh = async () => {
+    setRefreshing("busy");
+    setError(null);
+    let fetched = 0;
+    if (isMe) {
+      const conns = await api("/api/connections").catch(() => ({ connections: [] }));
+      for (const c of conns.connections.filter((x) => x.status === "active")) {
+        try {
+          fetched += (await api(`/api/connections/${c.provider}/sync`, { method: "POST" })).fetched || 0;
+        } catch {
+          // synced in the last 5 minutes, or the source didn't answer: show what's there
+        }
+      }
+    }
+    await Promise.all([cal.reload(), rides.reload(), races.reload()]);
+    setRefreshing(isMe ? `Up to date${fetched ? `: ${fetched} new or changed activit${fetched === 1 ? "y" : "ies"}` : ""}` : null);
+  };
 
   const data = cal.data;
   const weekStart = data ? addDays(anchor, -((weekdayOf(anchor) - data.week_start + 7) % 7)) : null;
@@ -109,6 +130,16 @@ export default function TrainingCalendar({ id, isMe }) {
             <ChevronRight size={18} />
           </button>
           <strong>{view === "week" && weekStart ? `Week of ${fmtDay(weekStart)}` : fmtDay(anchor, true)}</strong>
+          <button
+            className="icon-btn"
+            title={isMe ? "Fetch new activities and refresh" : "Refresh"}
+            aria-label="Refresh"
+            disabled={refreshing === "busy"}
+            onClick={refresh}
+          >
+            <RefreshCw size={16} className={refreshing === "busy" ? "spin" : ""} />
+          </button>
+          {refreshing && refreshing !== "busy" && <span className="small muted">{refreshing}</span>}
         </div>
         <div className="row">
           <div className="chips" role="radiogroup" aria-label="View">
@@ -229,7 +260,10 @@ export default function TrainingCalendar({ id, isMe }) {
                       {s.segment.kind === "segment" ? "⛰" : "🗺"} {s.segment.name}
                     </a>
                   ))}
-                {rideOn[d.date] && <RideInfo info={rideOn[d.date]} full={view === "day"} isMe={isMe} date={d.date} />}
+                {/* Before the ride only: once it's logged, the day shows what was ridden instead. */}
+                {rideOn[d.date] && !d.activities.length && (
+                  <RideInfo info={rideOn[d.date]} full={view === "day"} isMe={isMe} date={d.date} />
+                )}
                 {view === "day" && d.plan.description && <p className="small">{d.plan.description}</p>}
               </div>
             )}

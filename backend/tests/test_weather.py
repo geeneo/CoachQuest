@@ -277,6 +277,8 @@ def test_calendar_ride_details(make_user, fake_weather):
     short = r["days"][(today + timedelta(days=1)).isoformat()]
     assert short["numbers"]["distance_rough"] and short["fuel"]["carbs_g_per_h"] == 0
     assert p.get(f"/api/athletes/me/weather/rides?start={end}&end={today}").status_code == 422
+    past = p.get(f"/api/athletes/me/weather/rides?start={today - timedelta(days=7)}&end={today}").json()
+    assert set(past["days"]) == {today.isoformat()}  # past days get no estimate
     assert ride_info.kit({"temp_min": 5, "temp_max": 30, "rain_chance": 60, "wind_kmh": 35}) == [
         "Winter kit: long sleeves, full gloves, overshoes",
         "Sun cream and light colours; start early",

@@ -271,6 +271,8 @@ async def ride_details(
     for day, d in sorted(_plan_days(db, a.id, start, end).items()):
         if d["type"] == "Rest" or not plan_tracker.takes_route(d["type"]):
             continue
+        if day < today.isoformat():
+            continue  # past days show what was ridden, not what it would take
         try:
             item, forecast_ok = await _ride_day(db, a, day, d, ride_start, speed, home_at, today, forecast_ok, groups)
         except Exception:  # one odd day mustn't hide the others
