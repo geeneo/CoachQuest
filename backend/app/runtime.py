@@ -158,6 +158,14 @@ EDITABLE: dict[str, Editable] = {
         help="Empty: the free Open-Meteo API, for non-commercial use. When CoachQuest is used commercially, take a "
         "plan at open-meteo.com/en/pricing and paste its key here (weather then comes from the customer API).",
     ),
+    "ai_weather": Editable(
+        "Weather for the AI coach",
+        "Weather",
+        choices=("on", "off"),
+        help="On: when the AI writes or re-plans, it gets the forecast for the next 16 days (home and favourite "
+        "routes) and puts long rides on calm dry days, moves rides indoors in a storm, and says why. Off: plans "
+        "ignore the weather.",
+    ),
     "strava_note_profile": Editable(
         "Workout shape in Strava descriptions",
         "Workouts",

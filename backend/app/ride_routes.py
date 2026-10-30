@@ -6,15 +6,15 @@ line (either way round). Each route gets its numbers from all its rides: how oft
 ridden, average and fastest time, speed, heart rate and power.
 """
 
-from datetime import date
+from datetime import UTC, date
 from functools import lru_cache
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import geo, segments
+from . import geo, localtime, segments
 from .activity_types import category, is_outdoor, is_ride
-from .db import Activity, Segment
+from .db import Activity, Segment, User
 
 SHAPE_POINTS = 40  # each ride compared by 40 evenly spaced points
 START_M = 1500  # starts within 1.5 km
@@ -133,3 +133,37 @@ def favourites(db: DbSession, athlete_id: int) -> list[dict]:
 
 def all_routes(db: DbSession, athlete_id: int) -> list[dict]:
     return favourites(db, athlete_id) + ride_groups(db, athlete_id)
+
+
+def usual_start(db: DbSession, athlete: User) -> str:
+    """When the athlete usually starts riding (their last 20 outdoor rides), rounded to the half hour."""
+    tz = localtime.zone(athlete.timezone)
+    rides = db.scalars(
+        select(Activity.start_time)
+        .where(Activity.user_id == athlete.id, Activity.polyline.is_not(None))
+        .order_by(Activity.start_time.desc())
+        .limit(20)
+    ).all()
+    if not rides:
+        return "07:00"
+    minutes = sorted((t.replace(tzinfo=UTC).astimezone(tz).hour * 60 + t.minute) for t in rides)[len(rides) // 2]
+    minutes = round(minutes / 30) * 30
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def latest_start(db: DbSession, athlete_id: int) -> geo.Point | None:
+    latest = db.scalar(
+        select(Activity.polyline)
+        .where(Activity.user_id == athlete_id, Activity.polyline.is_not(None))
+        .order_by(Activity.start_time.desc())
+        .limit(1)
+    )
+    points = geo.decode(latest) if latest else []
+    return points[0] if points else None
+
+
+def home_point(db: DbSession, a: User) -> geo.Point | None:
+    """The athlete's home location if they set one, else where their latest outdoor ride started."""
+    if a.home_lat is not None and a.home_lng is not None:
+        return (a.home_lat, a.home_lng)
+    return latest_start(db, a.id)

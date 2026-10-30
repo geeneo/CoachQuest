@@ -185,3 +185,37 @@ def test_home_location(make_user, fake_weather, monkeypatch):
     monkeypatch.setattr(weather, "places", found)
     assert p.get("/api/athletes/me/weather/places?q=paarl").json()["places"][0]["name"] == "Paarl"
     assert p.get("/api/athletes/me/weather/places?q=p").status_code == 422
+
+
+def test_ai_coach_gets_the_forecast(make_user, fake_weather, monkeypatch):
+    from app import coach, runtime
+
+    seen = {}
+
+    async def fake_plan(db, viewer, athlete, facts):
+        seen["facts"] = facts
+        return {"summary_md": "Plan", "weeks": []}, "m"
+
+    monkeypatch.setattr("app.routers.plans.generate_plan", fake_plan)
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    _ride(aid, OTHER, 2, name="Cape Point")
+    with SessionLocal() as db:
+        db.add(Segment(athlete_id=aid, strava_id=1, kind="route", name="Loop", polyline=geo.encode(LOOP)))
+        db.add(Segment(athlete_id=aid, strava_id=2, kind="segment", name="Climb", polyline=geo.encode(LOOP)))
+        db.commit()
+    start = date.today()
+    r = p.post(
+        "/api/athletes/me/plans", json={"title": "B", "goal": "FTP", "weeks": 1, "start_date": start.isoformat()}
+    )
+    assert r.status_code == 200, r.text
+    w = seen["facts"]["weather"]
+    assert w["days"] and all(d["date"] >= date.today().isoformat() for d in w["days"])
+    assert len(w["days"]) <= 7 and w["days"][0]["temp_c"] == [18, 18]
+    assert [x["name"] for x in w["routes"]] == ["Loop"] and "headwind_pct" in w["routes"][0]["days"][0]
+    assert "`weather`" in coach.SYSTEM_PROMPT
+
+    real_get = runtime.get  # the admin switch turns it off
+    monkeypatch.setattr(runtime, "get", lambda key: "off" if key == "ai_weather" else real_get(key))
+    p.post("/api/athletes/me/plans", json={"title": "B", "goal": "FTP", "weeks": 1, "start_date": start.isoformat()})
+    assert "weather" not in seen["facts"]

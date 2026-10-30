@@ -1,6 +1,6 @@
 """The weather page: the athlete's routes (rides grouped, and favourites) and the forecast along them."""
 
-from datetime import UTC, date, timedelta
+from datetime import date, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -51,22 +51,6 @@ def _routes(db: DbSession, athlete_id: int) -> list[dict]:
     return ride_routes.favourites(db, athlete_id) + _groups[key]
 
 
-def _usual_start(db: DbSession, athlete: User) -> str:
-    """When the athlete usually starts riding (their last 20 outdoor rides), rounded to the half hour."""
-    tz = localtime.zone(athlete.timezone)
-    rides = db.scalars(
-        select(Activity.start_time)
-        .where(Activity.user_id == athlete.id, Activity.polyline.is_not(None))
-        .order_by(Activity.start_time.desc())
-        .limit(20)
-    ).all()
-    if not rides:
-        return "07:00"
-    minutes = sorted((t.replace(tzinfo=UTC).astimezone(tz).hour * 60 + t.minute) for t in rides)[len(rides) // 2]
-    minutes = round(minutes / 30) * 30
-    return f"{minutes // 60:02d}:{minutes % 60:02d}"
-
-
 @router.get("/routes")
 def routes(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     a = _athlete(db, user, athlete)
@@ -79,7 +63,7 @@ def routes(athlete: str, user: User = Depends(current_user), db: DbSession = Dep
                 Activity.user_id == a.id, Activity.polyline.is_(None), Activity.source == "strava"
             )
         ),
-        "usual_start": _usual_start(db, a),
+        "usual_start": ride_routes.usual_start(db, a),
         "home": _home_out(db, a),
     }
 
@@ -122,7 +106,7 @@ async def route(
         r = {**r, "polyline": await _line_for_favourite(db, a.id, db.get(Segment, r["segment_id"]))}
     if not r["polyline"]:
         raise HTTPException(status_code=409, detail="No map line for this route (connect Strava, or add it again)")
-    start = start or _usual_start(db, a)
+    start = start or ride_routes.usual_start(db, a)
     minutes = r.get("avg_minutes") or round(r["distance_km"] / 25 * 60)
     try:
         fc = await weather.route_forecast(r["polyline"], minutes, start, localtime.today(a))
@@ -134,28 +118,14 @@ async def route(
     return {"route": {k: v for k, v in r.items() if k != "polyline"}, "start": start, **fc}
 
 
-def _latest_start(db: DbSession, athlete_id: int) -> geo.Point | None:
-    latest = db.scalar(
-        select(Activity.polyline)
-        .where(Activity.user_id == athlete_id, Activity.polyline.is_not(None))
-        .order_by(Activity.start_time.desc())
-        .limit(1)
-    )
-    points = geo.decode(latest) if latest else []
-    return points[0] if points else None
-
-
-def _home_point(db: DbSession, a: User) -> geo.Point | None:
-    """The athlete's home location if they set one, else where their latest outdoor ride started."""
-    if a.home_lat is not None and a.home_lng is not None:
-        return (a.home_lat, a.home_lng)
-    return _latest_start(db, a.id)
-
-
 def _home_out(db: DbSession, a: User) -> dict:
     if a.home_lat is not None and a.home_lng is not None:
         return {"set": True, "name": a.home_name or "Home", "lat": a.home_lat, "lng": a.home_lng}
-    return {"set": False, "name": "Where your latest outdoor ride started", "available": bool(_latest_start(db, a.id))}
+    return {
+        "set": False,
+        "name": "Where your latest outdoor ride started",
+        "available": bool(ride_routes.latest_start(db, a.id)),
+    }
 
 
 class HomeIn(BaseModel):
@@ -196,7 +166,7 @@ async def places(
 async def home(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     """The forecast at the athlete's home location (or their latest outdoor ride's start), day by day."""
     a = _athlete(db, user, athlete)
-    point = _home_point(db, a)
+    point = ride_routes.home_point(db, a)
     if point is None:
         raise HTTPException(status_code=409, detail="Set your home location, or ride outdoors with Strava first")
     try:
@@ -248,8 +218,8 @@ async def plan_days(athlete: str, plan_id: int, user: User = Depends(current_use
     out: dict[str, dict] = {}
     if not days:
         return {"days": out, "start": None}
-    start = _usual_start(db, a)
-    home_at = _home_point(db, a)
+    start = ride_routes.usual_start(db, a)
+    home_at = ride_routes.home_point(db, a)
     try:
         for d in days:
             w = await _plan_day(db, a, d, start, today, home_at)

@@ -15,7 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, datefmt, health, instructions, runtime, segments, strength
+from . import athlete_notes, datefmt, health, instructions, runtime, segments, strength, weather_ai
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import activities_since, load_curve, profile_out, wellness_since
@@ -136,6 +136,8 @@ targets), duration in minutes, and intensity chips such as "Z2", "95-105% FTP" o
 (sick, missed sessions, poor sleep/HRV). This plan is general guidance, not medical advice.
 
 """
+    + weather_ai.PROMPT_RULE
+    + "\n\n"
     + instructions.PROMPT_RULE
     + "\n\n"
     + athlete_notes.PROMPT_RULE
@@ -227,6 +229,15 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
     )
     # Saved with the plan as JSON, so dates become ISO strings here.
     return jsonable_encoder(facts)
+
+
+async def add_weather(db: DbSession, athlete: User, facts: dict, scopes: set[str], first: date, last: date) -> None:
+    """Add the forecast for the plan days from `first` to `last` (weather_ai.py), when plans are shared."""
+    if "plans" not in scopes:
+        return
+    forecast = await weather_ai.for_ai(db, athlete, first, last, date.fromisoformat(facts["today"]))
+    if forecast:
+        facts["weather"] = forecast
 
 
 class CoachError(Exception):

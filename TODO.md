@@ -2,6 +2,16 @@
 
 ## Next up
 
+- [ ] **More on each planned ride in the Calendar (My training → Calendar).** Today an outdoor
+  day shows only its type, minutes and route name (e.g. "Road 316' · Stellenbosch 129km Lo…"). Add:
+  - the ride's numbers: total km, climbing, expected average speed and finish time (from the route,
+    or from the athlete's past rides on it: ride_routes.py);
+  - other recommendations: what to eat and drink for the length (carbs per hour, bottles), kit,
+    pacing (zones / power for the day's purpose), a start time;
+  - for outdoor days in the next 16 days, the weather on that route at riding time (as on plan
+    days: icon, temperature, rain chance, wind and headwind share, warnings, a link to Weather).
+  The Day view of the calendar is the place for the full detail; the Week view a short line.
+
 - [x] **A shareable information page, hidden from bots.** /welcome/<secret>
       (Admin → Information page: on/off, copy link, new link, Markdown text
       with a built-in "how it works" diagram, screenshots), default text and

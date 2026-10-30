@@ -26,7 +26,7 @@ from .. import (
     sync_engine,
     zwo,
 )
-from ..coach import PHASES, CoachError, build_facts, generate_day, generate_plan, has_data
+from ..coach import PHASES, CoachError, add_weather, build_facts, generate_day, generate_plan, has_data
 from ..db import Comment, Plan, PlatformWorkout, User, get_db
 from ..deps import active_grant, allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
 from ..queries import activities_since
@@ -289,7 +289,9 @@ async def create_plan(
     if not request["coach_notes"]:
         del request["coach_notes"]
     request["start_date"] = monday.isoformat()
-    facts = build_facts(db, target, allowed_scopes(db, user, athlete_id), request)
+    scopes = allowed_scopes(db, user, athlete_id)
+    facts = build_facts(db, target, scopes, request)
+    await add_weather(db, target, facts, scopes, monday, monday + timedelta(weeks=body.weeks) - timedelta(days=1))
     try:
         answer, model = await generate_plan(db, user, target, facts)
     except CoachError as exc:
@@ -584,7 +586,10 @@ async def replan(
             **({"coach_notes": body.coach_notes.strip()} if body.coach_notes.strip() else {}),
         },
     }
-    facts = build_facts(db, target, allowed_scopes(db, user, p.athlete_id), request, today)
+    scopes = allowed_scopes(db, user, p.athlete_id)
+    facts = build_facts(db, target, scopes, request, today)
+    first_day = date.fromisoformat(weeks[first]["start"])
+    await add_weather(db, target, facts, scopes, first_day, first_day + timedelta(weeks=len(weeks) - first))
     try:
         answer, model = await generate_plan(db, user, target, facts)
     except CoachError as exc:
@@ -674,7 +679,10 @@ async def replan_day(
             **({"coach_notes": body.coach_notes.strip()} if body.coach_notes.strip() else {}),
         },
     }
-    facts = build_facts(db, target, allowed_scopes(db, user, p.athlete_id), request, today)
+    scopes = allowed_scopes(db, user, p.athlete_id)
+    facts = build_facts(db, target, scopes, request, today)
+    week_start = date.fromisoformat(p.weeks[wi]["start"])
+    await add_weather(db, target, facts, scopes, week_start, week_start + timedelta(days=6))
     try:
         answer, model = await generate_day(db, user, target, facts)
     except CoachError as exc:
