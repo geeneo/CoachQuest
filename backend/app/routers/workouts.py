@@ -28,7 +28,7 @@ from .. import (
 from ..activity_types import category
 from ..db import Activity, Comment, Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
-from ..plan_tracker import GOAL_SHARE, takes_route
+from ..plan_tracker import GOAL_SHARE, _status, takes_route
 from ..queries import activities_since
 
 router = APIRouter(prefix="/api", tags=["workouts"])
@@ -318,12 +318,14 @@ def calendar(
     # Fetch a day either side: a UTC timestamp can fall on the next or previous local day.
     since = datetime.combine(start - timedelta(days=1), datetime.min.time())
     acts_by_day: dict[str, list[dict]] = defaultdict(list)
+    logged: dict[str, list[Activity]] = defaultdict(list)  # for the plan day's status
     briefs: dict[int, dict] = {}
     for a in activities_since(db, target.id, since):
         d = localtime.local_date(a.start_time, tz)
         briefs[a.id] = _activity_brief(a, d)
         if start <= d <= end:
             acts_by_day[d.isoformat()].append(briefs[a.id])
+            logged[d.isoformat()].append(a)
 
     rows = db.scalars(
         select(ScheduledWorkout)
@@ -354,7 +356,11 @@ def calendar(
             {
                 "date": key,
                 "is_today": d == today,
-                "plan": plan_days.get(key),
+                # The day's status as on the plan page (goal met, partly done, missed...), so an outdoor
+                # day without a structured workout also shows whether it was done.
+                "plan": plan_days[key] | {"status": _status(plan_days[key], logged.get(key, []), d, today)}
+                if key in plan_days
+                else None,
                 "workouts": [
                     scheduled_out(
                         sw,

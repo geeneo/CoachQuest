@@ -2559,3 +2559,10 @@ line.wind-calm {
   flex: 1;
   min-width: 200px;
 }
+/* A plan day's done / partly / missed mark (TrainingCalendar.jsx PLAN_STATUS). */
+.cal-plan {
+  position: relative;
+}
+.cal-plan:has(> .cal-badge) {
+  padding-right: 1.3rem;
+}

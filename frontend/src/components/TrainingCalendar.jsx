@@ -19,6 +19,12 @@ const STATUS = {
   skipped: { label: "Skipped", cls: "", emoji: "⏭️" },
   cancelled: { label: "Cancelled", cls: "", emoji: "🚫" },
 };
+// A plan day's status (backend plan_tracker._status), for days without a structured workout.
+const PLAN_STATUS = {
+  goal_met: { label: "Goal met", emoji: "✅" },
+  partial: { label: "Partly done", emoji: "⚠️" },
+  missed: { label: "Missed", emoji: "❌" },
+};
 const WEEKDAY = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function weekdayOf(iso) {
@@ -238,6 +244,12 @@ export default function TrainingCalendar({ id, isMe }) {
             ))}
             {d.plan && (
               <div className={`cal-plan ${d.plan.type === "Rest" ? "rest" : ""}`} title={d.plan.description}>
+                {/* Structured workouts carry their own mark; a day without one gets the plan's. */}
+                {PLAN_STATUS[d.plan.status] && !d.workouts.length && (
+                  <span className="cal-badge" role="img" aria-label={PLAN_STATUS[d.plan.status].label}>
+                    {PLAN_STATUS[d.plan.status].emoji}
+                  </span>
+                )}
                 <span className="badge">{d.plan.type}</span>
                 {d.plan.type !== "Rest" && (
                   <span className="small muted">

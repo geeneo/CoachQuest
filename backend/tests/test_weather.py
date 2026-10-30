@@ -341,3 +341,33 @@ def test_ridden_route_saved_as_favourite(make_user, fake_weather):
     fav = next(x for x in routes if x["source"] == "favourite")
     ridden = next(x for x in routes if x["source"] == "rides")
     assert fav["name"] == "My loop" and fav["has_line"] and ridden["favourite_id"] == r.json()["id"]
+
+
+def test_calendar_plan_day_status(make_user):
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    today = date.today()
+    _ride(aid, OTHER, 2, minutes=120)
+    with SessionLocal() as db:
+        days = [
+            _day(today - timedelta(days=3), "Road", None, 120),
+            _day(today - timedelta(days=2), "Road", None, 120),
+            _day(today + timedelta(days=1), "Road", None, 120),
+        ]
+        db.add(
+            Plan(
+                athlete_id=aid,
+                author_id=aid,
+                title="P",
+                content_md="",
+                model="m",
+                start_date=today - timedelta(days=3),
+                weeks=[{"phase": "Base", "days": days}],
+            )
+        )
+        db.commit()
+    cal = p.get(f"/api/athletes/me/calendar?start={today - timedelta(days=3)}&end={today + timedelta(days=1)}").json()
+    status = {d["date"]: (d["plan"] or {}).get("status") for d in cal["days"]}
+    assert status[(today - timedelta(days=3)).isoformat()] == "missed"
+    assert status[(today - timedelta(days=2)).isoformat()] == "goal_met"
+    assert status[(today + timedelta(days=1)).isoformat()] == "planned"
