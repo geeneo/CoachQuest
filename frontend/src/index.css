@@ -2504,3 +2504,18 @@ line.wind-calm {
 .day-weather.warn {
   background: color-mix(in srgb, var(--danger) 10%, var(--bg));
 }
+.home-location {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+}
+.home-location input {
+  flex: 1;
+  min-width: 0;
+}
+.place-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.4rem;
+}

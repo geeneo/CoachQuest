@@ -21,6 +21,7 @@ log = logging.getLogger("coachquest.weather")
 
 FREE_URL = "https://api.open-meteo.com/v1/forecast"
 PAID_URL = "https://customer-api.open-meteo.com/v1/forecast"
+PLACES_URL = "https://geocoding-api.open-meteo.com/v1/search"
 HOURLY = (
     "temperature_2m,precipitation,precipitation_probability,weather_code,"
     "wind_speed_10m,wind_direction_10m,wind_gusts_10m"
@@ -111,6 +112,30 @@ async def forecast(points: list[geo.Point]) -> list[dict]:
         for k, d in zip(missing, data if isinstance(data, list) else [data], strict=False):
             _cache[k] = (now, d["hourly"])
     return [_cache[k][1] for k in keys]
+
+
+async def places(query: str) -> list[dict]:
+    """Towns and places matching a name (Open-Meteo geocoding), for setting a home location."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(PLACES_URL, params={"name": query, "count": 8, "language": "en"})
+            r.raise_for_status()
+            found = r.json().get("results") or []
+    except (httpx.HTTPError, ValueError) as exc:
+        log.warning("Open-Meteo place search failed: %s", exc)
+        raise WeatherError("The place search didn't answer; try again in a minute") from exc
+    out = []
+    for f in found:
+        where = ", ".join(x for x in (f.get("admin1"), f.get("country")) if x)
+        out.append(
+            {
+                "name": f.get("name") or "",
+                "where": where,
+                "lat": round(float(f["latitude"]), 4),
+                "lng": round(float(f["longitude"]), 4),
+            }
+        )
+    return out
 
 
 def _index(hourly: dict) -> dict[str, int]:

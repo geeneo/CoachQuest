@@ -84,6 +84,10 @@ class User(Base):
     strength_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Your plan in your Strava activity descriptions (strava_notes.py): off, manual (per activity) or auto.
     strava_notes: Mapped[str] = mapped_column(String(10), default="off")
+    # Where the athlete's home forecast is for (Weather page); empty = where their latest ride started.
+    home_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    home_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    home_name: Mapped[str] = mapped_column(String(120), default="")
     # Health conditions from Profile (health.py), and when the athlete accepted the medical disclaimer.
     health_conditions: Mapped[list | None] = mapped_column(JSON, nullable=True)
     health_disclaimer_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -735,6 +739,9 @@ _ADDED_COLUMNS = {
         "strength_prefs": "JSON",
         "health_conditions": "JSON",
         "strava_notes": "VARCHAR(10) NOT NULL DEFAULT 'off'",
+        "home_lat": "FLOAT",
+        "home_lng": "FLOAT",
+        "home_name": "VARCHAR(120) NOT NULL DEFAULT ''",
         "health_disclaimer_at": "DATETIME",
         "date_format": "VARCHAR(10)",
         "ai_disabled": "BOOLEAN NOT NULL DEFAULT 0",

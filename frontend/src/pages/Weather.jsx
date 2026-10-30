@@ -23,6 +23,11 @@ const DISTANCES = [
   ["60-100", "60–100km", (km) => km >= 60 && km < 100],
   ["100", "100km+", (km) => km >= 100],
 ];
+const SOURCES = [
+  ["all", "All routes", () => true],
+  ["rides", "Ridden", (s) => s === "rides"],
+  ["favourite", "★ Favourites", (s) => s === "favourite"],
+];
 const SORTS = {
   ridden: ["Most ridden", (a, b) => b.count - a.count || b.distance_km - a.distance_km],
   longest: ["Longest first", (a, b) => b.distance_km - a.distance_km],
@@ -37,6 +42,7 @@ const STARTS = Array.from({ length: 29 }, (_, i) => {
 
 export default function Weather({ id = "me" }) {
   const list = useApi(`/api/athletes/${id}/weather/routes`);
+  const [source, setSource] = useState("all");
   const [kind, setKind] = useState("all");
   const [dist, setDist] = useState("any");
   const [sort, setSort] = useState("ridden");
@@ -44,12 +50,13 @@ export default function Weather({ id = "me" }) {
   const [params] = useSearchParams();
   const [picked, setPicked] = useState(params.get("route")); // route key, or "home"
   const routes = list.data?.routes || [];
+  const sourceOk = (r) => SOURCES.find(([k]) => k === source)[2](r.source);
   const kindOk = (r) => KINDS.find(([k]) => k === kind)[2](r.category);
   const distOk = (r) => DISTANCES.find(([k]) => k === dist)[2](r.distance_km);
   const shown = useMemo(
-    () => routes.filter((r) => kindOk(r) && distOk(r)).sort(SORTS[sort][1]),
+    () => routes.filter((r) => sourceOk(r) && kindOk(r) && distOk(r)).sort(SORTS[sort][1]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [routes, kind, dist, sort],
+    [routes, source, kind, dist, sort],
   );
   const current = picked || shown[0]?.key || (list.data && "home");
 
@@ -70,16 +77,30 @@ export default function Weather({ id = "me" }) {
       <div className="weather-layout">
         <aside className="weather-routes">
           <div className="chips tight">
+            {SOURCES.map(([k, label, ok]) => (
+              <button
+                key={k}
+                type="button"
+                className={`chip small ${source === k ? "on" : ""}`}
+                onClick={() => setSource(k)}
+              >
+                {label} <span className="muted">{routes.filter((r) => ok(r.source) && kindOk(r) && distOk(r)).length}</span>
+              </button>
+            ))}
+          </div>
+          <div className="chips tight">
             {KINDS.map(([k, label, ok]) => (
               <button key={k} type="button" className={`chip small ${kind === k ? "on" : ""}`} onClick={() => setKind(k)}>
-                {label} <span className="muted">{routes.filter((r) => ok(r.category) && distOk(r)).length}</span>
+                {label}{" "}
+                <span className="muted">{routes.filter((r) => ok(r.category) && sourceOk(r) && distOk(r)).length}</span>
               </button>
             ))}
           </div>
           <div className="chips tight">
             {DISTANCES.map(([k, label, ok]) => (
               <button key={k} type="button" className={`chip small ${dist === k ? "on" : ""}`} onClick={() => setDist(k)}>
-                {label} <span className="muted">{routes.filter((r) => ok(r.distance_km) && kindOk(r)).length}</span>
+                {label}{" "}
+                <span className="muted">{routes.filter((r) => ok(r.distance_km) && sourceOk(r) && kindOk(r)).length}</span>
               </button>
             ))}
           </div>
@@ -95,7 +116,8 @@ export default function Weather({ id = "me" }) {
             className={`route-item home ${current === "home" ? "on" : ""}`}
             onClick={() => setPicked("home")}
           >
-            Just show the home forecast
+            <strong>🏠 Home forecast</strong>
+            <span className="muted small">{list.data?.home?.name || "Where your latest outdoor ride started"}</span>
           </button>
           {shown.map((r) => (
             <button
@@ -134,7 +156,7 @@ export default function Weather({ id = "me" }) {
         </aside>
         <div className="weather-main">
           {current === "home" ? (
-            <HomeForecast id={id} />
+            <HomeForecast id={id} onHomeChanged={list.reload} />
           ) : (
             current && (
               <RouteForecast
@@ -151,16 +173,137 @@ export default function Weather({ id = "me" }) {
   );
 }
 
-function HomeForecast({ id }) {
+function HomeForecast({ id, onHomeChanged }) {
   const res = useApi(`/api/athletes/${id}/weather/home`);
-  if (res.error) return <div className="error">{res.error.message}</div>;
+  const [editing, setEditing] = useState(false);
+  const home = res.data?.home;
+  const changed = () => {
+    setEditing(false);
+    res.reload();
+    onHomeChanged();
+  };
+  const editor = editing && <HomeLocation id={id} home={home} onSaved={changed} onCancel={() => setEditing(false)} />;
+  if (res.error)
+    return (
+      <section className="card">
+        <h2>Home forecast</h2>
+        <div className="error">{res.error.message}</div>
+        {editor || (
+          <button type="button" onClick={() => setEditing(true)}>
+            Set your home location
+          </button>
+        )}
+      </section>
+    );
   if (!res.data) return <p className="muted">Loading the forecast…</p>;
   return (
     <section className="card">
-      <h2>Home forecast</h2>
-      <p className="muted small">Where your latest outdoor ride started, day by day.</p>
+      <div className="row between">
+        <h2>Home forecast</h2>
+        {id === "me" && !editing && (
+          <button type="button" className="link-btn small" onClick={() => setEditing(true)}>
+            Change home location
+          </button>
+        )}
+      </div>
+      <p className="muted small">
+        {home?.set ? `${home.name}, day by day.` : "Where your latest outdoor ride started, day by day."} Rides
+        without a route on your plan use this forecast too.
+      </p>
+      {editor}
       <DayStrip days={res.data.days} />
     </section>
+  );
+}
+
+// Pick a home location: search a town (Open-Meteo's place search), use this device's location, or go
+// back to where the latest ride started.
+function HomeLocation({ id, home, onSaved, onCancel }) {
+  const [q, setQ] = useState("");
+  const [found, setFound] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const save = async (body) => {
+    setError(null);
+    setBusy(true);
+    try {
+      await api(`/api/athletes/${id}/weather/home-location`, { method: "PUT", body });
+      onSaved();
+    } catch (e) {
+      setError(e.message);
+    }
+    setBusy(false);
+  };
+  const search = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      setFound((await api(`/api/athletes/${id}/weather/places?q=${encodeURIComponent(q.trim())}`)).places);
+    } catch (err) {
+      setError(err.message);
+    }
+    setBusy(false);
+  };
+  const here = () => {
+    if (!navigator.geolocation) return setError("This browser can't share its location");
+    setBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => save({ lat: pos.coords.latitude, lng: pos.coords.longitude, name: "My location" }),
+      () => {
+        setBusy(false);
+        setError("Couldn't get your location (allow it in the browser, or search for your town)");
+      },
+      { timeout: 15000 },
+    );
+  };
+  return (
+    <div className="home-location">
+      <form className="row tight" onSubmit={search}>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Town or suburb, e.g. Stellenbosch"
+          aria-label="Search a place"
+          minLength={2}
+          required
+        />
+        <button type="submit" disabled={busy || q.trim().length < 2}>
+          Search
+        </button>
+      </form>
+      {found && !found.length && <p className="muted small">Nothing found; try another spelling or a nearby town.</p>}
+      {found?.length > 0 && (
+        <div className="place-list">
+          {found.map((f) => (
+            <button
+              key={`${f.lat},${f.lng}`}
+              type="button"
+              className="route-item"
+              disabled={busy}
+              onClick={() => save({ lat: f.lat, lng: f.lng, name: f.name })}
+            >
+              <strong>{f.name}</strong>
+              <span className="muted small">{f.where}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="row tight">
+        <button type="button" className="link-btn small" disabled={busy} onClick={here}>
+          📍 Use where I am now
+        </button>
+        {home?.set && (
+          <button type="button" className="link-btn small" disabled={busy} onClick={() => save(undefined)}>
+            Use where my latest ride started
+          </button>
+        )}
+        <button type="button" className="link-btn small" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      {error && <div className="error">{error}</div>}
+    </div>
   );
 }
 

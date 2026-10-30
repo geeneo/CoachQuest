@@ -153,3 +153,33 @@ def test_plan_days_get_the_weather(make_user, monkeypatch):
     other = make_user("b@example.com")
     assert other.get(f"/api/athletes/{aid}/weather/plan/{plan_id}").status_code == 404
     assert other.get(f"/api/athletes/me/weather/plan/{plan_id}").status_code == 404
+
+
+def test_home_location(make_user, fake_weather, monkeypatch):
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    assert p.get("/api/athletes/me/weather/home").status_code == 409  # no ride, no home yet
+    assert p.get("/api/athletes/me/weather/routes").json()["home"] == {
+        "set": False,
+        "name": "Where your latest outdoor ride started",
+        "available": False,
+    }
+    r = p.request(
+        "PUT", "/api/athletes/me/weather/home-location", json={"lat": -33.93, "lng": 18.86, "name": "Stellenbosch"}
+    )
+    assert r.json() == {"set": True, "name": "Stellenbosch", "lat": -33.93, "lng": 18.86}
+    home = p.get("/api/athletes/me/weather/home").json()
+    assert home["home"]["name"] == "Stellenbosch" and len(home["days"]) == weather.DAYS
+    assert p.request("PUT", "/api/athletes/me/weather/home-location", json={"lat": 91, "lng": 0}).status_code == 422
+    coach = make_user("b@example.com")
+    assert (
+        coach.request("PUT", f"/api/athletes/{aid}/weather/home-location", json={"lat": 1, "lng": 1}).status_code == 404
+    )
+    assert p.request("PUT", "/api/athletes/me/weather/home-location").json()["set"] is False
+
+    async def found(q):
+        return [{"name": "Paarl", "where": "Western Cape, South Africa", "lat": -33.72, "lng": 18.96}]
+
+    monkeypatch.setattr(weather, "places", found)
+    assert p.get("/api/athletes/me/weather/places?q=paarl").json()["places"][0]["name"] == "Paarl"
+    assert p.get("/api/athletes/me/weather/places?q=p").status_code == 422

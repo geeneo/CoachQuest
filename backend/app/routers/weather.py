@@ -4,6 +4,7 @@ from datetime import UTC, date, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
@@ -79,6 +80,7 @@ def routes(athlete: str, user: User = Depends(current_user), db: DbSession = Dep
             )
         ),
         "usual_start": _usual_start(db, a),
+        "home": _home_out(db, a),
     }
 
 
@@ -132,8 +134,7 @@ async def route(
     return {"route": {k: v for k, v in r.items() if k != "polyline"}, "start": start, **fc}
 
 
-def _home_point(db: DbSession, athlete_id: int) -> geo.Point | None:
-    """Where the athlete usually starts: their latest outdoor ride's start."""
+def _latest_start(db: DbSession, athlete_id: int) -> geo.Point | None:
     latest = db.scalar(
         select(Activity.polyline)
         .where(Activity.user_id == athlete_id, Activity.polyline.is_not(None))
@@ -144,20 +145,67 @@ def _home_point(db: DbSession, athlete_id: int) -> geo.Point | None:
     return points[0] if points else None
 
 
+def _home_point(db: DbSession, a: User) -> geo.Point | None:
+    """The athlete's home location if they set one, else where their latest outdoor ride started."""
+    if a.home_lat is not None and a.home_lng is not None:
+        return (a.home_lat, a.home_lng)
+    return _latest_start(db, a.id)
+
+
+def _home_out(db: DbSession, a: User) -> dict:
+    if a.home_lat is not None and a.home_lng is not None:
+        return {"set": True, "name": a.home_name or "Home", "lat": a.home_lat, "lng": a.home_lng}
+    return {"set": False, "name": "Where your latest outdoor ride started", "available": bool(_latest_start(db, a.id))}
+
+
+class HomeIn(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    name: str = Field(default="", max_length=120)
+
+
+@router.put("/home-location")
+def set_home(
+    athlete: str, body: HomeIn | None = None, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """Set the home location (or, with no body, go back to where the latest ride started)."""
+    a = _athlete(db, user, athlete)
+    if a.id != user.id:
+        raise HTTPException(status_code=403, detail="Only the athlete can set their home location")
+    a.home_lat, a.home_lng = (round(body.lat, 4), round(body.lng, 4)) if body else (None, None)
+    a.home_name = body.name.strip() if body else ""
+    db.commit()
+    return _home_out(db, a)
+
+
+@router.get("/places")
+async def places(
+    athlete: str,
+    q: str = Query(min_length=2, max_length=80),
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    _athlete(db, user, athlete)
+    try:
+        return {"places": await weather.places(q)}
+    except weather.WeatherError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.get("/home")
 async def home(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    """The forecast where the athlete usually starts (their latest outdoor ride's start), day by day."""
+    """The forecast at the athlete's home location (or their latest outdoor ride's start), day by day."""
     a = _athlete(db, user, athlete)
-    point = _home_point(db, a.id)
+    point = _home_point(db, a)
     if point is None:
-        raise HTTPException(status_code=409, detail="No outdoor ride with a map line yet")
+        raise HTTPException(status_code=409, detail="Set your home location, or ride outdoors with Strava first")
     try:
         hourly = (await weather.forecast([point]))[0]
     except weather.WeatherError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     today = localtime.today(a)
     days = [weather._daily(hourly, today + timedelta(days=n)) for n in range(weather.DAYS)]
-    return {"days": [d for d in days if d]}
+    return {"days": [d for d in days if d], "home": _home_out(db, a)}
 
 
 async def _plan_day(db: DbSession, a: User, d: dict, start: str, today: date, home_at) -> dict | None:
@@ -201,7 +249,7 @@ async def plan_days(athlete: str, plan_id: int, user: User = Depends(current_use
     if not days:
         return {"days": out, "start": None}
     start = _usual_start(db, a)
-    home_at = _home_point(db, a.id)
+    home_at = _home_point(db, a)
     try:
         for d in days:
             w = await _plan_day(db, a, d, start, today, home_at)
