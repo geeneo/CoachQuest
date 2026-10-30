@@ -1,6 +1,6 @@
 import { CloudSun, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { duration, shortDate } from "../lib/format.js";
@@ -130,7 +130,9 @@ export default function Weather({ id = "me" }) {
                 <strong>
                   {r.distance_km}km · {r.elevation_m}m↑
                 </strong>
-                <span className="small accent">{r.source === "favourite" ? "★ favourite" : r.category}</span>
+                <span className="small accent">
+                  {r.source === "favourite" ? "★ favourite" : `${r.category}${r.favourite_id ? " ★" : ""}`}
+                </span>
               </span>
               <span className="route-name">{r.name}</span>
               <span className="muted small">
@@ -164,6 +166,7 @@ export default function Weather({ id = "me" }) {
                 routeKey={current}
                 usualStart={list.data?.usual_start || "07:00"}
                 firstDay={current === params.get("route") ? params.get("day") : null}
+                onSaved={list.reload}
               />
             )
           )}
@@ -307,7 +310,7 @@ function HomeLocation({ id, home, onSaved, onCancel }) {
   );
 }
 
-function RouteForecast({ id, routeKey, usualStart, firstDay }) {
+function RouteForecast({ id, routeKey, usualStart, firstDay, onSaved }) {
   const [start, setStart] = useState(usualStart);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -376,6 +379,9 @@ function RouteForecast({ id, routeKey, usualStart, firstDay }) {
               </>
             )}
           </p>
+          {r.source === "rides" && r.strava_url && (
+            <SaveFavourite key={r.key} id={id} route={r} onSaved={onSaved} />
+          )}
         </div>
         <div className="stats">
           <Tile label="Distance" value={`${r.distance_km}km`} />
@@ -446,6 +452,63 @@ function RouteForecast({ id, routeKey, usualStart, firstDay }) {
       <p className="small muted">{data.days.length} days on this route · click a day to see the wind for your ride</p>
       <DayStrip days={data.days} picked={d.date} onPick={setDay} />
     </>
+  );
+}
+
+// A ridden route into Routes → favourites: its latest ride on Strava, saved under a name you choose,
+// so the AI coach can plan rides on it and it stays in the list for its weather.
+function SaveFavourite({ id, route, onSaved }) {
+  const [savedId, setSavedId] = useState(route.favourite_id);
+  const [name, setName] = useState(null); // null = closed, else the name being typed
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  if (savedId)
+    return (
+      <p className="small">
+        ★ In your favourites · <Link to="/routes">Routes</Link>
+      </p>
+    );
+  if (name === null)
+    return (
+      <button type="button" className="small" onClick={() => setName(route.name.slice(0, 120))}>
+        ☆ Add to my favourite routes
+      </button>
+    );
+  const save = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const seg = await api(`/api/athletes/${id}/segments`, {
+        method: "POST",
+        body: { link: route.strava_url, name: name.trim(), uses: ["endurance"] },
+      });
+      setSavedId(seg.id);
+      onSaved?.();
+    } catch (err) {
+      setError(err.message);
+    }
+    setBusy(false);
+  };
+  return (
+    <form className="row tight save-fav" onSubmit={save}>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        maxLength={120}
+        required
+        aria-label="Name for the favourite route"
+        placeholder="e.g. Durbanville trails loop"
+        autoFocus
+      />
+      <button type="submit" disabled={busy || !name.trim()}>
+        Save
+      </button>
+      <button type="button" className="link-btn small" onClick={() => setName(null)}>
+        Cancel
+      </button>
+      {error && <span className="error small">{error}</span>}
+    </form>
   );
 }
 

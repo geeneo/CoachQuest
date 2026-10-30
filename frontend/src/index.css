@@ -2551,3 +2551,11 @@ line.wind-calm {
   margin: 0.3rem 0 0;
   padding-left: 1.1rem;
 }
+.save-fav {
+  flex-wrap: wrap;
+  margin-top: 0.3rem;
+}
+.save-fav input {
+  flex: 1;
+  min-width: 200px;
+}

@@ -67,13 +67,13 @@ def test_route_forecast_ranks_days(fake_weather):
     assert len(fc["line"]) == weather.STRETCHES + 1
 
 
-def _ride(aid, pts, days_ago, minutes=120, name="Loop"):
+def _ride(aid, pts, days_ago, minutes=120, name="Loop", external_id=None):
     with SessionLocal() as db:
         db.add(
             Activity(
                 user_id=aid,
                 source="strava",
-                external_id=f"{name}{days_ago}",
+                external_id=external_id or f"{name}{days_ago}",
                 name=name,
                 sport="Ride",
                 start_time=datetime.now() - timedelta(days=days_ago),
@@ -321,3 +321,21 @@ def test_calendar_ride_details_survive_strava_failing(make_user, fake_weather, m
     sat = r.json()["days"][today.isoformat()]
     assert sat["numbers"]["distance_km"] == 129.0 and sat["weather"] and not sat["weather"]["on_route"]
     assert r.json()["days"][(today + timedelta(days=1)).isoformat()]["weather"]
+
+
+def test_ridden_route_saved_as_favourite(make_user, fake_weather):
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    _ride(aid, LOOP, 3, external_id="16000000003")
+    _ride(aid, LOOP, 10, external_id="16000000010")
+    loop = p.get("/api/athletes/me/weather/routes").json()["routes"][0]
+    assert loop["favourite_id"] is None
+    detail = p.get(f"/api/athletes/me/weather/routes/{loop['key']}").json()["route"]
+    r = p.post(
+        "/api/athletes/me/segments", json={"link": detail["strava_url"], "name": "My loop", "uses": ["endurance"]}
+    )
+    assert r.status_code == 200, r.text
+    routes = p.get("/api/athletes/me/weather/routes").json()["routes"]
+    fav = next(x for x in routes if x["source"] == "favourite")
+    ridden = next(x for x in routes if x["source"] == "rides")
+    assert fav["name"] == "My loop" and fav["has_line"] and ridden["favourite_id"] == r.json()["id"]

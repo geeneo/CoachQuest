@@ -27,6 +27,7 @@ SUMMARY = (
     "this_year",
     "first",
     "last",
+    "favourite_id",
 )
 _groups: dict[tuple, list[dict]] = {}  # (athlete, rides with a line, newest id) -> routes
 
@@ -49,7 +50,20 @@ def _routes(db: DbSession, athlete_id: int) -> list[dict]:
         for old in [k for k in _groups if k[0] == athlete_id]:
             del _groups[old]
         _groups[key] = ride_routes.ride_groups(db, athlete_id)
-    return ride_routes.favourites(db, athlete_id) + _groups[key]
+    favs = ride_routes.favourites(db, athlete_id)
+    return favs + [{**g, "favourite_id": _saved_as(g, favs)} for g in _groups[key]]
+
+
+def _saved_as(group: dict, favs: list[dict]) -> int | None:
+    """The favourite this ridden route already is: one of its rides saved, or a route on the same line."""
+    me = {"km": group["distance_km"], "shape": ride_routes._shape(group["polyline"])}
+    for f in favs:
+        if f["strava_id"] in group["strava_ids"]:
+            return f["segment_id"]
+        if f["polyline"] and f["distance_km"]:
+            if ride_routes._same({"km": f["distance_km"], "shape": ride_routes._shape(f["polyline"])}, me):
+                return f["segment_id"]
+    return None
 
 
 @router.get("/routes")
