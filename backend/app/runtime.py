@@ -150,6 +150,14 @@ EDITABLE: dict[str, Editable] = {
         "photos first came from isn't documented; turn this off to hide them everywhere at once (the muscle map "
         "stays). Only super admins can change this.",
     ),
+    "open_meteo_key": Editable(
+        "Open-Meteo API key",
+        "Weather",
+        secret=True,
+        pattern=r"[A-Za-z0-9_\-]{8,128}",
+        help="Empty: the free Open-Meteo API, for non-commercial use. When CoachQuest is used commercially, take a "
+        "plan at open-meteo.com/en/pricing and paste its key here (weather then comes from the customer API).",
+    ),
     "strava_note_profile": Editable(
         "Workout shape in Strava descriptions",
         "Workouts",

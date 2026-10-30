@@ -73,7 +73,7 @@ def start(db: DbSession, conn: Connection, target: date) -> dict:
     return state(conn)
 
 
-FIELDS_VERSION = 2  # bump when activities gain fields that need a re-download
+FIELDS_VERSION = 3  # 3: route polylines for the weather page. Bump when activities gain fields that need a re-download
 
 
 def refresh(db: DbSession, conn: Connection) -> dict:

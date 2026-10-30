@@ -232,6 +232,7 @@ def _upsert(db: DbSession, user: User, item: dict) -> None:
     act.indoor = bool(item.get("trainer")) or act.sport in ("VirtualRide", "VirtualRun")
     # Strava's workout_type: 1 = race (runs), 11 = race (rides)
     act.is_race = item.get("workout_type") in (1, 11)
+    act.polyline = (item.get("map") or {}).get("summary_polyline") or act.polyline
     act.tss, act.tss_method = estimate_tss(
         act.duration_s,
         act.norm_power,
@@ -385,7 +386,14 @@ def _segment_out(s: dict) -> dict:
         "avg_grade": s.get("average_grade"),
         "elevation_m": round((s.get("elevation_high") or 0) - (s.get("elevation_low") or 0)) or None,
         "city": (s.get("city") or "")[:80],
+        "polyline": _line(s),
     }
+
+
+def _line(item: dict) -> str | None:
+    """The encoded line on the map: full when Strava gives it, else the summary."""
+    m = item.get("map") or {}
+    return m.get("polyline") or m.get("summary_polyline") or None
 
 
 def _route_out(r: dict) -> dict:
@@ -398,6 +406,7 @@ def _route_out(r: dict) -> dict:
         "elevation_m": round(r.get("elevation_gain") or 0) or None,
         "est_minutes": round(secs / 60) if secs else None,
         "sport": "run" if r.get("type") == 2 else "ride",
+        "polyline": _line(r),
     }
 
 
@@ -421,6 +430,7 @@ async def activity(db: DbSession, conn: Connection, activity_id: int) -> dict:
         "elevation_m": round(a.get("total_elevation_gain") or 0) or None,
         "est_minutes": round(secs / 60) if secs else None,
         "sport": "run" if "Run" in (a.get("sport_type") or a.get("type") or "") else "ride",
+        "polyline": _line(a),
     }
 
 

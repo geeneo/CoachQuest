@@ -202,6 +202,8 @@ class Activity(Base):
     note_tag: Mapped[str | None] = mapped_column(String(40), nullable=True)
     # The plan lines CoachQuest last wrote into this activity's Strava description (strava_notes.py).
     strava_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The route, as Strava's encoded summary polyline (outdoor Strava activities); see geo.py, ride_routes.py.
+    polyline: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class DeletedActivity(Base):
@@ -619,6 +621,8 @@ class Segment(Base):
     # What it's for (segments.USES), and how it's used, for the AI coach ("4-8 times, easy back down").
     uses: Mapped[list | None] = mapped_column(JSON, nullable=True)
     notes: Mapped[str] = mapped_column(String(300), default="")
+    # The line on the map (Strava's encoded polyline), for the weather along it (weather.py).
+    polyline: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Shared with everyone in CoachQuest (Routes page): others can add it to their own favourites.
     shared: Mapped[bool] = mapped_column(Boolean, default=False)
     added_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -709,6 +713,7 @@ _ADDED_COLUMNS = {
         "is_race": "BOOLEAN NOT NULL DEFAULT 0",
         "type_override": "VARCHAR(40)",
         "strava_note": "TEXT",
+        "polyline": "TEXT",
         "race_id": "INTEGER",
         "note_tag": "VARCHAR(40)",
     },
@@ -751,6 +756,7 @@ _ADDED_COLUMNS = {
         "sport": "VARCHAR(10) NOT NULL DEFAULT 'ride'",
         "uses": "JSON",
         "shared": "BOOLEAN NOT NULL DEFAULT 0",
+        "polyline": "TEXT",
     },
     "ai_calls": {
         "kind": "VARCHAR(12) NOT NULL DEFAULT ''",

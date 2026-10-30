@@ -29,6 +29,7 @@ from .routers import (
     preferences,
     races,
     segments,
+    weather,
     welcome,
     workouts,
 )
@@ -123,6 +124,7 @@ for r in (
     segments.router,
     segments.shared_router,
     health.router,
+    weather.router,
     welcome.public,
     welcome.admin,
     exercises.router,

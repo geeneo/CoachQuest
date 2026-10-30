@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CloudSun,
   Dumbbell,
   Flag,
   LayoutDashboard,
@@ -23,6 +24,7 @@ const NAV = [
   { to: "/", label: "My training", icon: LayoutDashboard, end: true },
   { to: "/workouts", label: "Workouts", icon: Dumbbell },
   { to: "/routes", label: "Routes", icon: MapIcon },
+  { to: "/weather", label: "Weather", icon: CloudSun },
   { to: "/races", label: "Races", icon: Flag },
   { to: "/connections", label: "Connections", icon: Link2 },
   { to: "/sharing", label: "Sharing", icon: Share2 },

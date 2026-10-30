@@ -56,7 +56,11 @@ async def from_strava(athlete: str, user: User = Depends(current_user), db: DbSe
     have = {(s.kind, s.strava_id) for s in segments.for_athlete(db, athlete_id)}
     return {
         # Strava ids as text: route ids are longer than a browser number keeps exactly.
-        "found": [{**f, "strava_id": str(f["strava_id"])} for f in found if (f["kind"], f["strava_id"]) not in have],
+        "found": [
+            {**{k: v for k, v in f.items() if k != "polyline"}, "strava_id": str(f["strava_id"])}
+            for f in found
+            if (f["kind"], f["strava_id"]) not in have
+        ],
         "private_routes": strava.sees_private_routes(conn),
     }
 
@@ -181,6 +185,7 @@ def _imported_ride(db: DbSession, athlete_id: int, strava_id: int) -> dict:
         "elevation_m": round(a.elevation_m or 0) or None,
         "est_minutes": round(a.duration_s / 60) if a.duration_s else None,
         "sport": "run" if "Run" in (a.sport or "") else "ride",
+        "polyline": a.polyline,
     }
 
 
@@ -231,7 +236,18 @@ class CopyShared(BaseModel):
 
 
 # Details a copy of a shared route or segment takes over; uses and notes are the sharer's, as a start.
-COPIED = ("kind", "strava_id", "name", "distance_m", "avg_grade", "elevation_m", "city", "est_minutes", "sport")
+COPIED = (
+    "kind",
+    "strava_id",
+    "name",
+    "distance_m",
+    "avg_grade",
+    "elevation_m",
+    "city",
+    "est_minutes",
+    "sport",
+    "polyline",
+)
 
 
 @router.post("/copy")

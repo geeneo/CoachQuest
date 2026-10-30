@@ -14,6 +14,7 @@ import Profile from "./pages/Profile.jsx";
 import Races from "./pages/Races.jsx";
 import RoutesPage from "./pages/Routes.jsx";
 import Sharing from "./pages/Sharing.jsx";
+import Weather from "./pages/Weather.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Workouts from "./pages/Workouts.jsx";
 
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="athletes/:athleteId/plans/:planId" element={<PlanView />} />
         <Route path="workouts" element={<Workouts />} />
         <Route path="routes" element={<RoutesPage />} />
+        <Route path="weather" element={<Weather />} />
         <Route path="races" element={<Races />} />
         <Route path="profile" element={<Profile />} />
         <Route path="glossary" element={<Glossary />} />

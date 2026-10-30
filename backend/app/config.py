@@ -55,6 +55,8 @@ class Settings:
     intervals_base_url: str = os.getenv("INTERVALS_BASE_URL", "https://intervals.icu").rstrip("/")
 
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
+    # Open-Meteo (weather.py): empty uses the free API (non-commercial use); a key uses the paid one.
+    open_meteo_key: str = os.getenv("OPEN_METEO_KEY", "")
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
     anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "high")
     # Readiness notes, weekly reviews and chat. Empty model: the same as plans.
