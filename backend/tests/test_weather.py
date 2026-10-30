@@ -118,7 +118,15 @@ def test_others_need_the_activities_scope(make_user):
 
 
 def _day(d: date, kind: str, segment_id=None, minutes=120):
-    return {"date": d.isoformat(), "type": kind, "duration_min": minutes, "segment_id": segment_id}
+    return {
+        "date": d.isoformat(),
+        "type": kind,
+        "duration_min": minutes,
+        "segment_id": segment_id,
+        "description": "",
+        "intensity": [],
+        "locked": False,
+    }
 
 
 def test_plan_days_get_the_weather(make_user, monkeypatch):
@@ -219,3 +227,59 @@ def test_ai_coach_gets_the_forecast(make_user, fake_weather, monkeypatch):
     monkeypatch.setattr(runtime, "get", lambda key: "off" if key == "ai_weather" else real_get(key))
     p.post("/api/athletes/me/plans", json={"title": "B", "goal": "FTP", "weeks": 1, "start_date": start.isoformat()})
     assert "weather" not in seen["facts"]
+
+
+def test_calendar_ride_details(make_user, fake_weather):
+    from app import ride_info
+
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    for n in range(3):
+        _ride(aid, LOOP, 3 + n, minutes=180)  # the loop, three times, ~3h
+    loop_m = geo.length_m(LOOP)
+    with SessionLocal() as db:
+        from app.db import User
+
+        db.get(User, aid).ftp_watts = 250
+        seg = Segment(
+            athlete_id=aid, strava_id=1, kind="route", name="Loop", polyline=geo.encode(LOOP), distance_m=loop_m
+        )
+        db.add(seg)
+        db.flush()
+        today = date.today()
+        days = [
+            dict(_day(today, "Road", seg.id, 200), intensity=["Z2"]),
+            _day(today + timedelta(days=1), "Road", None, 60),
+            _day(today + timedelta(days=2), "Zwift / indoor"),
+            _day(today + timedelta(days=3), "Rest"),
+        ]
+        db.add(
+            Plan(
+                athlete_id=aid,
+                author_id=aid,
+                title="P",
+                content_md="",
+                model="m",
+                start_date=today,
+                weeks=[{"phase": "Base", "days": days}],
+            )
+        )
+        db.commit()
+    end = today + timedelta(days=6)
+    r = p.get(f"/api/athletes/me/weather/rides?start={today}&end={end}").json()
+    assert set(r["days"]) == {today.isoformat(), (today + timedelta(days=1)).isoformat()}
+    long = r["days"][today.isoformat()]
+    n = long["numbers"]
+    assert n["ridden"] == 3 and n["distance_km"] == round(loop_m / 1000, 1) and "3 rides" in n["speed_from"]
+    assert n["ride_minutes"] == 180 and n["finish"]
+    assert long["pacing"] == ["Z2: 140–188 W"] and long["fuel"]["carbs_g_per_h"] == 75
+    assert long["weather"]["on_route"] and long["weather"]["place"] == "Loop"
+    short = r["days"][(today + timedelta(days=1)).isoformat()]
+    assert short["numbers"]["distance_rough"] and short["fuel"]["carbs_g_per_h"] == 0
+    assert p.get(f"/api/athletes/me/weather/rides?start={end}&end={today}").status_code == 422
+    assert ride_info.kit({"temp_min": 5, "temp_max": 30, "rain_chance": 60, "wind_kmh": 35}) == [
+        "Winter kit: long sleeves, full gloves, overshoes",
+        "Sun cream and light colours; start early",
+        "Rain jacket and mudguards",
+        "Windy: stay low, and deep wheels can be a handful",
+    ]

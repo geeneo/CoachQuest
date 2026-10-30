@@ -35,6 +35,9 @@ export default function TrainingCalendar({ id, isMe }) {
   const [selected, setSelected] = useState(null); // scheduled workout id shown below
   const [error, setError] = useState(null);
   const cal = useApi(`/api/athletes/${id}/calendar?start=${addDays(anchor, -7)}&end=${addDays(anchor, 7)}`);
+  // More on planned outdoor rides: numbers, food, pacing, kit and weather (backend ride_info.py).
+  const rides = useApi(`/api/athletes/${id}/weather/rides?start=${addDays(anchor, -7)}&end=${addDays(anchor, 7)}`);
+  const rideOn = rides.data?.days || {};
   // Race days (a race can last several days) shown on the calendar.
   const races = useApi(`/api/athletes/${id}/races`);
   const raceOn = {};
@@ -225,6 +228,7 @@ export default function TrainingCalendar({ id, isMe }) {
                       {s.segment.kind === "segment" ? "⛰" : "🗺"} {s.segment.name}
                     </a>
                   ))}
+                {rideOn[d.date] && <RideInfo info={rideOn[d.date]} full={view === "day"} isMe={isMe} date={d.date} />}
                 {view === "day" && d.plan.description && <p className="small">{d.plan.description}</p>}
               </div>
             )}
@@ -285,6 +289,78 @@ export default function TrainingCalendar({ id, isMe }) {
         />
       )}
     </>
+  );
+}
+
+// A planned outdoor ride: a short line in the week view, everything in the day view.
+function RideInfo({ info, full, isMe, date }) {
+  const n = info.numbers;
+  const w = info.weather;
+  const stats = [
+    n.distance_km && `${n.distance_rough ? "~" : ""}${n.distance_km} km`,
+    n.climb_m && `${n.climb_m} m↑`,
+    n.speed_kmh && `${n.speed_kmh} km/h`,
+    n.finish && `${n.start}–${n.finish}`,
+  ].filter(Boolean);
+  const sky = w && `${w.icon} ${w.temp_min}–${w.temp_max}° · 💨 ${w.wind_kmh} ${w.wind_from}`;
+  if (!full)
+    return (
+      <div className="cal-ride small" onClick={(e) => e.stopPropagation()}>
+        {stats.length > 0 && <span>{stats.slice(0, 2).join(" · ")}</span>}
+        {w && (
+          <span className={w.warnings.length ? "bad" : "muted"} title={w.warnings.join(", ")}>
+            {sky}
+            {w.warnings.length > 0 && " ⚠"}
+          </span>
+        )}
+      </div>
+    );
+  const f = info.fuel;
+  return (
+    <div className="cal-ride-full" onClick={(e) => e.stopPropagation()}>
+      {stats.length > 0 && (
+        <p className="small">
+          <strong>{stats.join(" · ")}</strong>
+          {n.ride_minutes ? ` · ${duration(n.ride_minutes * 60)} riding` : ""}
+          {n.speed_from && <span className="muted"> (speed from {n.speed_from}</span>}
+          {n.speed_from && n.fastest_minutes ? (
+            <span className="muted">; fastest {duration(n.fastest_minutes * 60)})</span>
+          ) : (
+            n.speed_from && <span className="muted">)</span>
+          )}
+        </p>
+      )}
+      {w && (
+        <p className="small">
+          {w.label} {sky} {w.gusts_kmh ? `(gusts ${w.gusts_kmh})` : ""} · 💧 {w.rain_chance}%
+          {w.headwind != null && ` · ${w.headwind}% headwind`}
+          {w.warnings.map((x) => (
+            <span key={x} className="badge bad">
+              {x}
+            </span>
+          ))}
+          {w.advice && w.advice.startsWith("Ride it the other way") && <span className="muted"> · {w.advice}</span>}
+          {isMe && (
+            <Link className="small" to={`/weather?route=${w.route_key || "home"}&day=${date}`}>
+              {" "}
+              Forecast →
+            </Link>
+          )}
+        </p>
+      )}
+      <ul className="small cal-ride-tips">
+        {f && (
+          <li>
+            🍌 {f.carbs_g ? `${f.carbs_g} g carbs (~${f.gels} gels or bars), ` : ""}
+            {f.bottles} bottle{f.bottles > 1 ? "s" : ""} ({(f.fluid_ml / 1000).toFixed(1)} L). {f.note}
+          </li>
+        )}
+        {info.pacing.length > 0 && <li>⚡ Power: {info.pacing.join(" · ")}</li>}
+        {info.kit.map((k) => (
+          <li key={k}>🧥 {k}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

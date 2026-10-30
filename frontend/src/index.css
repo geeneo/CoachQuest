@@ -2524,3 +2524,30 @@ line.wind-calm {
   color: #fc5200;
   font-weight: 600;
 }
+/* Calendar: more on planned outdoor rides (TrainingCalendar.jsx RideInfo). */
+.cal-ride {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 0.2rem;
+  line-height: 1.3;
+}
+.cal-ride .bad {
+  color: var(--danger);
+}
+.cal-ride-full {
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.cal-ride-full p {
+  margin: 0.2rem 0;
+}
+.cal-ride-full .badge {
+  margin-left: 0.3rem;
+}
+.cal-ride-tips {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+}

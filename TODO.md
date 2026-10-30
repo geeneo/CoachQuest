@@ -2,7 +2,7 @@
 
 ## Next up
 
-- [ ] **More on each planned ride in the Calendar (My training → Calendar).** Today an outdoor
+- [x] **More on each planned ride in the Calendar (My training → Calendar).** Today an outdoor
   day shows only its type, minutes and route name (e.g. "Road 316' · Stellenbosch 129km Lo…"). Add:
   - the ride's numbers: total km, climbing, expected average speed and finish time (from the route,
     or from the athlete's past rides on it: ride_routes.py);
