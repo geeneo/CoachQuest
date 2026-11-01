@@ -2655,3 +2655,137 @@ line.wind-calm {
 .stage-table td:nth-child(2) select {
   min-width: 7.5rem;
 }
+/* Activities table: fits a laptop screen (units in the header, compact cells, narrow selects). Cadence
+   and calories (.opt) hide below 1500 px unless "All columns" is on; the chip only shows then. */
+table.activities th,
+table.activities td {
+  padding: 0.4rem 0.28rem;
+}
+table.activities th .unit {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+table.activities select {
+  max-width: 6.5rem;
+}
+table.activities .name-cell {
+  max-width: 220px;
+}
+.all-cols-chip {
+  display: none;
+}
+@media (max-width: 1499px) {
+  table.activities:not(.all-cols) .opt {
+    display: none;
+  }
+  .all-cols-chip {
+    display: inline-flex;
+  }
+}
+table.activities th .unit {
+  display: block;
+  line-height: 1;
+}
+table.activities select {
+  max-width: 5rem;
+  padding-right: 1.1rem;
+  text-overflow: ellipsis;
+}
+table.activities .name-cell {
+  max-width: 170px;
+}
+@media (min-width: 1500px) {
+  table.activities .name-cell {
+    max-width: 260px;
+  }
+  table.activities select {
+    max-width: 7rem;
+  }
+}
+/* Races table: fits a laptop screen (Races.jsx). */
+.races-table th,
+.races-table td {
+  padding: 0.35rem 0.25rem;
+}
+.races-table .wide-cell input {
+  min-width: 9rem;
+}
+.races-table .short-cell input {
+  width: 4.8rem;
+}
+.races-table .num-cell input {
+  width: 4.4rem;
+}
+.races-table select {
+  max-width: 8rem;
+}
+.races-table input[type="date"] {
+  width: 8.6rem;
+}
+.races-table input[type="time"] {
+  width: 6rem;
+}
+.races-table .race-code {
+  display: block;
+  padding: 0 0.2rem;
+}
+.races-table .wide-cell input {
+  min-width: 8rem;
+}
+.races-table .short-cell input {
+  width: 4.2rem;
+}
+.races-table .num-cell input {
+  width: 3.8rem;
+}
+.races-table select {
+  max-width: 7rem;
+}
+.races-table input[type="date"] {
+  width: 7.9rem;
+}
+.races-table input[type="time"] {
+  width: 5.3rem;
+}
+.races-table th {
+  white-space: normal;
+  line-height: 1.15;
+  vertical-align: bottom;
+}
+.races-table input,
+.races-table select {
+  padding: 0.28rem 0.3rem;
+}
+.races-table select {
+  padding-right: 1.1rem;
+}
+.races-table .date-cell > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+/* Admin → Users: the cells are short texts; let them wrap so the table fits a laptop screen. */
+.admin-users > tbody > tr > td,
+.admin-users table.mini td {
+  white-space: normal;
+}
+.admin-users > tbody > tr > td:first-child {
+  min-width: 12rem;
+  max-width: 16rem;
+  overflow-wrap: anywhere;
+}
+/* Connections → platforms: headers and the "Can do" list wrap, so it fits a laptop screen. */
+table.platforms th,
+table.platforms td {
+  white-space: normal;
+}
+table.platforms td {
+  overflow-wrap: anywhere;
+}
+table.platforms td:first-child {
+  min-width: 12rem;
+  max-width: 20rem;
+}
+table.platforms td:nth-child(2) {
+  max-width: 18rem;
+}

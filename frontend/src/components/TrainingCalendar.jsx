@@ -25,6 +25,7 @@ const PLAN_STATUS = {
   partial: { label: "Partly done", emoji: "⚠️" },
   missed: { label: "Missed", emoji: "❌" },
   moved: { label: "Done on another day", emoji: "↪️" },
+  rest: { label: "Rested", emoji: "😴" }, // as on the plan page and the Plans strip (lib/dayStatus.js)
 };
 const WEEKDAY = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 

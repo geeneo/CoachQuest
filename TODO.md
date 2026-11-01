@@ -12,12 +12,17 @@
   To do: show the app version in the page footer for everyone (frontend and API build), so a
   screenshot says which version it is; and send screenshots from the same screen when comparing.
 
-- [ ] **Fit the screen on a PC (dynamic scaling).** My training → Activities (screenshot 1 Nov, about
+- [x] **Fit the screen on a PC (dynamic scaling).** My training → Activities (screenshot 1 Nov, about
   1250 px wide): the table runs off the right edge (the column after Note is cut off) while the page
   has room. Make wide tables fit: narrower selects (Type, Race, Note), shorter labels, less padding,
   and hide less-used columns (Cal, Cadence) below ~1400 px with a "Columns" picker; the table scrolls
   sideways inside its card, never the page. Check the other wide pages too (Races, Admin users,
   Workouts, Calendar) at 1280, 1366 and 1440 px, and with Windows display scaling at 125-150%.
+  Done (1 Nov): measured every page at 1245-1536 px; the page itself never ran off the screen, but
+  four tables scrolled inside their card. Activities (units in the header, narrow selects, cadence
+  and calories behind an "All columns" chip below 1500 px), Races (code under the name, start time
+  under the date, compact inputs), Admin → Users and Connections (cells wrap) now fit from 1245 px.
+  Below that (1024 px, tablets) they scroll sideways inside the card, as on phones.
 
 - [ ] **URGENT to decide: Strava API Agreement (effective 1 June 2026) vs
       how CoachQuest uses Strava data.** Found while researching the

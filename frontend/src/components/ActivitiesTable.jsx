@@ -46,6 +46,7 @@ export default function Activities({ id, editable }) {
   const [type, setType] = useState("All");
   const [racesOnly, setRacesOnly] = useState(false);
   const [showNP, setShowNP] = useState(false);
+  const [allCols, setAllCols] = useState(false); // cadence and calories, hidden on smaller screens
   const [search, setSearch] = useState("");
   const res = useApi(`/api/athletes/${id}/activities?${periodQuery(mode, range, month, year)}`);
   const races = useApi(editable ? "/api/athletes/me/races" : null);
@@ -205,6 +206,14 @@ export default function Activities({ id, editable }) {
           <button type="button" className={`chip ${showNP ? "on" : ""}`} onClick={() => setShowNP(!showNP)}>
             Show NP
           </button>
+          <button
+            type="button"
+            className={`chip all-cols-chip ${allCols ? "on" : ""}`}
+            title="Cadence and calories are hidden on smaller screens so the table fits"
+            onClick={() => setAllCols(!allCols)}
+          >
+            All columns
+          </button>
         </div>
         <input
           className="inline-input"
@@ -268,7 +277,7 @@ export default function Activities({ id, editable }) {
         <p className="muted">No activities match.</p>
       ) : (
         <div className="table-wrap">
-          <table className="activities">
+          <table className={`activities ${allCols ? "all-cols" : ""}`}>
             <thead>
               <tr>
                 {editable && (
@@ -284,15 +293,32 @@ export default function Activities({ id, editable }) {
                 <th>Date</th>
                 <th>Type</th>
                 <th>Activity</th>
-                <th className="num">Dist</th>
-                <th className="num">Elev</th>
+                {/* Units in the header, not on every row, so the table fits a laptop screen. */}
+                <th className="num">
+                  Dist <span className="unit">km</span>
+                </th>
+                <th className="num">
+                  Elev <span className="unit">m</span>
+                </th>
                 <th className="num">Time</th>
-                <th className="num">Speed</th>
-                <th className="num">Power</th>
-                {showNP && <th className="num">NP</th>}
-                <th className="num">HR</th>
-                <th className="num">Cadence</th>
-                <th className="num">Cal</th>
+                <th className="num">
+                  Speed <span className="unit">km/h</span>
+                </th>
+                <th className="num">
+                  Power <span className="unit">W</span>
+                </th>
+                {showNP && (
+                  <th className="num">
+                    NP <span className="unit">W</span>
+                  </th>
+                )}
+                <th className="num">
+                  HR <span className="unit">bpm</span>
+                </th>
+                <th className="num opt" title="Cadence: rpm on the bike, steps a minute on foot">
+                  Cad
+                </th>
+                <th className="num opt">Cal</th>
                 <th className="num">RE</th>
                 <th>Race</th>
                 <th>Note</th>
@@ -326,17 +352,15 @@ export default function Activities({ id, editable }) {
                   <td className="name-cell" title={`${a.name} (from ${SOURCES[a.source] || a.source})`}>
                     {a.name}
                   </td>
-                  <td className="num">{fmt(a.distance_km, 1)} km</td>
-                  <td className="num">{fmt(a.elevation_m)} m</td>
+                  <td className="num">{fmt(a.distance_km, 1)}</td>
+                  <td className="num">{fmt(a.elevation_m)}</td>
                   <td className="num">{duration(a.duration_s)}</td>
-                  <td className="num">{a.avg_speed_kmh ? `${fmt(a.avg_speed_kmh, 1)} km/h` : "–"}</td>
-                  <td className="num">{a.avg_power ? `${fmt(a.avg_power)}W` : "–"}</td>
-                  {showNP && <td className="num">{a.norm_power ? `${fmt(a.norm_power)}W` : "–"}</td>}
-                  <td className="num">{a.avg_hr ? `${fmt(a.avg_hr)} bpm` : "–"}</td>
-                  <td className="num">
-                    {a.avg_cadence ? `${a.avg_cadence} ${/run|walk|hike/i.test(a.category) ? "spm" : "rpm"}` : "–"}
-                  </td>
-                  <td className="num">{fmt(a.calories)}</td>
+                  <td className="num">{a.avg_speed_kmh ? fmt(a.avg_speed_kmh, 1) : "–"}</td>
+                  <td className="num">{a.avg_power ? fmt(a.avg_power) : "–"}</td>
+                  {showNP && <td className="num">{a.norm_power ? fmt(a.norm_power) : "–"}</td>}
+                  <td className="num">{a.avg_hr ? fmt(a.avg_hr) : "–"}</td>
+                  <td className="num opt">{a.avg_cadence || "–"}</td>
+                  <td className="num opt">{fmt(a.calories)}</td>
                   <td className="num">
                     {a.relative_effort != null ? (
                       <span className={`re-badge ${reClass(a.relative_effort)}`}>{fmt(a.relative_effort)}</span>

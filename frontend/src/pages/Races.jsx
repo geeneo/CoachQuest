@@ -11,8 +11,7 @@ const FIELDS = [
   ["distance_km", "Dist (km)", "number", "num-cell"],
   ["elevation_m", "Elev (m)", "number", "num-cell"],
   ["discipline", "Discipline", "select", ""],
-  ["target_date", "Date", "date", ""],
-  ["start_time", "Start", "time", ""],
+  ["target_date", "Date / start", "date", "date-cell"], // the start time sits under the date
   ["target_time", "Target time", "text", "short-cell"],
   ["target_ctl", "Target CTL", "number", "num-cell"],
   ["days", "Days", "number", "num-cell"],
@@ -77,10 +76,9 @@ export default function Races() {
       {error && <div className="error">{error}</div>}
       <section className="card">
         <div className="table-wrap">
-          <table className="edit-table">
+          <table className="edit-table races-table">
             <thead>
               <tr>
-                <th>Code</th>
                 {FIELDS.map(([f, label]) => (
                   <th key={f}>{label}</th>
                 ))}
@@ -92,11 +90,15 @@ export default function Races() {
               {races.data?.map((r) => (
                 <Fragment key={r.id}>
                 <tr className={r.days_to_go != null && r.days_to_go < 0 ? "past" : ""}>
-                  <td className="muted">{r.code}</td>
                   {FIELDS.map(([f, label, type, cls]) => (
                     <td key={f} className={cls}>
                       <span className={f === "target_ctl" ? "cell-with-btn" : undefined}>
                         <Cell race={r} field={f} label={label} type={type} options={disciplines.data} save={save} />
+                        {/* The race's code (used to link activities) under its name, not a column of its own. */}
+                        {f === "name" && <span className="race-code muted small">{r.code}</span>}
+                        {f === "target_date" && (
+                          <Cell race={r} field="start_time" label="Start" type="time" save={save} />
+                        )}
                         {f === "target_ctl" && r.target_time && r.days_to_go >= 0 && (
                           <button
                             className="icon-btn"
@@ -135,7 +137,6 @@ export default function Races() {
                 </tr>
                 {(r.estimate || r.ctl_advice) && r.days_to_go >= 0 && (
                   <tr className="race-extra">
-                    <td />
                     <td colSpan={FIELDS.length + 2}>
                       <Estimate e={r.estimate} time={r.target_time} />
                       {r.ctl_advice && (
