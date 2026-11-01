@@ -2789,3 +2789,12 @@ table.platforms td:first-child {
 table.platforms td:nth-child(2) {
   max-width: 18rem;
 }
+/* Version line at the bottom of every page (Layout.jsx VersionFooter). */
+.app-footer {
+  margin-top: 3rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.app-footer code {
+  font-size: 0.8rem;
+}

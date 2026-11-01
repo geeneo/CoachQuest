@@ -2,7 +2,7 @@
 
 ## Next up
 
-- [ ] **"The demo screen doesn't look like the actual" (1 Nov).** My screenshots come from a local
+- [x] **"The demo screen doesn't look like the actual" (1 Nov).** My screenshots come from a local
   test copy with made-up demo data (Demo plan, Mon–Sun weeks, demo rides); yours from the server
   with your DC Training plan (Sat–Fri weeks). Two kinds of difference:
   - Different data and views: e.g. the Plans strip (My training → Plans) vs the Calendar (My
@@ -11,6 +11,8 @@
     Plans strip with ‹ This week › came in 7234fef). Admin → Overview shows the frontend build.
   To do: show the app version in the page footer for everyone (frontend and API build), so a
   screenshot says which version it is; and send screenshots from the same screen when comparing.
+  Done (1 Nov): every page ends with "CoachQuest · app <build> · server <build> · built <time>", and
+  says when the two differ (reload with Ctrl+Shift+R, else update with "Everything").
 
 - [x] **Fit the screen on a PC (dynamic scaling).** My training → Activities (screenshot 1 Nov, about
   1250 px wide): the table runs off the right edge (the column after Note is cut off) while the page

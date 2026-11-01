@@ -4,14 +4,14 @@ import logging
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from . import accounts, assessments, auth_log, backfill, plan_approval, posts_seed, runtime, sync_engine
 from .config import check_required, settings
 from .db import Connection, SessionLocal, User, init_db
-from .deps import READ_REQUEST
+from .deps import READ_REQUEST, current_user
 from .routers import (
     admin,
     athlete_notes,
@@ -135,3 +135,9 @@ for r in (
 @app.get("/api/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/api/version")
+def version(_: User = Depends(current_user)):
+    """The API's build, for the page footer: a screenshot then says which version it shows."""
+    return {"commit": settings.build_commit, "built": settings.build_time}

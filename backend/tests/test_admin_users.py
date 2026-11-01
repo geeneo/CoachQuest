@@ -147,3 +147,10 @@ def test_admin_imports_older_data_for_a_user(make_user, monkeypatch):
     assert r.json()["backfill"]["status"] == "cancelled"
     assert admin.post(f"/api/admin/users/{rid}/refresh/strava").status_code == 409  # no activities yet
     assert rider.post(f"/api/admin/users/{rid}/backfill/strava", json={"since": "2024-01-01"}).status_code == 403
+
+
+def test_everyone_signed_in_sees_the_version(make_user, client):
+    p = make_user("a@example.com")
+    v = p.get("/api/version").json()
+    assert set(v) == {"commit", "built"}
+    assert client.get("/api/version").status_code == 401

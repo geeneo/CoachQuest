@@ -16,7 +16,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../lib/auth.jsx";
+import { dateTime } from "../lib/format.js";
 import Logo from "./Logo.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
 
@@ -72,7 +74,36 @@ export default function Layout() {
       <main className="content">
         <ThemeToggle className="content-theme" />
         <Outlet />
+        <VersionFooter />
       </main>
     </div>
+  );
+}
+
+// Which version this is: the app in the browser (built into it) and the server's API. When they
+// differ, the browser holds an older copy of the app (or the update isn't finished).
+function VersionFooter() {
+  const api = useApi("/api/version");
+  const app = import.meta.env.VITE_BUILD_COMMIT || "dev";
+  const server = api.data?.commit;
+  const differ = server && server !== app;
+  return (
+    <footer className="app-footer small muted">
+      CoachQuest · app <code>{app}</code>
+      {server && (
+        <>
+          {" "}
+          · server <code>{server}</code>
+        </>
+      )}
+      {api.data?.built && <> · built {dateTime(api.data.built)}</>}
+      {differ && (
+        <span className="warn-text">
+          {" "}
+          · The app and the server differ: reload with Ctrl+Shift+R. If it stays, update CoachQuest with
+          "Everything" (Admin → Update CoachQuest).
+        </span>
+      )}
+    </footer>
   );
 }
