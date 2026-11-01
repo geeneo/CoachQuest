@@ -2,52 +2,39 @@
 
 ## Next up
 
-- [ ] **Check the views after the next update (1 Nov).** From the screenshots:
-  - Calendar, week of 31 Oct: Sun 1 Nov shows "E-MTB · 🔄 planned Road" and ✅: the plan following
-    what was done works live.
-  - Calendar, Thu 5 Nov still shows the indoor workout "Kendal A 5x2": fixed by the indoor-names
-    change (indoor_names.py), not on the server yet; after it, it reads "Intervals 5×2 min" and is
-    sent to Intervals.icu again under that name.
-  - My training → Plans, Current plan strip: still the old strip (no ‹ This week ›, no dates or
-    times): the new one is commit 7234fef; check the server runs it (Admin → Overview: frontend
-    build), then Ctrl+Shift+R.
+- [ ] **URGENT to decide: Strava API Agreement (effective 1 June 2026) vs
+      how CoachQuest uses Strava data.** Found while researching the
+      write-back below (strava.com/legal/api_policy):
+      - 5.3: Strava data may not be used "directly or indirectly" in
+        developing or operating an AI application, also derived,
+        aggregated or anonymised data, grounding and retrieval. The AI
+        coach sends recent activities, load and volume to Claude, and these
+        can come from Strava. Only the Strava MCP (3.5) is allowed for AI,
+        and not for commercial or third-party use.
+      - 2.3 / 6.1: a user's Strava data may be shown only to that user,
+        unless the app's athlete capacity is 9,999 or less. CoachQuest
+        shows it to coaches and friends (with consent); our Strava app is
+        far below that limit, so 6.1 likely covers it for now.
+      - Options: (a) email developers@strava.com describing CoachQuest
+        and ask for written OK; (b) a super admin switch "Send Strava
+        data to the AI coach" (off: Strava-sourced activities are left
+        out of AI facts; Garmin, Intervals.icu and manual data still go);
+        (c) make Garmin or Intervals.icu the main activity source for AI
+        users. Not legal advice: check with a lawyer for the company.
+      - In the same email, ask about "Your plan on Strava" (CoachQuest writes the plan lines into
+        activity descriptions; built 29 Oct, opt-in) before many athletes use it, and mention that the
+        AI coach's weather facts use favourite route lines from Strava (Admin → Settings → Weather can
+        switch that off).
+
+- [ ] **Check the views after the update to 8bfbb03 (1 Nov).** Admin → Overview should show API
+  and frontend build 8bfbb03 (update with "Everything"), then Ctrl+Shift+R.
+  - My training → Plans, Current plan strip: the new one, with ‹ This week ›, dates and times.
+  - Sun 1 Nov e-MTB ride on a Road day: "🔄 planned Road" and ✅ on the plan page, the Calendar
+    (already right there) and the Plans strip.
+  - Calendar, Thu 5 Nov: "Intervals 5×2 min" instead of "Kendal A 5x2" (renamed when the plan page or
+    Plans tab is first opened after the update, and sent to Intervals.icu again).
   - Calendar, Sun 25 Oct: ❌ for the Zwift / indoor day with nothing logged; correct unless a
     session that day is missing from Strava/Garmin.
-
-- [ ] **Check after deploy: Sun 1 Nov e-MTB ride on a Road day.** The plan said Road (25 min
-  recovery spin); the ride was an e-MTB ride (30.1 km, 1h 06m). With the plan following what was
-  done (plan_follow.py) the day should become "E-MTB · planned Road · 25m" and stay goal met; check
-  the plan page, the Calendar and the Current plan strip on My training.
-
-- [x] **Current plan strip (My training → Plans): go back and forward a week.** It shows only this
-  week (Sat–Fri); add ‹ › to step through the plan's weeks, with "this week" to come back.
-
-- [x] **Outdoor segments can't be used for indoor sessions.** The AI named an indoor Zwift
-  workout after an outdoor Strava segment ("Kendal A 5x2", Thu 5 Nov, from the favourite segment
-  "Kendal climb A"). The instructions already say indoor days name no route or segment; enforce it in
-  code too: a "Zwift / indoor" (or treadmill) session's workout name and description must not use a
-  favourite's name, and the segment's efforts (e.g. 4-8 x 0.7 km at 6.2%) become a plain indoor
-  interval set (minutes at % FTP) instead. Check plan_tracker.ai_day / plan_workouts.
-
-- [x] **More on each planned ride in the Calendar (My training → Calendar).** Today an outdoor
-  day shows only its type, minutes and route name (e.g. "Road 316' · Stellenbosch 129km Lo…"). Add:
-  - the ride's numbers: total km, climbing, expected average speed and finish time (from the route,
-    or from the athlete's past rides on it: ride_routes.py);
-  - other recommendations: what to eat and drink for the length (carbs per hour, bottles), kit,
-    pacing (zones / power for the day's purpose), a start time;
-  - for outdoor days in the next 16 days, the weather on that route at riding time (as on plan
-    days: icon, temperature, rain chance, wind and headwind share, warnings, a link to Weather).
-  The Day view of the calendar is the place for the full detail; the Week view a short line.
-
-- [x] **A shareable information page, hidden from bots.** /welcome/<secret>
-      (Admin → Information page: on/off, copy link, new link, Markdown text
-      with a built-in "how it works" diagram, screenshots), default text and
-      three screenshots from demo data; Sign up / Request access and Sign in
-      buttons. noindex (header, meta tag, robots.txt) for the whole site,
-      nginx rate limit on the page. docs/welcome-page.md has the Cloudflare
-      settings (Bot Fight Mode, block AI crawlers, a Managed Challenge rule
-      on /welcome/). Later: more screenshots (calendar, routes, health,
-      coach view), an invite code if needed.
 
 - [ ] **Multi-day events (stage races): each day its own line, with totals,
       so the AI coach plans for the whole event.** E.g. Sani2c / Wines2Whales
@@ -95,33 +82,6 @@
       fasttalklabs.com/recovery/how-to-maximize-recovery-during-multi-day-events;
       biogen.co.za/events/tankwa-trek-survival-guide.
 
-- [x] **Update CoachQuest from the admin page.** Admin → Update CoachQuest
-      (super admins): running version, newest on GitHub, the new commits,
-      "Check now", and "Update now" (everything / backend / frontend, with
-      the admin's password), live log and earlier updates; recorded in the
-      sign-in log. Safe by design: the API only writes a request file in
-      DATA_PATH/deploy; deploy-agent.sh on the server (cron each minute,
-      menu.sh option 11) runs deploy.sh. No Docker socket or root for the
-      web app. Later: an email to super admins when new commits arrive;
-      roll back to the previous version with one click.
-      - [ ] Review the lock-down later (fine for testing now: super admin
-        plus password): e.g. a second factor (TOTP) for updates, an email
-        to all super admins when one starts, only allow it from certain
-        IPs, or deploy only signed / tagged releases.
-
-- [x] **Deleting a user deletes all their data.** accounts.delete_account
-      follows every foreign key to users (tables added later are covered
-      too): rows that belong to them are deleted, what they wrote for others
-      stays unsigned. Before deleting, CoachQuest revokes its access at
-      Strava and Intervals.icu and removes the upcoming workouts it sent to
-      Intervals.icu; afterwards the user is emailed. Admin → Users shows
-      what will be deleted once the email is typed. Tested on SQLite and
-      Postgres: nothing anywhere points at the user afterwards.
-      Still open: say in a privacy notice that the sign-in log keeps the
-      email until it's cleared and backups for 14 days; "delete my
-      account" and "export my data" for athletes themselves (POPIA/GDPR,
-      Later list).
-
 - [ ] **Wellness: tiles showed "–", and when Garmin data comes in.** The
       five tiles (resting HR, HRV, sleep, sleep score, Body Battery) took
       today's row, which is empty until the next sync, so they showed "–"
@@ -143,42 +103,63 @@
         shows;
       - a warning to super admins (banner and email) when free disk drops
         below, say, 2 GB or the database grows unusually fast;
-      - the backup age: when the last backup was made (none yet on the
-        server!).
+      - the backup age: when the last backup was made (the nightly backup is switched on with
+        menu.sh option 10; check it's on).
 
-- [x] **Postgres option, with a lossless move and the way back.**
-      docs/postgres.md: a db container (profile "postgres"), app.movedb
-      copies every table SQLite → Postgres (source only read, counts
-      checked, fixes reported), and back. Backups with pg_dump (menu 7).
+- [ ] **Training plan page layout like the old hub** (screenshot 25 Oct).
+      - A "This week — Week 4" heading above the current week, and the plan
+        title and length under the page title ("8-week Old Mutual Wealth
+        Double Century plan").
+      - Week header: phase badge, dates, then "DRAFT — focus text — review
+        and adjust" on one line. Click the focus text to edit it.
+      - One row per day: weekday on the left, with a coloured bar showing the
+        day's state (rest, done, missed, planned).
+      - A narrow column per day holding the type badge (with an icon: Rest,
+        Zwift, Road…), the bike under it (e.g. "Trek Domane SLR6"), and
+        stacked small buttons: route, MyWhoosh, fits a workout, swap, lock.
+      - Indoor days show the MyWhoosh and "fits a workout" buttons (indoor
+        workout matching).
+      - On the right: the full description, then intensity chips with icons
+        (⚡ 95–105% FTP, ❤ Z2), then "✓ Goal met · Logged: 120.7km · 1213m ·
+        4h55m · RE 169 · 138W avg · 122bpm avg (Ride)", or "✗ Not logged"
+        with the "why missed?" dropdown.
+      - Compact, so a whole week fits on one screen.
 
-- [ ] **URGENT to decide: Strava API Agreement (effective 1 June 2026) vs
-      how CoachQuest uses Strava data.** Found while researching the
-      write-back below (strava.com/legal/api_policy):
-      - 5.3: Strava data may not be used "directly or indirectly" in
-        developing or operating an AI application, also derived,
-        aggregated or anonymised data, grounding and retrieval. The AI
-        coach sends recent activities, load and volume to Claude, and these
-        can come from Strava. Only the Strava MCP (3.5) is allowed for AI,
-        and not for commercial or third-party use.
-      - 2.3 / 6.1: a user's Strava data may be shown only to that user,
-        unless the app's athlete capacity is 9,999 or less. CoachQuest
-        shows it to coaches and friends (with consent); our Strava app is
-        far below that limit, so 6.1 likely covers it for now.
-      - Options: (a) email developers@strava.com describing CoachQuest
-        and ask for written OK; (b) a super admin switch "Send Strava
-        data to the AI coach" (off: Strava-sourced activities are left
-        out of AI facts; Garmin, Intervals.icu and manual data still go);
-        (c) make Garmin or Intervals.icu the main activity source for AI
-        users. Not legal advice: check with a lawyer for the company.
+- [ ] **Edit access for My coaches.** On Sharing → My coaches, choose per
+      coach whether each shared item is view only or view and edit (screenshot
+      25 Oct). Today "Training plans" lets a coach both view and change plans
+      and workouts, and everything else is view only.
+      - Per item: View, or View + edit. For example: profile (FTP, threshold
+        and max HR, goal), weight, races, training plans and calendar
+        workouts, activity notes and types.
+      - Default for new and existing coaches: view only, except training
+        plans, which keep view + edit so nothing changes for current coaches.
+      - The API checks edit rights on every change, not only the buttons.
+        Edits made by a coach are recorded in the access log, with what
+        changed.
+      - The athlete sees who last changed something ("FTP 265 W · set by
+        Coach Mike · 2 days ago").
+      - The coach is emailed when edit access is given or removed (with the
+        existing sharing emails).
 
-- [x] **Done (29 Oct):** Profile → "Your plan on Strava": Off (default) /
-      Per activity (a 🎯 button on each Strava activity, preview first) /
-      Automatically (after each Strava sync, recent activities only, when
-      the lines change); "Allow on Strava" asks for activity:write.
-      Written from the plan, never by the AI; own text kept, lines replaced
-      not repeated. Still to do: ask developers@strava.com before many
-      athletes use it.
-- [ ] **Write back to Strava: the plan in the activity description,
+## Later
+
+- [ ] Account export (download all my data), privacy notice and consent text on the Sharing page
+      (POPIA/GDPR). Deleting an account is done (Admin → Users, with Strava/Intervals revoked).
+- [ ] Optional two-factor sign-in (TOTP)
+- [ ] Strava webhooks instead of 6-hourly polling
+- [ ] Alembic migrations. The database runs on Postgres now (docs/postgres.md); new columns are
+      still added by db._ADDED_COLUMNS at startup, which is fine until a change needs more than that.
+- [ ] Ask Strava to raise the shared app's athlete limit (if not every user
+      brings their own app)
+- [ ] Garmin: move to the official Garmin Connect Developer Program before
+      offering CoachQuest as a paid service
+- [ ] Zwift's own Training API, once Zwift approves CoachQuest as a partner (Intervals.icu covers
+      Zwift until then); check MyWhoosh's terms; Garmin's developer program for sending workouts.
+
+## Done
+
+- [x] **Write back to Strava: the plan in the activity description,
       "powered by coachquest.mmc24.com".** When an activity matches a plan
       day, CoachQuest updates its Strava description, e.g.
       "🎯 Planned: Sweet spot 2×10 (Z3-Z4) · ✅ Goal met — CoachQuest
@@ -197,7 +178,103 @@
         brand guidelines and must not suggest Strava endorses CoachQuest.
         Ask developers@strava.com before going live.
       - Mind the rate limits (an update per activity; batch on sync).
-
+      Done as "Your plan on Strava" (29 Oct, above); asking Strava is part of the agreement item.
+- [x] **Multi-platform workout sync (Zwift, MyWhoosh, Intervals.icu).**
+      Full spec: [docs/workout-sync.md](docs/workout-sync.md). Coaches build
+      structured cycling workouts, schedule them on the athlete's calendar,
+      and CoachQuest delivers them to Zwift / MyWhoosh / Garmin where an
+      authorised integration allows it, with ZWO file export everywhere
+      else.
+      - [x] **Phase 1 — working MVP:** review the code, a platform-neutral
+        workout model, the graphical workout builder (with templates,
+        TSS/IF estimate and preview chart), the training calendar (built on
+        the existing plan tracker), ZWO and plan-ZIP export, and the
+        Settings → Connected Platforms page.
+      - [x] **Phase 2 — integration framework:** provider adapters, a
+        background sync queue with retries and history, sync errors shown
+        to the athlete, Intervals.icu investigation, tests against mocked
+        platform APIs.
+      - [x] **Phase 3 — automatic delivery:** AI plans schedule their
+        indoor sessions as structured workouts (sent on automatically),
+        completion is stored with manual correction, planned vs actual per
+        week (also in the AI weekly review). MyWhoosh checked: no usable API
+        (the community one needs the athlete's password), but Intervals.icu
+        reaches it.
+        - [ ] Still open: Zwift's own Training API, only once Zwift approves
+          CoachQuest as a partner (Intervals.icu covers Zwift until then).
+      - [x] **Closest Zwift / MyWhoosh workout per indoor day.** Shared
+        catalog uploaded by admins as .zwo files; each indoor plan day shows
+        the closest one on the athlete's preferred platforms with a match
+        score, and can swap to it and back. A super admin switch turns it
+        off.
+      - This replaces the training plan page's "MyWhoosh" and "fits a
+        workout" buttons: indoor plan days link to real workouts.
+      - Needs from outside: Zwift partner approval; a check of MyWhoosh's
+        terms; possibly Garmin's official developer program for sending
+        workouts to Garmin.
+      Done apart from what needs outside approval (moved to Later).
+- [x] **Current plan strip (My training → Plans): go back and forward a week.** It shows only this
+  week (Sat–Fri); add ‹ › to step through the plan's weeks, with "this week" to come back.
+- [x] **Outdoor segments can't be used for indoor sessions.** The AI named an indoor Zwift
+  workout after an outdoor Strava segment ("Kendal A 5x2", Thu 5 Nov, from the favourite segment
+  "Kendal climb A"). The instructions already say indoor days name no route or segment; enforce it in
+  code too: a "Zwift / indoor" (or treadmill) session's workout name and description must not use a
+  favourite's name, and the segment's efforts (e.g. 4-8 x 0.7 km at 6.2%) become a plain indoor
+  interval set (minutes at % FTP) instead. Check plan_tracker.ai_day / plan_workouts.
+- [x] **More on each planned ride in the Calendar (My training → Calendar).** Today an outdoor
+  day shows only its type, minutes and route name (e.g. "Road 316' · Stellenbosch 129km Lo…"). Add:
+  - the ride's numbers: total km, climbing, expected average speed and finish time (from the route,
+    or from the athlete's past rides on it: ride_routes.py);
+  - other recommendations: what to eat and drink for the length (carbs per hour, bottles), kit,
+    pacing (zones / power for the day's purpose), a start time;
+  - for outdoor days in the next 16 days, the weather on that route at riding time (as on plan
+    days: icon, temperature, rain chance, wind and headwind share, warnings, a link to Weather).
+  The Day view of the calendar is the place for the full detail; the Week view a short line.
+- [x] **A shareable information page, hidden from bots.** /welcome/<secret>
+      (Admin → Information page: on/off, copy link, new link, Markdown text
+      with a built-in "how it works" diagram, screenshots), default text and
+      three screenshots from demo data; Sign up / Request access and Sign in
+      buttons. noindex (header, meta tag, robots.txt) for the whole site,
+      nginx rate limit on the page. docs/welcome-page.md has the Cloudflare
+      settings (Bot Fight Mode, block AI crawlers, a Managed Challenge rule
+      on /welcome/). Later: more screenshots (calendar, routes, health,
+      coach view), an invite code if needed.
+- [x] **Update CoachQuest from the admin page.** Admin → Update CoachQuest
+      (super admins): running version, newest on GitHub, the new commits,
+      "Check now", and "Update now" (everything / backend / frontend, with
+      the admin's password), live log and earlier updates; recorded in the
+      sign-in log. Safe by design: the API only writes a request file in
+      DATA_PATH/deploy; deploy-agent.sh on the server (cron each minute,
+      menu.sh option 11) runs deploy.sh. No Docker socket or root for the
+      web app. Later: an email to super admins when new commits arrive;
+      roll back to the previous version with one click.
+      - [ ] Review the lock-down later (fine for testing now: super admin
+        plus password): e.g. a second factor (TOTP) for updates, an email
+        to all super admins when one starts, only allow it from certain
+        IPs, or deploy only signed / tagged releases.
+- [x] **Deleting a user deletes all their data.** accounts.delete_account
+      follows every foreign key to users (tables added later are covered
+      too): rows that belong to them are deleted, what they wrote for others
+      stays unsigned. Before deleting, CoachQuest revokes its access at
+      Strava and Intervals.icu and removes the upcoming workouts it sent to
+      Intervals.icu; afterwards the user is emailed. Admin → Users shows
+      what will be deleted once the email is typed. Tested on SQLite and
+      Postgres: nothing anywhere points at the user afterwards.
+      Still open: say in a privacy notice that the sign-in log keeps the
+      email until it's cleared and backups for 14 days; "delete my
+      account" and "export my data" for athletes themselves (POPIA/GDPR,
+      Later list).
+- [x] **Postgres option, with a lossless move and the way back.**
+      docs/postgres.md: a db container (profile "postgres"), app.movedb
+      copies every table SQLite → Postgres (source only read, counts
+      checked, fixes reported), and back. Backups with pg_dump (menu 7).
+- [x] **Done (29 Oct):** Profile → "Your plan on Strava": Off (default) /
+      Per activity (a 🎯 button on each Strava activity, preview first) /
+      Automatically (after each Strava sync, recent activities only, when
+      the lines change); "Allow on Strava" asks for activity:write.
+      Written from the plan, never by the AI; own text kept, lines replaced
+      not repeated. Still to do: ask developers@strava.com before many
+      athletes use it.
 - [x] **Health conditions in Profile (checkboxes with presets), with a
       medical disclaimer.** Athletes tick what applies; the AI coach plans
       around it (and the strength options' "limits" stay for free text).
@@ -232,7 +309,6 @@
       - Privacy: health data is special personal information (POPIA /
         GDPR): opt in, coaches see it only with the plans scope (friends
         never), and it's part of account export and delete.
-
 - [x] **Maintain fitness when not training for an event.** Today a plan
       needs a goal (free text) and the event date is optional, so plans
       without an event still build like a race block. Suggestions:
@@ -255,13 +331,11 @@
         an event if the athlete adds one on Races.
       - Optional "fitness check" every 6-8 weeks (FTP test or a known
         segment from Routes) to update zones.
-
 - [x] **Routes page: favourites and routes shared by athletes.** A Routes
       menu item with your favourite routes and segments (moved from My
       training → Plans) and "Shared by athletes": share a favourite with
       everyone (your name shows), search and filter shared ones, add one
       to your favourites in one click; admins can take one off the list.
-
 - [x] **Guide (News & guides): link Intervals.icu with Zwift so plan workouts show in Zwift.**
       A how-to post (posts_seed.py, like the routes & segments guide):
       CoachQuest → Intervals.icu calendar → Zwift.
@@ -285,7 +359,6 @@
       zwiftinsider.com/intervals-integration/,
       forum.intervals.icu/t/solved-planned-workouts-not-syncing-to-zwift/97528,
       intervals.icu/features/training-calendar/.
-
 - [x] **Indoor sessions: no Strava segments, only workouts.**
       An indoor day (Zwift / indoor) can be planned with a favourite
       segment linked, e.g. Thu "Zwift / indoor 40′" shows "⛰ Kendal climb A"
@@ -293,20 +366,17 @@
       structured workout: the AI coach shouldn't link a route or segment to
       them (prompt and a server-side check that drops it), and the calendar
       shouldn't show one. Segments and routes stay for outdoor (Road) days.
-
 - [x] **Admin → Platform workouts: collapse the screen.**
       With 1,177 workouts the section is pages and pages of collections.
       Make the whole section collapsible (collapsed by default, showing just
       the counts and search), group collections by series (e.g. "2018 PRL100
       Prep" with its weeks inside), sort weeks in number order (Week 2 before
       Week 10), and show the first 20 groups with "Show more".
-
 - [x] **Show clearly on the calendar when a session was done (emoji).**
       A done workout only shows a small "✓ Done" line, easy to miss next to
       "✓ Intervals.icu". Make done days stand out at a glance, e.g. an emoji
       badge on the workout card (✅ done, ⏭ skipped, ⚠️ partly done/short),
       maybe a tinted card, in the week and day views of the plan calendar.
-
 - [x] **Load favourite routes & segments from Strava, picking several at once.**
       In Favourite routes & segments, "From my Strava" lists the athlete's
       starred segments and saved routes, but each one is added with its own
@@ -314,7 +384,6 @@
       or both), tick the ones wanted (select all per group), set what
       they're for (uses) in one go, and add them together. Also on the
       coach's view of the athlete.
-
 - [x] **Strength training from the AI coach (cycling and running).**
       - Exercise library: the public-domain Free Exercise DB
         (github.com/yuhonas/free-exercise-db, Unlicense), text only, no
@@ -333,7 +402,6 @@
       chart; strength exercises show start/end photos (400 px WebP, ~15 MB,
       super admin switch "Exercise photos" in case their origin is
       questioned) and a muscle map (our own SVG drawing).
-
 - [x] **Favourite Strava routes and segments for planning rides.** Athletes
       keep favourite routes and segments (from a link or their Strava
       starred segments and routes), tagged with uses; the AI coach plans
@@ -358,7 +426,6 @@
       - Indoor days: the same efforts as an indoor workout, with the
         segment named for reference.
       - Show the segment link on the plan day, so it opens in Strava.
-
 - [x] **News and how-to section.** A place in the app for posts about
       CoachQuest, written and edited by admins in the web UI:
       - News: blog updates about the application (what's new, changes).
@@ -378,7 +445,6 @@
       - Shown separately from coaches on Sharing, and their looks go in the
         athlete's "Who looked at my data" log like a coach's.
       - Either side can end it at any time.
-
 - [x] **Dark mode switch in the top right.** A light/dark toggle in the
       header (top right, next to the user menu), so it can be changed from
       any page. It should use the same setting as the Light / Dark / System
@@ -530,7 +596,6 @@
         confirm, and you can't delete yourself.
       - Admin → Storage: database size on disk, rows per table (activities,
         wellness days, plans, users), and free disk space where the data lives.
-
 - [x] **Admin approves new users.** A third registration mode, "approval",
       next to open and closed:
       - New accounts are created as "waiting for approval" and can't sign in
@@ -548,73 +613,6 @@
     sharing.
   - Each person can turn these off in Profile.
   - Needs email (SMTP) set up.
-- [ ] **Training plan page layout like the old hub** (screenshot 25 Oct).
-      - A "This week — Week 4" heading above the current week, and the plan
-        title and length under the page title ("8-week Old Mutual Wealth
-        Double Century plan").
-      - Week header: phase badge, dates, then "DRAFT — focus text — review
-        and adjust" on one line. Click the focus text to edit it.
-      - One row per day: weekday on the left, with a coloured bar showing the
-        day's state (rest, done, missed, planned).
-      - A narrow column per day holding the type badge (with an icon: Rest,
-        Zwift, Road…), the bike under it (e.g. "Trek Domane SLR6"), and
-        stacked small buttons: route, MyWhoosh, fits a workout, swap, lock.
-      - Indoor days show the MyWhoosh and "fits a workout" buttons (indoor
-        workout matching).
-      - On the right: the full description, then intensity chips with icons
-        (⚡ 95–105% FTP, ❤ Z2), then "✓ Goal met · Logged: 120.7km · 1213m ·
-        4h55m · RE 169 · 138W avg · 122bpm avg (Ride)", or "✗ Not logged"
-        with the "why missed?" dropdown.
-      - Compact, so a whole week fits on one screen.
-- [ ] **Multi-platform workout sync (Zwift, MyWhoosh, Intervals.icu).**
-      Full spec: [docs/workout-sync.md](docs/workout-sync.md). Coaches build
-      structured cycling workouts, schedule them on the athlete's calendar,
-      and CoachQuest delivers them to Zwift / MyWhoosh / Garmin where an
-      authorised integration allows it, with ZWO file export everywhere
-      else.
-      - [x] **Phase 1 — working MVP:** review the code, a platform-neutral
-        workout model, the graphical workout builder (with templates,
-        TSS/IF estimate and preview chart), the training calendar (built on
-        the existing plan tracker), ZWO and plan-ZIP export, and the
-        Settings → Connected Platforms page.
-      - [x] **Phase 2 — integration framework:** provider adapters, a
-        background sync queue with retries and history, sync errors shown
-        to the athlete, Intervals.icu investigation, tests against mocked
-        platform APIs.
-      - [x] **Phase 3 — automatic delivery:** AI plans schedule their
-        indoor sessions as structured workouts (sent on automatically),
-        completion is stored with manual correction, planned vs actual per
-        week (also in the AI weekly review). MyWhoosh checked: no usable API
-        (the community one needs the athlete's password), but Intervals.icu
-        reaches it.
-        - [ ] Still open: Zwift's own Training API, only once Zwift approves
-          CoachQuest as a partner (Intervals.icu covers Zwift until then).
-      - [x] **Closest Zwift / MyWhoosh workout per indoor day.** Shared
-        catalog uploaded by admins as .zwo files; each indoor plan day shows
-        the closest one on the athlete's preferred platforms with a match
-        score, and can swap to it and back. A super admin switch turns it
-        off.
-      - This replaces the training plan page's "MyWhoosh" and "fits a
-        workout" buttons: indoor plan days link to real workouts.
-      - Needs from outside: Zwift partner approval; a check of MyWhoosh's
-        terms; possibly Garmin's official developer program for sending
-        workouts to Garmin.
-- [ ] **Edit access for My coaches.** On Sharing → My coaches, choose per
-      coach whether each shared item is view only or view and edit (screenshot
-      25 Oct). Today "Training plans" lets a coach both view and change plans
-      and workouts, and everything else is view only.
-      - Per item: View, or View + edit. For example: profile (FTP, threshold
-        and max HR, goal), weight, races, training plans and calendar
-        workouts, activity notes and types.
-      - Default for new and existing coaches: view only, except training
-        plans, which keep view + edit so nothing changes for current coaches.
-      - The API checks edit rights on every change, not only the buttons.
-        Edits made by a coach are recorded in the access log, with what
-        changed.
-      - The athlete sees who last changed something ("FTP 265 W · set by
-        Coach Mike · 2 days ago").
-      - The coach is emailed when edit access is given or removed (with the
-        existing sharing emails).
 - [x] **The real coach has a say in the AI coach.** (Done.) A human coach (with the
       Training plans permission) can give the AI coach input that it must
       follow, so the coach stays in charge of the training:
@@ -746,7 +744,6 @@
         SVG version): on a light background show it in a navy badge, or get a
         transparent / SVG version made later. Use resized copies, not the
         0.5–0.9 MB originals, so pages stay quick.
-
 - [x] **Date format setting** (Done: Profile → Date format and Time format.) (screenshot 26 Oct). Dates follow the browser's
       language, so the same page mixes formats: "From Garmin, 10/26/2026,
       8:28:05 AM" (US month/day, 12-hour, seconds) next to a birth date of
@@ -760,7 +757,6 @@
       - The browser's date picker (birth date, races, workouts) follows the
         browser's language and can't be restyled; show the chosen format
         next to it, or swap it for our own picker if that looks wrong.
-
 - [x] **Admin: each user's data at a glance.** (Done, except a "reconnect needed" email.) Admin → Users today shows only
       name, email, role, active/approved and when they joined. Add per user:
       - Activities: total, by source (Strava / Garmin / Intervals.icu), first
@@ -774,7 +770,6 @@
       - Sort and filter (e.g. sync problems first), click a user for a detail
         panel; actions there such as "sync now" or "reconnect needed" email.
       - Admin only, and each view logged like a coach's access.
-
 - [x] **Bug: the 7 / 30 / 90-day switch doesn't work for a coach** (Closed 26 Oct: works after the rebuild.) (26 Oct).
       As a coach, My athletes → an athlete → Overview: choosing a period
       doesn't change the charts. Reproduce with a coach account (shares with
@@ -785,7 +780,6 @@
         came in with commit a556ca5; the server probably runs an older
         build. Rebuild (`bash build.sh`), then re-check; if it still fails,
         note the athlete and what they share.
-
 - [x] **Admin: AI use per user, with a per-user limit and an off switch** (Done; the 80% email and a token budget are not built.) (26 Oct).
       Mike Nel (mike@mmc24.com) shows 6 AI calls / 28k tokens but has no data
       of his own: he's a coach.
@@ -805,7 +799,6 @@
         other admin actions.
       - Optional: a monthly token budget (not only a call count), and an email
         to the admin when someone reaches 80% of their limit.
-
 - [x] **Use fewer AI tokens** (Done: caching, cheaper settings for short jobs, no pointless notes, chat cap, smaller lookups, compact JSON, leaner re-plans, measuring. Old chats' history is left as it is: editing it would break the AI's stored reasoning.) (26 Oct; from a read of coach.py, assessments.py,
       coach_chat.py). Each AI call has a type: plan, re-plan, readiness note,
       weekly review or chat. Roughly in order of savings:
@@ -842,7 +835,6 @@
         (the `AiCall` table has neither), and show tokens per type on the
         admin page, so each change above can be checked against real numbers.
         Goes with "Admin: AI use per user".
-
 - [x] **Why did Mike Nel (mike@mmc24.com) make AI calls with no data of his own?** (Done: guard built; Admin → Details → AI → "Latest calls" shows what each was for, old ones matched by time.) (26 Oct)
       Admin → Details shows 6 calls this month: 5 on his own account, and 1 for
       Michael Nel (the athlete he coaches). His account has no Strava, Garmin or
@@ -860,7 +852,6 @@
         useful).
       - The scheduled morning notes already skip accounts without data
         (since 26 Oct).
-
 - [x] **Admin: turn off emails to a user** (Done.) (26 Oct). In Admin → Users → Details,
       a switch "Emails to this user" that stops every email CoachQuest
       would send them (sharing, comments, plan approvals, scheduled AI
@@ -872,7 +863,6 @@
         sign-in log like other admin actions.
       - The user sees in Profile that the admin has turned their emails off
         (their own switches greyed out).
-
 - [x] **Intervals.icu: "Sync now" button** (Done.) (26 Oct). On Connections → Intervals.icu
       (screenshot: only "active", last sync and the three switches today):
       - "Sync now" sends every scheduled workout from today on to
@@ -886,7 +876,6 @@
         hammered. The API for the import part exists already
         (`POST /api/connections/intervals_icu/sync`); the page has no button
         and the forced re-send doesn't exist yet.
-
 - [x] **Re-plan one day** (Done.) (26 Oct). On a plan day, a "Re-plan this day" button
       next to the comments, so the AI rewrites just that day (and its indoor
       workout) instead of the whole plan from this week.
@@ -899,7 +888,6 @@
         the same approval rule as other re-plans (waits for a coach unless
         switched off).
       - Much cheaper than a full re-plan: one day in, one day out.
-
 - [x] **Athlete may approve when the coach doesn't answer** (Done.) (26 Oct). A plan,
       re-plan or re-planned day waiting for a coach shouldn't block training
       when no coach reacts.
@@ -913,24 +901,11 @@
         ends (e.g. tomorrow's session), the athlete may decide at once.
       - Logged and shown on the plan as "approved by the athlete (no coach
         answer in 48 h)", and the coach is told.
-
 - [x] **AI target CTL from a target finish time.** Races get a Target time
       (h:mm). CoachQuest works out what it takes (power, W/kg, IF and TSS for
       rides; pace for runs), and ✨ asks the AI coach for a target CTL with a
       verdict (realistic / a stretch / unlikely, with a realistic time). A
       suggestion only: "Use" fills in Target CTL.
-
-## Later
-
-- [ ] Account export and delete (POPIA/GDPR), privacy notice and consent text
-      on the Sharing page
-- [ ] Optional two-factor sign-in (TOTP)
-- [ ] Strava webhooks instead of 6-hourly polling
 - [x] Coach comments on plans (done: comments on the plan or a day by the athlete
       and coaches with Training plans; anyone there can edit or delete; emails
       with their own Profile switch; re-plans read them)
-- [ ] Postgres + Alembic migrations when SQLite gets tight
-- [ ] Ask Strava to raise the shared app's athlete limit (if not every user
-      brings their own app)
-- [ ] Garmin: move to the official Garmin Connect Developer Program before
-      offering CoachQuest as a paid service
