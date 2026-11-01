@@ -29,8 +29,8 @@ from .. import (
 from ..activity_types import category
 from ..db import Activity, Comment, Connection, Plan, ScheduledWorkout, SyncJob, SyncLog, User, Workout, get_db, utcnow
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
-from ..plan_tracker import GOAL_SHARE, _status, takes_route
-from ..queries import activities_since
+from ..plan_tracker import GOAL_SHARE, _status, day_tss, takes_route
+from ..queries import activities_since, load_by_day
 
 router = APIRouter(prefix="/api", tags=["workouts"])
 
@@ -194,6 +194,8 @@ def _activity_brief(a, day: date) -> dict:
         "type": category(a),
         "minutes": round(a.duration_s / 60),
         "km": round(a.distance_m / 1000, 1),
+        "elevation_m": round(a.elevation_m or 0),
+        "relative_effort": round(a.relative_effort) if a.relative_effort else None,
         "avg_power": round(a.avg_power) if a.avg_power else None,
         "norm_power": round(a.norm_power) if a.norm_power else None,
         "avg_hr": round(a.avg_hr) if a.avg_hr else None,
@@ -351,6 +353,7 @@ def calendar(
     n_comments = comments.counts(db, "workout", [sw.id for sw in rows])
     plan_follow.update_all(db, target, start, end)  # the plans follow what was done
     plan_days = _plan_days(db, target.id, start, end)
+    load = load_by_day(db, target.id, start, end, today) if "fitness" in scopes else {}
     days = []
     for i in range((end - start).days + 1):
         d = start + timedelta(days=i)
@@ -360,9 +363,14 @@ def calendar(
             {
                 "date": key,
                 "is_today": d == today,
+                "load": load.get(key),  # CTL and TSB that day, when fitness is shared
                 # The day's status as on the plan page (goal met, partly done, missed...), so an outdoor
                 # day without a structured workout also shows whether it was done.
-                "plan": plan_days[key] | {"status": _status(plan_days[key], logged.get(key, []), d, today)}
+                "plan": plan_days[key]
+                | {
+                    "status": _status(plan_days[key], logged.get(key, []), d, today),
+                    "planned_tss": day_tss(plan_days[key]),
+                }
                 if key in plan_days
                 else None,
                 "workouts": [

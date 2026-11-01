@@ -45,6 +45,16 @@ def load_curve(db: DbSession, athlete_id: int, days: int, today: date | None = N
     return curve[-days:], acts
 
 
+def load_by_day(db: DbSession, athlete_id: int, start: date, end: date, today: date) -> dict[str, dict]:
+    """Fitness (CTL) and form (TSB) per day from `start` to `end` (up to today), for the plan and the
+    calendar's week totals."""
+    end = min(end, today)
+    if end < start:
+        return {}
+    curve, _ = load_curve(db, athlete_id, (today - start).days + 1, today)
+    return {p.day.isoformat(): {"ctl": round(p.ctl), "tsb": round(p.tsb)} for p in curve if start <= p.day <= end}
+
+
 def calories(a: Activity) -> float | None:
     """Calories as recorded, else cycling kilojoules (≈ kcal burned, by the ~24% efficiency rule of thumb)."""
     if a.calories:

@@ -32,7 +32,7 @@ from .. import (
 from ..coach import PHASES, CoachError, add_weather, build_facts, generate_day, generate_plan, has_data
 from ..db import Comment, Plan, PlatformWorkout, User, get_db
 from ..deps import active_grant, allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
-from ..queries import activities_since
+from ..queries import activities_since, load_by_day
 from .preferences import SESSION_TYPES, preferences_out
 
 router = APIRouter(prefix="/api/athletes/{athlete}/plans", tags=["plans"])
@@ -106,6 +106,10 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
             start = datetime.combine(date.fromisoformat(p.weeks[0]["start"]), datetime.min.time()) - timedelta(1)
             acts = activities_since(db, p.athlete_id, start)
             out["weeks"] = plan_tracker.with_actuals(p.weeks, acts, today, localtime.zone(athlete.timezone))
+            if viewer is not None and "fitness" in allowed_scopes(db, viewer, p.athlete_id):
+                first = date.fromisoformat(p.weeks[0]["start"])
+                last = date.fromisoformat(p.weeks[-1]["start"]) + timedelta(days=6)
+                out["load"] = load_by_day(db, p.athlete_id, first, last, today)
             out["platform_matching"] = _add_matches(db, athlete, out["weeks"], today)
             _add_segments(db, p.athlete_id, out["weeks"])
             out["max_sessions_per_day"] = runtime.max_sessions_per_day()

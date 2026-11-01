@@ -10,6 +10,7 @@ Stored on Plan.weeks as:
 Whether a day was done is decided here, in code, from the logged activities.
 """
 
+import re
 from collections import defaultdict
 from datetime import date, timedelta
 from zoneinfo import ZoneInfo
@@ -172,9 +173,32 @@ def _actual(acts: list) -> dict:
         "relative_effort": round(sum(a.relative_effort or 0 for a in acts)) or None,
         "avg_power": round(max((a.avg_power or 0) for a in acts)) or None,
         "avg_hr": round(max((a.avg_hr or 0) for a in acts)) or None,
+        "tss": round(sum(a.tss or 0 for a in acts)) or None,
         "types": sorted({category(a) for a in acts}),
         "names": [a.name for a in acts][:3],
     }
+
+
+# Intensity factor by zone (fraction of FTP), for a planned outdoor session's estimated TSS.
+ZONE_IF = {"1": 0.55, "2": 0.68, "3": 0.8, "4": 0.95, "5": 1.05}
+NO_LOAD = {"Rest", "Strength", "Yoga / mobility"}
+
+
+def planned_tss(session: dict) -> int:
+    """A session's planned TSS: its workout's when it has one, else roughly from its time and its
+    highest zone (Z2 when none is given); strength, yoga and rest count as none."""
+    if session.get("type") in NO_LOAD or not session.get("duration_min"):
+        return 0
+    w = session.get("workout")
+    if w and w.get("steps"):
+        return workouts.estimate(w["steps"]).get("tss") or 0
+    zones = [z for chip in session.get("intensity") or [] for z in re.findall(r"Z([1-5])", str(chip).upper())]
+    factor = ZONE_IF[max(zones)] if zones else (0.85 if session.get("type") == "Race" else ZONE_IF["2"])
+    return round(session["duration_min"] / 60 * factor**2 * 100)
+
+
+def day_tss(day: dict) -> int:
+    return sum(planned_tss(s) for s in (day, *extras(day)))
 
 
 def with_actuals(weeks: list[dict], activities: list, today: date, tz: ZoneInfo | None = None) -> list[dict]:
@@ -192,6 +216,7 @@ def with_actuals(weeks: list[dict], activities: list, today: date, tz: ZoneInfo 
             day_date = date.fromisoformat(day["date"])
             d["actual"] = _actual(acts) if acts else None
             d["status"] = _status(day, acts, day_date, today)
+            d["planned_tss"] = day_tss(day)
             d["is_today"] = day_date == today
             days.append(d)
         done = [d for d in days if d["status"] in ("goal_met", "partial")]
@@ -206,6 +231,10 @@ def with_actuals(weeks: list[dict], activities: list, today: date, tz: ZoneInfo 
                 "summary": {
                     "planned_minutes": sum(day_minutes(d) for d in days),
                     "logged_minutes": sum(d["actual"]["minutes"] for d in days if d["actual"]),
+                    "planned_tss": sum(d["planned_tss"] for d in days),
+                    "logged_tss": sum(d["actual"]["tss"] or 0 for d in days if d["actual"]),
+                    "logged_km": round(sum(d["actual"]["km"] for d in days if d["actual"]), 1),
+                    "logged_elevation_m": sum(d["actual"]["elevation_m"] for d in days if d["actual"]),
                     "sessions_done": len(done),
                     "sessions_due": len(planned),
                 },

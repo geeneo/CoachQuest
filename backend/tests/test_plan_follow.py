@@ -20,6 +20,7 @@ def _act(day: date, sport: str, minutes=60, indoor=False, override=None):
         distance_m=20000,
         elevation_m=100,
         relative_effort=None,
+        tss=None,
         avg_power=None,
         avg_hr=None,
         name=sport,

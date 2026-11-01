@@ -8,6 +8,7 @@ import { MAX_WEEKS, weeksToEvent } from "../lib/planWeeks.js";
 import { localToday } from "../lib/workout.js";
 import { DAY_STATUS } from "../lib/dayStatus.js";
 import { MedicalDisclaimer } from "../components/HealthConditions.jsx";
+import WeekTotals from "../components/WeekTotals.jsx";
 import { useReadOnly } from "../lib/readOnly.js";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -459,7 +460,9 @@ function CurrentPlan({ plan, athleteId, apiBase, ro }) {
     weeks.findIndex((w) => w.is_current),
   );
   const [idx, setIdx] = useState(nowIdx);
+  const [open, setOpen] = useState(null); // the day whose details show under the week
   const week = weeks[Math.min(idx, weeks.length - 1)];
+  const openDay = week.days.find((d) => d.date === open);
   const sum = week.summary;
   const label = (d) => d.weekday.slice(0, 1).toUpperCase() + d.weekday.slice(1);
   const minutes = (d) => (d.duration_min || 0) + (d.extra_sessions || []).reduce((t, e) => t + (e.duration_min || 0), 0);
@@ -493,13 +496,6 @@ function CurrentPlan({ plan, athleteId, apiBase, ro }) {
             {week.phase} · {shortDate(week.days[0].date)} – {shortDate(week.days[6].date)}
           </span>
         </div>
-        {sum && (
-          <span className="small muted">
-            {sum.sessions_due > 0
-              ? `${sum.sessions_done}/${sum.sessions_due} sessions · ${duration(sum.logged_minutes * 60)} of ${duration(sum.planned_minutes * 60)}`
-              : `${duration(sum.planned_minutes * 60)} planned`}
-          </span>
-        )}
       </div>
       {week.focus && <p className="small muted plan-week-focus">{week.focus}</p>}
       <div className="mini-week">
@@ -507,16 +503,31 @@ function CurrentPlan({ plan, athleteId, apiBase, ro }) {
           const st = DAY_STATUS[d.status];
           const changed = d.changed_from;
           return (
-            <div
+            <button
+              type="button"
               key={d.date}
-              className={`mini-day ${st?.cls || ""} ${d.is_today ? "today" : ""} ${d.type === "Rest" ? "rest" : ""}`}
+              className={`mini-day ${st?.cls || ""} ${d.is_today ? "today" : ""} ${d.type === "Rest" ? "rest" : ""} ${open === d.date ? "open" : ""}`}
               title={d.description}
+              aria-expanded={open === d.date}
+              onClick={() => setOpen(open === d.date ? null : d.date)}
             >
               <span className="muted small">
                 {label(d)} {shortDate(d.date)}
               </span>
               <strong>{d.type}</strong>
-              {minutes(d) > 0 && <span className="small muted">{duration(minutes(d) * 60)}</span>}
+              {minutes(d) > 0 && (
+                <span className="small muted mini-note">
+                  {duration(minutes(d) * 60)}
+                  {d.planned_tss > 0 && ` · ≈${d.planned_tss} TSS`}
+                </span>
+              )}
+              {d.actual && (
+                <span className="small mini-done">
+                  {duration(d.actual.minutes * 60)}
+                  {d.actual.km > 0 && ` · ${Math.round(d.actual.km)} km`}
+                  {d.actual.tss ? ` · ${d.actual.tss} TSS` : ""}
+                </span>
+              )}
               {changed && <span className="small muted mini-note">🔄 planned {changed.type}</span>}
               {d.moved_from && <span className="small muted mini-note">↪️ from {label({ weekday: weekdayOf(d.moved_from) })}</span>}
               {st && d.status !== "today" && (
@@ -528,11 +539,101 @@ function CurrentPlan({ plan, athleteId, apiBase, ro }) {
                 </span>
               )}
               {d.status === "today" && <span className="small accent mini-status">🎯 Today</span>}
-            </div>
+            </button>
           );
         })}
       </div>
+      {openDay && <PlanDayDetail d={openDay} close={() => setOpen(null)} />}
+      {sum && (
+        <WeekTotals
+          t={{
+            planned_min: sum.planned_minutes,
+            done_min: sum.logged_minutes,
+            planned_tss: sum.planned_tss,
+            done_tss: sum.logged_tss,
+            km: sum.logged_km,
+            elevation_m: sum.logged_elevation_m,
+            sessions_done: sum.sessions_done,
+            sessions_due: sum.sessions_due,
+          }}
+          dates={week.days.map((d) => d.date)}
+          load={plan.load}
+        />
+      )}
     </section>
+  );
+}
+
+// Everything about one plan day, under the week: the session(s), planned vs done, what was logged.
+function PlanDayDetail({ d, close }) {
+  const st = DAY_STATUS[d.status];
+  const a = d.actual;
+  const sessions = [d, ...(d.extra_sessions || [])].filter((s) => s.type !== "Rest");
+  return (
+    <div className="day-detail">
+      <div className="row between">
+        <strong>
+          {shortDate(d.date)} · {d.type} {st && d.status !== "today" ? `· ${st.emoji} ${st.label}` : ""}
+        </strong>
+        <button type="button" className="link-btn small" onClick={close}>
+          Close
+        </button>
+      </div>
+      {sessions.map((s, i) => (
+        <div key={i} className="day-detail-session">
+          {i > 0 && <span className="badge">+ {s.type}</span>}
+          <p className="small">{s.description || <span className="muted">No description.</span>}</p>
+          <span className="small muted">
+            {s.duration_min ? `Planned ${duration(s.duration_min * 60)}` : ""}
+            {s.intensity?.length ? ` · ${s.intensity.join(" · ")}` : ""}
+            {s.workout?.name ? ` · workout "${s.workout.name}"` : ""}
+          </span>
+          {s.changed_from && (
+            <span className="small muted">
+              {" "}
+              · 🔄 done as {s.type}; planned {s.changed_from.type}
+              {s.changed_from.duration_min ? ` ${duration(s.changed_from.duration_min * 60)}` : ""}
+            </span>
+          )}
+        </div>
+      ))}
+      {d.type === "Rest" && !a && <p className="small muted">{d.moved_to ? `Moved to ${shortDate(d.moved_to)}.` : "Rest day."}</p>}
+      <table className="mini day-detail-table">
+        <thead>
+          <tr>
+            <th />
+            <th className="num">Time</th>
+            <th className="num">km</th>
+            <th className="num">m↑</th>
+            <th className="num">TSS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="muted">Planned</td>
+            <td className="num">{duration(sessions.reduce((t, s) => t + (s.duration_min || 0), 0) * 60) || "–"}</td>
+            <td className="num">–</td>
+            <td className="num">–</td>
+            <td className="num">{d.planned_tss ? `≈${d.planned_tss}` : "–"}</td>
+          </tr>
+          <tr>
+            <td className="muted">Done</td>
+            <td className="num">{a ? duration(a.minutes * 60) : "–"}</td>
+            <td className="num">{a ? a.km : "–"}</td>
+            <td className="num">{a ? a.elevation_m.toLocaleString() : "–"}</td>
+            <td className="num">{a?.tss ?? "–"}</td>
+          </tr>
+        </tbody>
+      </table>
+      {a && (
+        <p className="small muted">
+          {a.names.join(" · ")} ({a.types.join(", ")})
+          {a.avg_power ? ` · ${a.avg_power} W avg` : ""}
+          {a.avg_hr ? ` · ${a.avg_hr} bpm avg` : ""}
+          {a.relative_effort ? ` · RE ${a.relative_effort}` : ""}
+        </p>
+      )}
+    </div>
   );
 }
 

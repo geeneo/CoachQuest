@@ -2798,3 +2798,53 @@ table.platforms td:nth-child(2) {
 .app-footer code {
   font-size: 0.8rem;
 }
+/* Plans strip and Calendar: the numbers on a day, the day panel, the week totals. */
+button.mini-day {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  border: none;
+  cursor: pointer;
+}
+.mini-day.open {
+  outline: 2px solid var(--accent);
+}
+.mini-done {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.day-detail {
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.day-detail p {
+  margin: 0.15rem 0;
+}
+.day-detail-table th,
+.day-detail-table td {
+  padding: 0.1rem 0.8rem 0.1rem 0;
+}
+.week-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.2rem;
+  margin-top: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.cal-cell {
+  cursor: pointer;
+}
+.day-detail-table {
+  width: auto;
+  min-width: 20rem;
+}

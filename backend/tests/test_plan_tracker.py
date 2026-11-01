@@ -59,6 +59,7 @@ def _act(day, minutes):
         distance_m=40000,
         elevation_m=500,
         relative_effort=80,
+        tss=70,
         avg_power=150,
         avg_hr=130,
         name="Ride",

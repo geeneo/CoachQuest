@@ -6,6 +6,7 @@ import { api, download } from "../lib/api.js";
 import { dateTime, duration, formatDate } from "../lib/format.js";
 import { addDays, localToday } from "../lib/workout.js";
 import { CommentsToggle } from "./PlanComments.jsx";
+import WeekTotals from "./WeekTotals.jsx";
 import WorkoutChart from "./WorkoutChart.jsx";
 import { useReadOnly } from "../lib/readOnly.js";
 
@@ -122,8 +123,9 @@ export default function TrainingCalendar({ id, isMe }) {
     if (tpl) schedule(Number(tpl), day);
     else if (moved) edit(Number(moved), { day });
   };
+  const [openDay, setOpenDay] = useState(null); // week view: the day whose details show under the week
   const onDayClick = (day) => {
-    if (!picked) return;
+    if (!picked) return setOpenDay(openDay === day ? null : day);
     schedule(picked.id, day);
     setPicked(null);
   };
@@ -274,7 +276,8 @@ export default function TrainingCalendar({ id, isMe }) {
                 {d.plan.type !== "Rest" && (
                   <span className="small muted">
                     {" "}
-                    {d.plan.duration_min}′{view === "day" ? ` · ${d.plan.plan_title}` : ""}
+                    {d.plan.duration_min}′{d.plan.planned_tss ? ` · ≈${d.plan.planned_tss} TSS` : ""}
+                    {view === "day" ? ` · ${d.plan.plan_title}` : ""}
                   </span>
                 )}
                 {d.plan.changed_from && (
@@ -348,11 +351,18 @@ export default function TrainingCalendar({ id, isMe }) {
             {d.activities.map((a) => (
               <div key={a.id} className="cal-activity small" title={a.name}>
                 {a.type} · {a.minutes}′{a.km ? ` · ${a.km} km` : ""}
+                {a.tss ? ` · ${a.tss} TSS` : ""}
               </div>
             ))}
           </div>
         ))}
       </div>
+      {view === "week" && openDay && days.some((d) => d.date === openDay) && (
+        <CalDayDetail d={days.find((d) => d.date === openDay)} close={() => setOpenDay(null)} />
+      )}
+      {view === "week" && days.length > 0 && (
+        <WeekTotals t={weekTotals(days)} dates={days.map((d) => d.date)} load={Object.fromEntries(days.map((d) => [d.date, d.load]))} />
+      )}
       {data && <Compliance id={id} key={complianceKey(data)} />}
       {current && (
         <WorkoutDetail
@@ -438,6 +448,112 @@ function RideInfo({ info, full, isMe, date }) {
           <li key={k}>🧥 {k}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+const DONE = new Set(["goal_met", "partial"]);
+const planMinutes = (p) => (p ? (p.duration_min || 0) + (p.extra_sessions || []).reduce((t, e) => t + (e.duration_min || 0), 0) : 0);
+
+// Planned vs done for the shown week (WeekTotals).
+function weekTotals(days) {
+  const today = localToday();
+  const acts = days.flatMap((d) => d.activities);
+  const due = days.filter((d) => d.plan && d.plan.type !== "Rest" && d.date <= today);
+  return {
+    planned_min: days.reduce((t, d) => t + planMinutes(d.plan), 0),
+    done_min: acts.reduce((t, a) => t + (a.minutes || 0), 0),
+    planned_tss: days.reduce((t, d) => t + (d.plan?.planned_tss || 0), 0),
+    done_tss: acts.reduce((t, a) => t + (a.tss || 0), 0),
+    km: acts.reduce((t, a) => t + (a.km || 0), 0),
+    elevation_m: acts.reduce((t, a) => t + (a.elevation_m || 0), 0),
+    sessions_due: due.length,
+    sessions_done: due.filter((d) => DONE.has(d.plan.status)).length,
+  };
+}
+
+// Everything about one calendar day, under the week: the plan's session, workouts, and what was logged.
+function CalDayDetail({ d, close }) {
+  const p = d.plan;
+  const st = p && PLAN_STATUS[p.status];
+  const acts = d.activities;
+  const sum = (k) => acts.reduce((t, a) => t + (a[k] || 0), 0);
+  return (
+    <div className="day-detail">
+      <div className="row between">
+        <strong>
+          {fmtDay(d.date, true)}
+          {p ? ` · ${p.type}` : ""}
+          {st ? ` · ${st.emoji} ${st.label}` : ""}
+        </strong>
+        <button type="button" className="link-btn small" onClick={close}>
+          Close
+        </button>
+      </div>
+      {p && (
+        <>
+          <p className="small">{p.description || <span className="muted">{p.type === "Rest" ? "Rest day." : "No description."}</span>}</p>
+          <span className="small muted">
+            {p.plan_title}
+            {p.intensity?.length ? ` · ${p.intensity.join(" · ")}` : ""}
+            {p.segment ? ` · ${p.segment.name}` : ""}
+            {p.changed_from ? ` · 🔄 done as ${p.type}; planned ${p.changed_from.type}` : ""}
+            {p.moved_to ? ` · ↪️ done ${fmtDay(p.moved_to)}` : ""}
+            {p.moved_from ? ` · ↪️ from ${fmtDay(p.moved_from)}` : ""}
+          </span>
+          {(p.extra_sessions || []).map((e, i) => (
+            <span key={i} className="small">
+              <span className="badge">+ {e.type}</span> {e.description} {e.duration_min ? `· ${duration(e.duration_min * 60)}` : ""}
+            </span>
+          ))}
+        </>
+      )}
+      {d.workouts.map((w) => (
+        <span key={w.id} className="small">
+          🏋 {w.name} · {duration(w.estimate.duration_s)} · TSS {w.estimate.tss ?? "–"} · {STATUS[w.status].label}
+        </span>
+      ))}
+      <table className="mini day-detail-table">
+        <thead>
+          <tr>
+            <th />
+            <th className="num">Time</th>
+            <th className="num">km</th>
+            <th className="num">m↑</th>
+            <th className="num">TSS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="muted">Planned</td>
+            <td className="num">{planMinutes(p) ? duration(planMinutes(p) * 60) : "–"}</td>
+            <td className="num">–</td>
+            <td className="num">–</td>
+            <td className="num">{p?.planned_tss ? `≈${p.planned_tss}` : "–"}</td>
+          </tr>
+          <tr>
+            <td className="muted">Done</td>
+            <td className="num">{acts.length ? duration(sum("minutes") * 60) : "–"}</td>
+            <td className="num">{acts.length ? Math.round(sum("km") * 10) / 10 : "–"}</td>
+            <td className="num">{acts.length ? sum("elevation_m").toLocaleString() : "–"}</td>
+            <td className="num">{acts.length ? sum("tss") || "–" : "–"}</td>
+          </tr>
+        </tbody>
+      </table>
+      {acts.map((a) => (
+        <span key={a.id} className="small muted">
+          {a.name} ({a.type}){a.avg_power ? ` · ${a.avg_power} W avg` : ""}
+          {a.norm_power ? ` · NP ${a.norm_power} W` : ""}
+          {a.avg_hr ? ` · ${a.avg_hr} bpm avg` : ""}
+          {a.relative_effort ? ` · RE ${a.relative_effort}` : ""}
+        </span>
+      ))}
+      {d.load?.ctl > 0 && (
+        <span className="small muted">
+          Fitness {d.load.ctl} · form {d.load.tsb > 0 ? "+" : ""}
+          {d.load.tsb} at the end of the day
+        </span>
+      )}
     </div>
   );
 }
