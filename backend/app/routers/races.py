@@ -1,7 +1,7 @@
 """Races / events per athlete. The athlete edits; coaches with the plans scope can read."""
 
 import re
-from datetime import date, time
+from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -9,8 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
+from .. import localtime, race_stages
+from ..activity_types import category
 from ..db import Race, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
+from ..queries import activities_since
 from ..race_estimate import estimate, format_time, parse_time
 
 router = APIRouter(prefix="/api", tags=["races"])
@@ -89,17 +92,45 @@ def race_out(r: Race, today: date | None = None) -> dict:
         "days": r.days,
         "active": r.active,
         "days_to_go": (r.target_date - today).days if r.target_date else None,
+        # A multi-day event: each day, and the totals with its longest and hardest day.
+        "stages": race_stages.with_dates(r.stages, r.target_date),
+        "stage_totals": race_stages.totals(r.stages or []),
     }
 
 
 def upcoming(db: DbSession, athlete_id: int, today: date | None = None) -> list[Race]:
+    """Active races still to come, or under way (a stage race on its third day)."""
     today = today or date.today()
     rows = db.scalars(
         select(Race)
-        .where(Race.user_id == athlete_id, Race.active, Race.target_date >= today)
+        .where(Race.user_id == athlete_id, Race.active, Race.target_date >= today - timedelta(days=60))
         .order_by(Race.target_date)
     ).all()
-    return list(rows)
+    return [r for r in rows if race_stages.last_day(r) >= today]
+
+
+def _logged(db: DbSession, athlete: User, races: list[Race], out: list[dict]) -> None:
+    """After (and during) a stage race: what was logged on each of its days."""
+    today = localtime.today(athlete)
+    started = [r for r in races if r.stages and r.target_date and r.target_date <= today]
+    if not started:
+        return
+    first = min(r.target_date for r in started)
+    tz = localtime.zone(athlete.timezone)
+    by_day: dict[str, list] = {}
+    since = datetime.combine(first - timedelta(days=1), datetime.min.time())
+    for a in activities_since(db, athlete.id, since):
+        by_day.setdefault(localtime.local_date(a.start_time, tz).isoformat(), []).append(a)
+    for item in out:
+        for s in item["stages"]:
+            acts = by_day.get(s["date"] or "", [])
+            if acts:
+                s["logged"] = {
+                    "km": round(sum(a.distance_m for a in acts) / 1000, 1),
+                    "elevation_m": round(sum(a.elevation_m for a in acts)),
+                    "minutes": round(sum(a.duration_s for a in acts) / 60),
+                    "types": sorted({category(a) for a in acts}),
+                }
 
 
 def _own(db: DbSession, race_id: int, user: User) -> Race:
@@ -133,9 +164,11 @@ def list_races(athlete: str, user: User = Depends(current_user), db: DbSession =
         select(Race).where(Race.user_id == athlete_id).order_by(Race.target_date.is_(None), Race.target_date)
     ).all()
     # What the target time asks for (power, pace): the athlete's own view, as it uses their weight and FTP.
+    out = [race_out(r) for r in rows]
+    _logged(db, db.get(User, athlete_id), list(rows), out)
     if athlete_id == user.id:
-        return [{**race_out(r), "estimate": estimate(r, user)} for r in rows]
-    return [race_out(r) for r in rows]
+        return [{**o, "estimate": estimate(r, user)} for o, r in zip(out, rows, strict=True)]
+    return out
 
 
 @router.post("/races")
@@ -160,6 +193,29 @@ def update_race(race_id: int, body: RaceFields, user: User = Depends(current_use
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Another race already uses that code") from None
+    return race_out(race)
+
+
+class Stages(BaseModel):
+    stages: list[dict] = Field(default_factory=list, max_length=race_stages.MAX_STAGES)
+
+
+@router.put("/races/{race_id}/stages")
+def set_stages(race_id: int, body: Stages, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Save a multi-day event's days (all at once); an empty list makes it a one-day race again.
+    The race's distance, climbing and number of days become the stages' totals."""
+    race = _own(db, race_id, user)
+    try:
+        stages = race_stages.clean(body.stages)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    race.stages = stages or None
+    tot = race_stages.totals(stages)
+    if tot:
+        race.days, race.distance_km, race.elevation_m = tot["days"], tot["distance_km"], tot["elevation_m"]
+    elif not stages:
+        race.days = 1
+    db.commit()
     return race_out(race)
 
 

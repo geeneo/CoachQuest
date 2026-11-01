@@ -1,7 +1,8 @@
-import { Sparkles, Trash2, X } from "lucide-react";
-import { Fragment, useState } from "react";
+import { CalendarDays, Sparkles, Trash2, X } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
+import { duration, shortDate } from "../lib/format.js";
 
 // Click a field, change it, click away: it saves. Empty number fields clear the value.
 const FIELDS = [
@@ -27,6 +28,12 @@ export default function Races() {
   const disciplines = useApi("/api/races/disciplines");
   const [error, setError] = useState(null);
   const [asking, setAsking] = useState(null);
+  const [openStages, setOpenStages] = useState(null); // race id whose days are shown
+  const favourites = useApi("/api/athletes/me/segments");
+  const stagesOf = races.data?.find((r) => r.id === openStages);
+  useEffect(() => {
+    if (openStages) document.getElementById("race-days")?.scrollIntoView({ behavior: "smooth" });
+  }, [openStages]);
 
   const askAi = async (race) => {
     setError(null);
@@ -112,7 +119,15 @@ export default function Races() {
                       onChange={(e) => save(r, "active", e.target.checked)}
                     />
                   </td>
-                  <td>
+                  <td className="row tight">
+                    <button
+                      className={`icon-btn ${openStages === r.id || r.stages.length ? "active" : ""}`}
+                      title={r.stages.length ? `${r.stages.length} days: show or edit` : "Multi-day event: add its days"}
+                      aria-label={`Days of ${r.name}`}
+                      onClick={() => setOpenStages(openStages === r.id ? null : r.id)}
+                    >
+                      <CalendarDays size={16} />
+                    </button>
                     <button className="icon-btn" aria-label={`Delete ${r.name}`} onClick={() => remove(r)}>
                       <Trash2 size={16} />
                     </button>
@@ -142,7 +157,206 @@ export default function Races() {
         {races.data?.length === 0 && <p className="muted">No races yet. Add your first one below.</p>}
         <AddRace disciplines={disciplines.data || []} onAdded={races.reload} />
       </section>
+      {stagesOf && (
+        <section className="card" id="race-days">
+          <div className="row between">
+            <h2>
+              <CalendarDays size={18} /> Days of {stagesOf.name}
+            </h2>
+            <button className="icon-btn" aria-label="Close the days" onClick={() => setOpenStages(null)}>
+              <X size={16} />
+            </button>
+          </div>
+          <StageTable
+            key={stagesOf.id}
+            race={stagesOf}
+            routes={(favourites.data?.favourites || []).filter((f) => f.kind !== "segment")}
+            onSaved={races.reload}
+          />
+        </section>
+      )}
     </>
+  );
+}
+
+const KINDS = ["prologue", "stage", "time trial", "marathon", "rest"];
+const TERRAINS = ["", "road", "gravel", "mtb", "mixed", "trail"];
+const blankStage = (day) => ({ day, kind: "stage", name: "", distance_km: "", elevation_m: "", terrain: "", start_time: "", notes: "", segment_id: "" });
+
+// A multi-day event's days (backend race_stages.py): one row each, saved together. The race's distance,
+// climbing and days become their totals. After the event, each day shows what was logged.
+function StageTable({ race, routes, onSaved }) {
+  const [rows, setRows] = useState(() =>
+    race.stages.length
+      ? race.stages.map((s) => ({ ...blankStage(s.day), ...s, distance_km: s.distance_km ?? "", elevation_m: s.elevation_m ?? "", segment_id: s.segment_id ?? "" }))
+      : [blankStage(1), blankStage(2)],
+  );
+  const [error, setError] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const set = (i, k, v) => {
+    setSaved(false);
+    setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  };
+  const dateOf = (day) => {
+    if (!race.target_date) return "";
+    const d = new Date(`${race.target_date}T12:00:00`);
+    d.setDate(d.getDate() + day - 1);
+    return shortDate(d.toISOString().slice(0, 10));
+  };
+  const riding = rows.filter((r) => r.kind !== "rest");
+  const num = (v) => (v === "" || v == null ? 0 : Number(v));
+  const effort = (r) => num(r.distance_km) + num(r.elevation_m) / 100;
+  const longest = riding.length ? riding.reduce((a, b) => (num(b.distance_km) > num(a.distance_km) ? b : a)).day : null;
+  const hardest = riding.length ? riding.reduce((a, b) => (effort(b) > effort(a) ? b : a)).day : null;
+  const save = async (list) => {
+    setError(null);
+    try {
+      await api(`/api/races/${race.id}/stages`, {
+        method: "PUT",
+        body: {
+          stages: list.map((r) => ({
+            ...r,
+            distance_km: r.distance_km === "" ? null : Number(r.distance_km),
+            elevation_m: r.elevation_m === "" ? null : Number(r.elevation_m),
+            segment_id: r.segment_id === "" ? null : Number(r.segment_id),
+          })),
+        },
+      });
+      setSaved(true);
+      onSaved();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  return (
+    <div className="stage-table">
+      <p className="small muted">
+        A multi-day event (stage race): one line per day, rest days too. Saving makes the race's distance, climbing and
+        days the totals, and the AI coach plans for riding hard on consecutive days. Day 1 is the race's date.
+      </p>
+      <div className="table-wrap">
+        <table className="edit-table">
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Kind</th>
+              <th>Name</th>
+              <th>Dist (km)</th>
+              <th>Elev (m)</th>
+              <th>Terrain</th>
+              <th>Start</th>
+              <th>Route</th>
+              <th>Notes</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const rest = r.kind === "rest";
+              const logged = race.stages.find((s) => s.day === r.day)?.logged;
+              return (
+                <Fragment key={i}>
+                  <tr className={rest ? "past" : ""}>
+                    <td className="num-cell">
+                      <strong>{r.day}</strong> <span className="muted small">{dateOf(r.day)}</span>
+                      {r.day === hardest && <span className="badge bad" title="Hardest day: distance and climbing">hardest</span>}
+                      {r.day === longest && r.day !== hardest && <span className="badge">longest</span>}
+                    </td>
+                    <td>
+                      <select aria-label={`Kind of day ${r.day}`} value={r.kind} onChange={(e) => set(i, "kind", e.target.value)}>
+                        {KINDS.map((k) => (
+                          <option key={k}>{k}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="wide-cell">
+                      <input aria-label={`Name of day ${r.day}`} value={r.name} onChange={(e) => set(i, "name", e.target.value)} placeholder={rest ? "Rest day" : `Stage ${r.day}`} />
+                    </td>
+                    <td className="num-cell">
+                      <input type="number" min={0} aria-label={`Distance of day ${r.day}`} disabled={rest} value={r.distance_km} onChange={(e) => set(i, "distance_km", e.target.value)} />
+                    </td>
+                    <td className="num-cell">
+                      <input type="number" min={0} aria-label={`Climbing of day ${r.day}`} disabled={rest} value={r.elevation_m} onChange={(e) => set(i, "elevation_m", e.target.value)} />
+                    </td>
+                    <td>
+                      <select aria-label={`Terrain of day ${r.day}`} disabled={rest} value={r.terrain} onChange={(e) => set(i, "terrain", e.target.value)}>
+                        {TERRAINS.map((t) => (
+                          <option key={t} value={t}>
+                            {t || "—"}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input type="time" aria-label={`Start of day ${r.day}`} disabled={rest} value={r.start_time} onChange={(e) => set(i, "start_time", e.target.value)} />
+                    </td>
+                    <td>
+                      <select aria-label={`Route of day ${r.day}`} disabled={rest || !routes.length} value={r.segment_id} onChange={(e) => set(i, "segment_id", e.target.value)}>
+                        <option value="">—</option>
+                        {routes.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="wide-cell">
+                      <input aria-label={`Notes for day ${r.day}`} value={r.notes} maxLength={300} onChange={(e) => set(i, "notes", e.target.value)} placeholder="e.g. long climb at 60 km, tech descent" />
+                    </td>
+                    <td>
+                      <button className="icon-btn" aria-label={`Remove day ${r.day}`} onClick={() => setRows(rows.filter((_, j) => j !== i))}>
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                  {logged && (
+                    <tr className="stage-logged">
+                      <td />
+                      <td colSpan={9} className="small">
+                        ✅ Logged: {logged.km} km · {logged.elevation_m} m↑ · {duration(logged.minutes * 60)} ({logged.types.join(", ")})
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+            <tr className="stage-totals">
+              <td>
+                <strong>{rows.length ? Math.max(...rows.map((r) => r.day)) : 0} days</strong>
+              </td>
+              <td className="small muted">{rows.length - riding.length ? `${rows.length - riding.length} rest` : ""}</td>
+              <td className="small muted">Total</td>
+              <td className="num-cell">
+                <strong>{Math.round(riding.reduce((t, r) => t + num(r.distance_km), 0) * 10) / 10}</strong>
+              </td>
+              <td className="num-cell">
+                <strong>{Math.round(riding.reduce((t, r) => t + num(r.elevation_m), 0))}</strong>
+              </td>
+              <td colSpan={5} />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="row tight">
+        <button type="button" className="btn small" onClick={() => setRows([...rows, blankStage((rows.length ? Math.max(...rows.map((r) => r.day)) : 0) + 1)])}>
+          + Add day
+        </button>
+        <button type="button" className="btn small primary" onClick={() => save(rows)}>
+          Save days
+        </button>
+        {race.stages.length > 0 && (
+          <button
+            type="button"
+            className="link-btn small"
+            onClick={() => confirm("Make this a one-day race again? Its days are removed.") && save([])}
+          >
+            Make it a one-day race
+          </button>
+        )}
+        {saved && <span className="small ok-text">Saved: the race's distance, climbing and days are the totals now.</span>}
+      </div>
+      {error && <div className="error">{error}</div>}
+    </div>
   );
 }
 

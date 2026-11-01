@@ -15,7 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, datefmt, health, instructions, runtime, segments, strength, weather_ai
+from . import athlete_notes, datefmt, health, instructions, race_stages, runtime, segments, strength, weather_ai
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import activities_since, load_curve, profile_out, wellness_since
@@ -138,6 +138,8 @@ targets), duration in minutes, and intensity chips such as "Z2", "95-105% FTP" o
 (sick, missed sessions, poor sleep/HRV). This plan is general guidance, not medical advice.
 
 """
+    + race_stages.PROMPT_RULE
+    + "\n"
     + weather_ai.PROMPT_RULE
     + "\n\n"
     + instructions.PROMPT_RULE

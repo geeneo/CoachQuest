@@ -13,7 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, instructions
+from . import athlete_notes, instructions, race_stages
 from .coach import CoachError, ask_claude, facts_json, require_data
 from .db import Activity, Race, User, utcnow
 from .fitness import weekly_volume
@@ -39,7 +39,9 @@ time, and judge whether it is realistic:
 - target_ctl: a whole number. Don't suggest a CTL above `reachable_ctl` + 10.
 - why: 2-4 short sentences in plain language, quoting the numbers you used (power or pace, intensity,
   CTL now and needed, weeks left). Mention the biggest assumption if it matters. Not medical advice.
-- If FTP or weight is missing, say once what that limits."""
+- If FTP or weight is missing, say once what that limits.
+- A race with `stages` is a multi-day event and the target time is for all of it: riding hard on
+  consecutive days needs a higher CTL than one day of the same length; weigh its hardest stage."""
 
 SCHEMA = {
     "type": "json_schema",
@@ -81,6 +83,8 @@ def facts(db: DbSession, race: Race, athlete: User, today: date | None = None) -
             "elevation_m": race.elevation_m,
             "days": race.days,
             "target_time": format_time(race.target_seconds),
+            # A stage race: each day; the target time is for the whole event.
+            **({"stages": race.stages, "stage_totals": race_stages.totals(race.stages)} if race.stages else {}),
         },
         "weeks_left": round(weeks_left, 1),
         "estimate": estimate(race, athlete),

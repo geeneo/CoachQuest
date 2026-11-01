@@ -2,6 +2,23 @@
 
 ## Next up
 
+- [ ] **"The demo screen doesn't look like the actual" (1 Nov).** My screenshots come from a local
+  test copy with made-up demo data (Demo plan, Mon–Sun weeks, demo rides); yours from the server
+  with your DC Training plan (Sat–Fri weeks). Two kinds of difference:
+  - Different data and views: e.g. the Plans strip (My training → Plans) vs the Calendar (My
+    training → Calendar) are two different screens; weeks start on your Profile's day.
+  - Real differences: the server runs an older frontend until it's updated with "Everything" (the
+    Plans strip with ‹ This week › came in 7234fef). Admin → Overview shows the frontend build.
+  To do: show the app version in the page footer for everyone (frontend and API build), so a
+  screenshot says which version it is; and send screenshots from the same screen when comparing.
+
+- [ ] **Fit the screen on a PC (dynamic scaling).** My training → Activities (screenshot 1 Nov, about
+  1250 px wide): the table runs off the right edge (the column after Note is cut off) while the page
+  has room. Make wide tables fit: narrower selects (Type, Race, Note), shorter labels, less padding,
+  and hide less-used columns (Cal, Cadence) below ~1400 px with a "Columns" picker; the table scrolls
+  sideways inside its card, never the page. Check the other wide pages too (Races, Admin users,
+  Workouts, Calendar) at 1280, 1366 and 1440 px, and with Windows display scaling at 125-150%.
+
 - [ ] **URGENT to decide: Strava API Agreement (effective 1 June 2026) vs
       how CoachQuest uses Strava data.** Found while researching the
       write-back below (strava.com/legal/api_policy):
@@ -36,7 +53,7 @@
   - Calendar, Sun 25 Oct: ❌ for the Zwift / indoor day with nothing logged; correct unless a
     session that day is missing from Strava/Garmin.
 
-- [ ] **Multi-day events (stage races): each day its own line, with totals,
+- [x] **Multi-day events (stage races): each day its own line, with totals,
       so the AI coach plans for the whole event.** E.g. Sani2c / Wines2Whales
       (3 days), Tankwa Trek (4), Cape Epic (8, with a prologue), Joberg2c (9).
       Today a race has one distance and climbing for the whole event and a
@@ -81,6 +98,12 @@
       cycle-smart.com/library/2017/4/14/multi-day-race-recovery;
       fasttalklabs.com/recovery/how-to-maximize-recovery-during-multi-day-events;
       biogen.co.za/events/tankwa-trek-survival-guide.
+      Done (1 Nov): Races → 📅 Days: a table per race (day, kind incl. prologue and rest days, name,
+      km, climbing, terrain, start, route, notes), totals row, longest and hardest day; the race's
+      distance, climbing and days become the totals; the Calendar shows each stage; the AI coach
+      gets the stages with stage-race rules, also for the target CTL; logged rides per stage after
+      the event; a race under way still counts as upcoming. Still open: paste the organiser's stage
+      list or import their GPX files; match rides to stages on the plan page; an event summary.
 
 - [ ] **Wellness: tiles showed "–", and when Garmin data comes in.** The
       five tiles (resting HR, HRV, sleep, sleep score, Body Battery) took

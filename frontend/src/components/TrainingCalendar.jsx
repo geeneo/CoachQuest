@@ -51,7 +51,12 @@ export default function TrainingCalendar({ id, isMe }) {
   const raceOn = {};
   for (const r of races.data || []) {
     if (!r.active || !r.target_date) continue;
-    for (let i = 0; i < (r.days || 1); i++) (raceOn[addDays(r.target_date, i)] ||= []).push({ ...r, day: i + 1 });
+    for (let i = 0; i < (r.days || 1); i++)
+      (raceOn[addDays(r.target_date, i)] ||= []).push({
+        ...r,
+        day: i + 1,
+        stage: (r.stages || []).find((s) => s.day === i + 1), // a stage race's day (race_stages.py)
+      });
   }
   const library = useApi(ro ? null : "/api/workouts");
   const platforms = useApi(`/api/athletes/${id}/platforms`);
@@ -233,18 +238,25 @@ export default function TrainingCalendar({ id, isMe }) {
                 key={r.id}
                 to="/races"
                 className="cal-race"
-                title={`${r.name}${r.distance_km ? ` · ${r.distance_km} km` : ""}${r.elevation_m ? ` · ${r.elevation_m} m` : ""}`}
+                title={
+                  r.stage
+                    ? `${r.name} · day ${r.day}: ${stageText(r.stage)}`
+                    : `${r.name}${r.distance_km ? ` · ${r.distance_km} km` : ""}${r.elevation_m ? ` · ${r.elevation_m} m` : ""}`
+                }
                 onClick={(e) => e.stopPropagation()}
               >
                 🏁 <strong>{r.short_name || r.code || r.name}</strong>
                 {r.days > 1 ? ` · day ${r.day}/${r.days}` : ""}
-                {r.day === 1 && r.start_time ? ` · ${r.start_time}` : ""}
+                {r.stage?.start_time ? ` · ${r.stage.start_time}` : r.day === 1 && r.start_time ? ` · ${r.start_time}` : ""}
+                {r.stage && view === "week" && <span className="small muted cal-stage">{stageText(r.stage)}</span>}
                 {view === "day" && (
                   <span className="small muted">
                     {" "}
                     · {r.name}
-                    {r.distance_km ? ` · ${r.distance_km} km` : ""}
-                    {r.elevation_m ? ` · ${r.elevation_m} m` : ""}
+                    {r.stage ? ` · ${stageText(r.stage)}` : ""}
+                    {!r.stage && r.distance_km ? ` · ${r.distance_km} km` : ""}
+                    {!r.stage && r.elevation_m ? ` · ${r.elevation_m} m` : ""}
+                    {r.stage?.notes ? ` · ${r.stage.notes}` : ""}
                   </span>
                 )}
               </Link>
@@ -427,6 +439,18 @@ function RideInfo({ info, full, isMe, date }) {
       </ul>
     </div>
   );
+}
+
+// A stage race's day in a few words: "Queen stage · 95 km · 2600 m", "rest day".
+function stageText(s) {
+  if (s.kind === "rest") return "rest day";
+  return [
+    s.name || (s.kind === "stage" ? "" : s.kind),
+    s.distance_km != null && `${s.distance_km} km`,
+    s.elevation_m != null && `${s.elevation_m} m`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function fmtDay(iso, long = false) {
