@@ -2572,3 +2572,13 @@ line.wind-calm {
   color: var(--muted);
   font-weight: normal;
 }
+/* The plan followed what was done (plan_follow.py): plan page and calendar. */
+.followed {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0.2rem 0;
+}
+.cal-followed {
+  display: block;
+}

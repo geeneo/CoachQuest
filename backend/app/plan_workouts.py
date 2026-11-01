@@ -34,12 +34,25 @@ def wanted(plan: Plan, today: date) -> dict[date, dict]:
     return out
 
 
+def followed(plan: Plan) -> set[date]:
+    """Days changed to what the athlete did instead (another session type, or moved)."""
+    return {
+        date.fromisoformat(d["date"])
+        for w in plan.weeks or []
+        for d in w["days"]
+        if d.get("changed_from") or d.get("moved_to") or d.get("moved_from")
+    }
+
+
 def reconcile(db: DbSession, plan: Plan, today: date) -> int:
     """Bring the plan's calendar workouts in line with the plan. Returns how many changed."""
     rows = db.scalars(
         select(ScheduledWorkout).where(ScheduledWorkout.plan_id == plan.id, ScheduledWorkout.day >= today)
     ).all()
     managed = {sw.plan_day: sw for sw in rows if sw.plan_managed}
+    # A day the plan changed to what was done (plan_follow.py) keeps its workout: it may be the one done.
+    for d in followed(plan):
+        managed.pop(d, None)
     handled = {sw.plan_day for sw in rows if not sw.plan_managed}  # edited by hand; the plan stays out
     changed: list[ScheduledWorkout] = []
     for day, w in wanted(plan, today).items():

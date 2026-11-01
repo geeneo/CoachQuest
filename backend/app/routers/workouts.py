@@ -19,6 +19,7 @@ from .. import (
     compliance,
     library,
     localtime,
+    plan_follow,
     platforms,
     segments,
     sync_engine,
@@ -282,6 +283,8 @@ def _plan_days(db: DbSession, athlete_id: int, start: date, end: date) -> dict[s
                         "plan_title": p.title,
                         "phase": week["phase"],
                         **{k: d[k] for k in ("type", "description", "duration_min", "intensity", "locked")},
+                        # Done as another session type, or on another day (plan_follow.py).
+                        **{k: d.get(k) for k in ("changed_from", "moved_from", "moved_to")},
                         "extra_sessions": extras,
                         # The favourite route or segment the day rides (segments.py), when it's still saved.
                         "segment": favourites[d["segment_id"]] if _rides_route(d, favourites) else None,
@@ -346,6 +349,7 @@ def calendar(
     names = {u.id: u.display_name for u in db.scalars(select(User).where(User.id.in_(ids)))} if ids else {}
     delivery = sync_engine.status_for(db, [sw.id for sw in rows])
     n_comments = comments.counts(db, "workout", [sw.id for sw in rows])
+    plan_follow.update_all(db, target, start, end)  # the plans follow what was done
     plan_days = _plan_days(db, target.id, start, end)
     days = []
     for i in range((end - start).days + 1):

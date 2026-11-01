@@ -299,6 +299,8 @@ function Day({ day, ctx }) {
   const canRoute = !ctx.ro && takesRoute(day.type) && ctx.segments.length > 0;
   const save = (body) => ctx.editDay(day.date, body);
   const canReplan = !ctx.ro && !day.locked && day.date >= new Date().toISOString().slice(0, 10);
+  // A day done as something else than its indoor workout (plan_follow.py) no longer shows the workout.
+  const workout = day.workout && (!day.changed_from || day.type === "Zwift / indoor") ? day.workout : null;
   return (
     <div className={`day status-${day.status} ${day.is_today ? "today" : ""} ${day.type === "Rest" ? "rest" : ""}`}>
       <div className="day-label">
@@ -440,21 +442,22 @@ function Day({ day, ctx }) {
             {day.duration_min > 0 && <span className="muted"> ~{duration(day.duration_min * 60)}</span>}
           </button>
         )}
-        {!editing && (day.intensity.length > 0 || day.gear || day.route || day.workout || day.segment) && (
+        {!editing && <Followed day={day} />}
+        {!editing && (day.intensity.length > 0 || day.gear || day.route || workout || day.segment) && (
           <div className="chips tight">
             {day.intensity.map((c) => (
               <span key={c} className="badge intensity">
                 {c}
               </span>
             ))}
-            {day.workout && (
+            {workout && (
               <button
                 type="button"
                 className="badge workout"
                 title="Download for Zwift / MyWhoosh (.zwo)"
                 onClick={() => ctx.get(`/days/${day.date}/zwo`)}
               >
-                ⬇ {day.workout.name}
+                ⬇ {workout.name}
               </button>
             )}
             {day.segment && <SegmentLink segment={day.segment} />}
@@ -465,11 +468,11 @@ function Day({ day, ctx }) {
         {!editing && ctx.weather[day.date] && (
           <DayWeather w={ctx.weather[day.date]} date={day.date} link={ctx.ownWeather} />
         )}
-        {!editing && day.workout?.steps?.length > 0 && (
-          <WorkoutChart blocks={blocks(day.workout.steps)} height={90} />
+        {!editing && workout?.steps?.length > 0 && (
+          <WorkoutChart blocks={blocks(workout.steps)} height={90} />
         )}
         {!editing && day.strength && <StrengthSession session={day.strength} />}
-        {!editing && <PlatformMatches day={day} ctx={ctx} />}
+        {!editing && workout && <PlatformMatches day={day} ctx={ctx} />}
         {!editing && (
           <ExtraSessions day={day} types={types} max={ctx.maxSessions} save={save} readOnly={ctx.ro} />
         )}
@@ -652,6 +655,24 @@ function StrengthSession({ session }) {
 }
 
 // A favourite Strava route or segment on a session: opens it in Strava.
+// The plan followed what was done (backend plan_follow.py): another kind of session, or another day.
+function Followed({ day }) {
+  const changed = [day, ...(day.extra_sessions || [])].filter((s) => s.changed_from);
+  if (!changed.length && !day.moved_from) return null;
+  return (
+    <div className="followed small muted">
+      {changed.map((s, i) => (
+        <span key={i}>
+          🔄 Done as {s.type}; planned {s.changed_from.type}
+          {s.changed_from.duration_min ? ` · ${duration(s.changed_from.duration_min * 60)}` : ""}
+          {s.changed_from.description ? ` (${s.changed_from.description})` : ""}
+        </span>
+      ))}
+      {day.moved_from && <span>↪️ Moved here from {fmtDate(day.moved_from)}</span>}
+    </div>
+  );
+}
+
 function hash(text) {
   let h = 0;
   for (const c of text) h = (h * 31 + c.charCodeAt(0)) | 0;
@@ -868,6 +889,8 @@ function Actual({ day, tags, save, readOnly }) {
       return <div className="actual warn-text">⚠️ Partly done {logged}</div>;
     case "extra":
       return <div className="actual muted">💪 Trained on a rest day {logged}</div>;
+    case "moved":
+      return <div className="actual muted">↪️ Done on {fmtDate(day.moved_to)} instead</div>;
     case "missed":
       if (readOnly) return <div className="actual bad-text">❌ Not logged{day.missed_reason ? ` · ${day.missed_reason}` : ""}</div>;
       return (

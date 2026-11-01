@@ -17,6 +17,7 @@ from .. import (
     library,
     localtime,
     plan_approval,
+    plan_follow,
     plan_tracker,
     plan_workouts,
     platform_catalog,
@@ -97,6 +98,7 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
                 at = plan_approval.athlete_may_decide_at(p, viewer)
                 out["athlete_decides_at"] = at.isoformat() if at else None
         if p.weeks:
+            plan_follow.update(db, p, athlete, today)  # the plan follows what was done (other type, other day)
             # A day early: a ride late on the first local day can be stored as the day before in UTC.
             start = datetime.combine(date.fromisoformat(p.weeks[0]["start"]), datetime.min.time()) - timedelta(1)
             acts = activities_since(db, p.athlete_id, start)
@@ -558,6 +560,7 @@ async def replan(
     _check_coach_notes(user, p.athlete_id, body.coach_notes)
     target = db.get(User, p.athlete_id)
     today = localtime.today(target)
+    plan_follow.update(db, p, target, today)  # past days as they were really done
     weeks = _editable(p)
     first = plan_tracker.replan_from(weeks, today)
     if first == len(weeks):
@@ -567,6 +570,8 @@ async def replan(
         {
             **{k: d[k] for k in ("date", "weekday", "type", "description", "duration_min", "status")},
             "extra_sessions": plan_tracker.extras(d),
+            # Done as another kind of session, or on another day, than planned (plan_follow.py).
+            **{k: d[k] for k in ("changed_from", "moved_from", "moved_to") if d.get(k)},
         }
         for w in tracked[first:]
         for d in w["days"]
@@ -647,6 +652,7 @@ async def replan_day(
         raise HTTPException(status_code=409, detail="A re-plan of the plan is waiting: approve or send it back first")
     target = db.get(User, p.athlete_id)
     today = localtime.today(target)
+    plan_follow.update(db, p, target, today)
     try:
         wi, di = plan_tracker.find_day(p.weeks, day.isoformat())
     except KeyError:

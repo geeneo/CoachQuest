@@ -24,6 +24,7 @@ const PLAN_STATUS = {
   goal_met: { label: "Goal met", emoji: "✅" },
   partial: { label: "Partly done", emoji: "⚠️" },
   missed: { label: "Missed", emoji: "❌" },
+  moved: { label: "Done on another day", emoji: "↪️" },
 };
 const WEEKDAY = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -262,6 +263,17 @@ export default function TrainingCalendar({ id, isMe }) {
                     {" "}
                     {d.plan.duration_min}′{view === "day" ? ` · ${d.plan.plan_title}` : ""}
                   </span>
+                )}
+                {d.plan.changed_from && (
+                  <span className="cal-followed small muted" title={d.plan.changed_from.description}>
+                    🔄 planned {d.plan.changed_from.type}
+                  </span>
+                )}
+                {d.plan.moved_to && (
+                  <span className="cal-followed small muted">↪️ done {fmtDay(d.plan.moved_to)}</span>
+                )}
+                {d.plan.moved_from && (
+                  <span className="cal-followed small muted">↪️ from {fmtDay(d.plan.moved_from)}</span>
                 )}
                 {[d.plan, ...(d.plan.extra_sessions || [])]
                   .filter((s) => s.segment)

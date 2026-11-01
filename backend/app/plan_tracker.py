@@ -215,6 +215,8 @@ def with_actuals(weeks: list[dict], activities: list, today: date, tz: ZoneInfo 
 
 
 def _status(day: dict, acts: list, day_date: date, today: date) -> str:
+    if day.get("moved_to") and not acts:
+        return "moved"  # done on another day of the week (plan_follow.py)
     if day["type"] == "Rest":
         return "extra" if acts else ("rest" if day_date <= today else "planned")
     if acts:

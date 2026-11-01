@@ -2,6 +2,21 @@
 
 ## Next up
 
+- [ ] **Check after deploy: Sun 1 Nov e-MTB ride on a Road day.** The plan said Road (25 min
+  recovery spin); the ride was an e-MTB ride (30.1 km, 1h 06m). With the plan following what was
+  done (plan_follow.py) the day should become "E-MTB · planned Road · 25m" and stay goal met; check
+  the plan page, the Calendar and the Current plan strip on My training.
+
+- [ ] **Current plan strip (My training → Overview): go back and forward a week.** It shows only this
+  week (Sat–Fri); add ‹ › to step through the plan's weeks, with "this week" to come back.
+
+- [ ] **Outdoor segments can't be used for indoor sessions.** The AI named an indoor Zwift
+  workout after an outdoor Strava segment ("Kendal A 5x2", Thu 5 Nov, from the favourite segment
+  "Kendal climb A"). The instructions already say indoor days name no route or segment; enforce it in
+  code too: a "Zwift / indoor" (or treadmill) session's workout name and description must not use a
+  favourite's name, and the segment's efforts (e.g. 4-8 x 0.7 km at 6.2%) become a plain indoor
+  interval set (minutes at % FTP) instead. Check plan_tracker.ai_day / plan_workouts.
+
 - [x] **More on each planned ride in the Calendar (My training → Calendar).** Today an outdoor
   day shows only its type, minutes and route name (e.g. "Road 316' · Stellenbosch 129km Lo…"). Add:
   - the ride's numbers: total km, climbing, expected average speed and finish time (from the route,

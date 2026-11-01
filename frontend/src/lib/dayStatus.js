@@ -6,5 +6,6 @@ export const DAY_STATUS = {
   missed: { emoji: "❌", label: "Missed", cls: "bad" },
   extra: { emoji: "💪", label: "Extra session", cls: "good" },
   rest: { emoji: "😴", label: "Rested", cls: "" },
+  moved: { emoji: "↪️", label: "Moved", cls: "" },
   today: { emoji: "🎯", label: "Today", cls: "" },
 };

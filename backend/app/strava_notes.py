@@ -122,6 +122,8 @@ def note_for(db: DbSession, athlete: User, act: Activity, today: date | None = N
     tz = localtime.zone(athlete.timezone)
     day = localtime.local_date(act.start_time, tz)
     planned = _plan_day(db, athlete.id, day)
+    if planned and planned.get("changed_from"):
+        planned = {**planned, **planned["changed_from"]}  # the note says what was planned (plan_follow.py)
     if not planned or planned["type"] == "Rest":
         return None
     start = datetime.combine(day - timedelta(days=1), time.min)
