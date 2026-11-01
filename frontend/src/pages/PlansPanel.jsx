@@ -1,9 +1,9 @@
-import { Sparkles, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
-import { dateTime, formatDate } from "../lib/format.js";
+import { dateTime, duration, formatDate, shortDate } from "../lib/format.js";
 import { MAX_WEEKS, weeksToEvent } from "../lib/planWeeks.js";
 import { localToday } from "../lib/workout.js";
 import { DAY_STATUS } from "../lib/dayStatus.js";
@@ -142,36 +142,11 @@ export default function PlansPanel({ id, athlete }) {
         !p.next_block.planned &&
         (new Date(localToday()) - new Date(p.next_block.ends)) / 86400000 <= 28,
     );
-  const thisWeek = cur?.weeks?.find((w) => w.is_current) || cur?.weeks?.[0];
+  const thisWeek = cur?.weeks?.[0];
   return (
     <>
       {cur && thisWeek && (
-        <section className="card week current">
-          <div className="row between">
-            <h2>Current plan: {cur.title}</h2>
-            <Link to={`/athletes/${athlete.id}/plans/${cur.id}`}>Open the full plan →</Link>
-          </div>
-          {!ro && <NextBlock plan={cur} athleteId={athlete.id} apiBase={`/api/athletes/${id}/plans`} />}
-          <div className="mini-week">
-            {thisWeek.days.map((d) => (
-              <div
-                key={d.date}
-                className={`mini-day ${DAY_STATUS[d.status]?.cls || ""} ${d.is_today ? "today" : ""}`}
-              >
-                <span className="muted small">{d.weekday.slice(0, 1).toUpperCase() + d.weekday.slice(1)}</span>
-                <strong>{d.type}</strong>
-                {DAY_STATUS[d.status] && d.status !== "today" && (
-                  <span className="small mini-status">
-                    <span className="mini-badge" role="img" aria-hidden="true">
-                      {DAY_STATUS[d.status].emoji}
-                    </span>{" "}
-                    {DAY_STATUS[d.status].label}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+        <CurrentPlan plan={cur} athleteId={athlete.id} apiBase={`/api/athletes/${id}/plans`} ro={ro} />
       )}
       {ended && !ro && (
         <section className="card week current">
@@ -474,3 +449,95 @@ function NextBlock({ plan, athleteId, apiBase }) {
     </div>
   );
 }
+
+// The current plan, a week at a time: ‹ › through its weeks, "This week" back. Each day: its date,
+// session and time, how it went, and whether it was done as something else (plan_follow.py).
+function CurrentPlan({ plan, athleteId, apiBase, ro }) {
+  const weeks = plan.weeks;
+  const nowIdx = Math.max(
+    0,
+    weeks.findIndex((w) => w.is_current),
+  );
+  const [idx, setIdx] = useState(nowIdx);
+  const week = weeks[Math.min(idx, weeks.length - 1)];
+  const sum = week.summary;
+  const label = (d) => d.weekday.slice(0, 1).toUpperCase() + d.weekday.slice(1);
+  const minutes = (d) => (d.duration_min || 0) + (d.extra_sessions || []).reduce((t, e) => t + (e.duration_min || 0), 0);
+  return (
+    <section className="card week current">
+      <div className="row between wrap">
+        <h2>Current plan: {plan.title}</h2>
+        <Link to={`/athletes/${athleteId}/plans/${plan.id}`}>Open the full plan →</Link>
+      </div>
+      {!ro && <NextBlock plan={plan} athleteId={athleteId} apiBase={apiBase} />}
+      <div className="row between wrap plan-week-bar">
+        <div className="row tight">
+          <button className="icon-btn" aria-label="Previous week" disabled={idx === 0} onClick={() => setIdx(idx - 1)}>
+            <ChevronLeft size={18} />
+          </button>
+          <button className="btn small" disabled={idx === nowIdx} onClick={() => setIdx(nowIdx)}>
+            This week
+          </button>
+          <button
+            className="icon-btn"
+            aria-label="Next week"
+            disabled={idx >= weeks.length - 1}
+            onClick={() => setIdx(idx + 1)}
+          >
+            <ChevronRight size={18} />
+          </button>
+          <strong>
+            Week {idx + 1} of {weeks.length}
+          </strong>
+          <span className="muted small">
+            {week.phase} · {shortDate(week.days[0].date)} – {shortDate(week.days[6].date)}
+          </span>
+        </div>
+        {sum && (
+          <span className="small muted">
+            {sum.sessions_due > 0
+              ? `${sum.sessions_done}/${sum.sessions_due} sessions · ${duration(sum.logged_minutes * 60)} of ${duration(sum.planned_minutes * 60)}`
+              : `${duration(sum.planned_minutes * 60)} planned`}
+          </span>
+        )}
+      </div>
+      {week.focus && <p className="small muted plan-week-focus">{week.focus}</p>}
+      <div className="mini-week">
+        {week.days.map((d) => {
+          const st = DAY_STATUS[d.status];
+          const changed = d.changed_from;
+          return (
+            <div
+              key={d.date}
+              className={`mini-day ${st?.cls || ""} ${d.is_today ? "today" : ""} ${d.type === "Rest" ? "rest" : ""}`}
+              title={d.description}
+            >
+              <span className="muted small">
+                {label(d)} {shortDate(d.date)}
+              </span>
+              <strong>{d.type}</strong>
+              {minutes(d) > 0 && <span className="small muted">{duration(minutes(d) * 60)}</span>}
+              {changed && <span className="small muted mini-note">🔄 planned {changed.type}</span>}
+              {d.moved_from && <span className="small muted mini-note">↪️ from {label({ weekday: weekdayOf(d.moved_from) })}</span>}
+              {st && d.status !== "today" && (
+                <span className="small mini-status">
+                  <span className="mini-badge" role="img" aria-hidden="true">
+                    {st.emoji}
+                  </span>{" "}
+                  {d.status === "moved" ? `Done ${label({ weekday: weekdayOf(d.moved_to) })}` : st.label}
+                </span>
+              )}
+              {d.status === "today" && <span className="small accent mini-status">🎯 Today</span>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+function weekdayOf(iso) {
+  return WEEKDAYS[new Date(`${iso}T12:00:00`).getDay()];
+}
+

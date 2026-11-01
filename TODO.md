@@ -7,7 +7,7 @@
   done (plan_follow.py) the day should become "E-MTB · planned Road · 25m" and stay goal met; check
   the plan page, the Calendar and the Current plan strip on My training.
 
-- [ ] **Current plan strip (My training → Overview): go back and forward a week.** It shows only this
+- [x] **Current plan strip (My training → Plans): go back and forward a week.** It shows only this
   week (Sat–Fri); add ‹ › to step through the plan's weeks, with "this week" to come back.
 
 - [ ] **Outdoor segments can't be used for indoor sessions.** The AI named an indoor Zwift
