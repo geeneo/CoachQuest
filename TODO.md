@@ -126,7 +126,7 @@
       - Maybe sync Garmin wellness once more mid-morning, after most
         watches have uploaded the night.
 
-- [ ] **Monitor the database size.** Admin → Storage already shows the
+- [x] **Monitor the database size.** Admin → Storage already shows the
       database size, per-table rows and free disk (per user under Admin →
       Users). Add:
       - a size history (one reading a day) with a small chart, so growth
@@ -135,6 +135,12 @@
         below, say, 2 GB or the database grows unusually fast;
       - the backup age: when the last backup was made (the nightly backup is switched on with
         menu.sh option 10; check it's on).
+      Done (1 Nov): storage_watch.py records a reading a day (04:10 UTC, and when Admin → Storage
+      is first opened); Admin → Storage shows growth charts (database, free disk with the warning
+      line) and the last backup (backup.sh writes DATA_DIR/backup-status.txt, also when it fails).
+      Super admins get a banner on the admin pages and an email (once a day per warning) for low
+      disk (Settings → Storage, default 2 GB), fast growth (+50% and 100 MB in a week), and no
+      backup / a failed one / one older than two days.
 
 - [ ] **Training plan page layout like the old hub** (screenshot 25 Oct).
       - A "This week — Week 4" heading above the current week, and the plan

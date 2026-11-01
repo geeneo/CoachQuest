@@ -158,6 +158,13 @@ EDITABLE: dict[str, Editable] = {
         help="Empty: the free Open-Meteo API, for non-commercial use. When CoachQuest is used commercially, take a "
         "plan at open-meteo.com/en/pricing and paste its key here (weather then comes from the customer API).",
     ),
+    "storage_warn_free_gb": Editable(
+        "Warn when free disk is below (GB)",
+        "Storage",
+        pattern=r"\d{1,4}(\.\d)?",
+        help="Super admins get a banner on the admin pages and an email (once a day) when the server's free disk "
+        "drops below this. Default 2.",
+    ),
     "ai_weather": Editable(
         "Weather for the AI coach",
         "Weather",

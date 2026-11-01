@@ -1,4 +1,5 @@
-import { CheckCircle2, KeyRound, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, KeyRound, XCircle } from "lucide-react";
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Stat } from "../components/WellnessPanel.jsx";
@@ -37,6 +38,7 @@ export default function Admin() {
   return (
     <>
       <h1>Admin</h1>
+      <StorageWarnings go={() => navigate("/admin/storage")} rev={rev} />
       <div className="tabs admin-tabs" role="tablist">
         {tabs.map(([id, label]) => (
           <button
@@ -1097,19 +1099,103 @@ function bytes(n) {
   return `${n.toFixed(i ? 1 : 0)} ${units[i]}`;
 }
 
+// Super admins: disk running out, the database growing fast, or no recent backup (storage_watch.py).
+function StorageWarnings({ go, rev }) {
+  const w = useApi(`/api/admin/storage/warnings?rev=${rev}`);
+  const list = w.data?.warnings || [];
+  if (!list.length) return null;
+  return (
+    <div className="storage-warnings" role="alert">
+      <AlertTriangle size={18} />
+      <div>
+        {list.map((x) => (
+          <p key={x.code} className="small">
+            {x.text}
+          </p>
+        ))}
+        <button type="button" className="link-btn small" onClick={go}>
+          Storage →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const MB = 1024 ** 2;
+const GB = 1024 ** 3;
+const chartTip = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8 };
+
 function Storage({ rev }) {
   const s = useApi(`/api/admin/storage?rev=${rev}`);
   if (s.error) return <div className="error">{s.error.message}</div>;
   if (!s.data) return null;
-  const { disk } = s.data;
+  const { disk, backup, history, warnings, warn_free_gb: warnGb } = s.data;
+  const points = history.map((h) => ({
+    day: formatDate(h.day, { year: false }),
+    db: Math.round((h.database_bytes / MB) * 10) / 10,
+    free: Math.round((h.disk_free / GB) * 10) / 10,
+  }));
+  const first = history[0];
+  const grew = first && history.length > 1 ? s.data.database_bytes - first.database_bytes : null;
   return (
     <section className="card">
       <h2>Storage</h2>
+      {warnings.map((w) => (
+        <p key={w.code} className="small warn-text">
+          ⚠ {w.text}
+        </p>
+      ))}
       <div className="stats">
         <Stat label="Database" value={bytes(s.data.database_bytes)} />
         <Stat label="Disk free" value={bytes(disk.free)} />
         <Stat label="Disk used" value={`${Math.round((disk.used / disk.total) * 100)}%`} />
+        <Stat
+          label="Last backup"
+          value={backup ? (backup.ok ? dateTime(backup.at) : "failed") : "none seen"}
+        />
       </div>
+      <p className="small muted">
+        {backup
+          ? backup.ok
+            ? `Last backup ${backup.file}${backup.size != null ? ` (${bytes(backup.size)})` : ""}, made ${dateTime(backup.at)}. `
+            : `The last backup failed on ${dateTime(backup.at)}: ${backup.error}. `
+          : "No backup seen yet: on the server run bash menu.sh, option 7 (now) or 10 (every night). "}
+        Super admins get a banner here and an email when free disk is below {warnGb} GB (Settings → Storage), the
+        database grows fast, or the last backup is over two days old.
+      </p>
+      <h3>Growth {grew != null && <span className="muted small">({grew >= 0 ? "+" : "−"}
+              {bytes(Math.abs(grew))} since {formatDate(first.day)})</span>}</h3>
+      {points.length < 2 ? (
+        <p className="small muted">One reading a day: the chart fills in from tomorrow.</p>
+      ) : (
+        <div className="storage-charts">
+          <div>
+            <p className="small muted">Database (MB)</p>
+            <ResponsiveContainer width="100%" height={160}>
+              <LineChart data={points} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="var(--grid)" vertical={false} />
+                <XAxis dataKey="day" stroke="var(--muted)" fontSize={11} tickLine={false} minTickGap={24} />
+                <YAxis stroke="var(--muted)" fontSize={11} width={44} domain={["auto", "auto"]} />
+                <Tooltip contentStyle={chartTip} formatter={(v) => [`${v} MB`, "Database"]} />
+                <Line dataKey="db" stroke="var(--c1)" strokeWidth={2} dot={false} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div>
+            <p className="small muted">Free disk (GB)</p>
+            <ResponsiveContainer width="100%" height={160}>
+              <LineChart data={points} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="var(--grid)" vertical={false} />
+                <XAxis dataKey="day" stroke="var(--muted)" fontSize={11} tickLine={false} minTickGap={24} />
+                <YAxis stroke="var(--muted)" fontSize={11} width={44} domain={[0, "auto"]} />
+                <Tooltip contentStyle={chartTip} formatter={(v) => [`${v} GB`, "Free disk"]} />
+                <ReferenceLine y={warnGb} stroke="var(--danger)" strokeDasharray="4 4" />
+                <Line dataKey="free" stroke="var(--c3)" strokeWidth={2} dot={false} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
       <div className="table-wrap">
         <table>
           <tbody>

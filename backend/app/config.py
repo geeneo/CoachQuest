@@ -58,6 +58,7 @@ class Settings:
     # Open-Meteo (weather.py): empty uses the free API (non-commercial use); a key uses the paid one.
     open_meteo_key: str = os.getenv("OPEN_METEO_KEY", "")
     ai_weather: str = os.getenv("AI_WEATHER", "on")
+    storage_warn_free_gb: str = os.getenv("STORAGE_WARN_FREE_GB", "2")
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
     anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "high")
     # Readiness notes, weekly reviews and chat. Empty model: the same as plans.

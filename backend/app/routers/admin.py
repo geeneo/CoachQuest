@@ -2,17 +2,13 @@
 
 import base64
 import logging
-import shutil
 from datetime import date, timedelta
-from pathlib import Path
 
 import anthropic
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, or_, select
-from sqlalchemy import text as sql
-from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session as DbSession
 
 from .. import (
@@ -25,6 +21,7 @@ from .. import (
     mailer,
     platform_catalog,
     runtime,
+    storage_watch,
 )
 from ..config import settings
 from ..db import (
@@ -37,6 +34,7 @@ from ..db import (
     Plan,
     PlatformWorkout,
     Session,
+    StorageReading,
     User,
     WellnessDay,
     get_db,
@@ -431,23 +429,26 @@ def storage(_: User = Depends(admin_user), db: DbSession = Depends(get_db)):
         ("Sign-in sessions", Session),
     ):
         tables[name] = db.scalar(select(func.count()).select_from(model))
-    files = {}
-    url = make_url(settings.db_url)
-    if url.get_backend_name() == "sqlite" and url.database:
-        for suffix in ("", "-wal", "-shm"):
-            path = Path(url.database + suffix)
-            if path.exists():
-                files[path.name] = path.stat().st_size
-    elif url.get_backend_name() == "postgresql":
-        name = db.scalar(sql("SELECT current_database()"))
-        files[f"Postgres database {name}"] = db.scalar(sql("SELECT pg_database_size(current_database())"))
-    disk = shutil.disk_usage(settings.data_dir if Path(settings.data_dir).exists() else ".")
+    files = storage_watch.database_files(db)
+    if db.get(StorageReading, date.today()) is None:
+        storage_watch.record(db)  # the history starts the first time someone looks
+    backup = storage_watch.backup_status()
     return {
         "database_bytes": sum(files.values()),
         "files": files,
         "tables": tables,
-        "disk": {"total": disk.total, "used": disk.used, "free": disk.free, "path": settings.data_dir},
+        "disk": storage_watch.disk(),
+        "history": storage_watch.history(db),
+        "backup": backup,
+        "warnings": storage_watch.warnings(db),
+        "warn_free_gb": float(runtime.get("storage_warn_free_gb") or 2),
     }
+
+
+@router.get("/storage/warnings")
+def storage_warnings(user: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """For the banner on the admin pages: super admins only (they run the server)."""
+    return {"warnings": storage_watch.warnings(db) if user.is_super_admin else []}
 
 
 @router.patch("/users/{user_id}")

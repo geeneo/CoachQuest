@@ -680,6 +680,19 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class StorageReading(Base):
+    """One reading a day of the database size and free disk, for Admin → Storage (storage_watch.py)."""
+
+    __tablename__ = "storage_readings"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    database_bytes: Mapped[int] = mapped_column(BigInteger)
+    disk_free: Mapped[int] = mapped_column(BigInteger)
+    disk_total: Mapped[int] = mapped_column(BigInteger)
+    # The warnings emailed to super admins that day, so each goes out once a day at most.
+    warned: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+
 # SQLite (one file in DATA_DIR, the default) or Postgres (DATABASE_URL=postgresql+psycopg://...;
 # docs/postgres.md moves the data across with app.movedb and back again).
 _sqlite = settings.db_url.startswith("sqlite")
