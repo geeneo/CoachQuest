@@ -10,10 +10,12 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from .. import (
     comments,
     health,
+    indoor_names,
     library,
     localtime,
     plan_approval,
@@ -99,6 +101,7 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
                 out["athlete_decides_at"] = at.isoformat() if at else None
         if p.weeks:
             plan_follow.update(db, p, athlete, today)  # the plan follows what was done (other type, other day)
+            _scrub_indoor(db, p, today)
             # A day early: a ride late on the first local day can be stored as the day before in UTC.
             start = datetime.combine(date.fromisoformat(p.weeks[0]["start"]), datetime.min.time()) - timedelta(1)
             acts = activities_since(db, p.athlete_id, start)
@@ -108,6 +111,19 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
             out["max_sessions_per_day"] = runtime.max_sessions_per_day()
             out["exercise_photos"] = strength.photos_on()
     return out
+
+
+def _favourite_names(db: DbSession, athlete_id: int) -> list[str]:
+    return [s.name for s in segments.for_athlete(db, athlete_id)]
+
+
+def _scrub_indoor(db: DbSession, p: Plan, today: date) -> None:
+    """Plans written before indoor_names.py may name an outdoor favourite on an indoor day: fix the days
+    to come, and send the renamed workouts on again."""
+    if indoor_names.scrub_weeks(p.weeks, _favourite_names(db, p.athlete_id), today.isoformat()):
+        flag_modified(p, "weeks")
+        db.commit()
+        plan_workouts.reconcile(db, p, today)
 
 
 def _add_segments(db: DbSession, athlete_id: int, weeks: list[dict]) -> None:
@@ -299,6 +315,7 @@ async def create_plan(
     except CoachError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     weeks = plan_tracker.build_weeks(answer.get("weeks", []), monday, body.weeks)
+    indoor_names.scrub_weeks(weeks, _favourite_names(db, athlete_id))
     plan = Plan(
         athlete_id=athlete_id,
         author_id=user.id,
@@ -601,6 +618,7 @@ async def replan(
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     start = date.fromisoformat(weeks[first]["start"])
     fresh = plan_tracker.build_weeks(answer.get("weeks", []), start, len(weeks) - first)
+    indoor_names.scrub_weeks(fresh, _favourite_names(db, p.athlete_id))
     summary = (answer.get("summary_md") or "").strip()
     why = {"reason": body.reason.strip(), "coach_notes": body.coach_notes.strip()}
     needs = plan_approval.needs_approval(db, p.athlete_id, user)
@@ -694,6 +712,7 @@ async def replan_day(
     except CoachError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     new = plan_tracker.ai_day(answer["day"])
+    indoor_names.scrub_day(new, indoor_names.patterns(_favourite_names(db, p.athlete_id)))
     plan_approval.propose_day(
         p,
         user,

@@ -2,6 +2,18 @@
 
 ## Next up
 
+- [ ] **Check the views after the next update (1 Nov).** From the screenshots:
+  - Calendar, week of 31 Oct: Sun 1 Nov shows "E-MTB · 🔄 planned Road" and ✅: the plan following
+    what was done works live.
+  - Calendar, Thu 5 Nov still shows the indoor workout "Kendal A 5x2": fixed by the indoor-names
+    change (indoor_names.py), not on the server yet; after it, it reads "Intervals 5×2 min" and is
+    sent to Intervals.icu again under that name.
+  - My training → Plans, Current plan strip: still the old strip (no ‹ This week ›, no dates or
+    times): the new one is commit 7234fef; check the server runs it (Admin → Overview: frontend
+    build), then Ctrl+Shift+R.
+  - Calendar, Sun 25 Oct: ❌ for the Zwift / indoor day with nothing logged; correct unless a
+    session that day is missing from Strava/Garmin.
+
 - [ ] **Check after deploy: Sun 1 Nov e-MTB ride on a Road day.** The plan said Road (25 min
   recovery spin); the ride was an e-MTB ride (30.1 km, 1h 06m). With the plan following what was
   done (plan_follow.py) the day should become "E-MTB · planned Road · 25m" and stay goal met; check
@@ -10,7 +22,7 @@
 - [x] **Current plan strip (My training → Plans): go back and forward a week.** It shows only this
   week (Sat–Fri); add ‹ › to step through the plan's weeks, with "this week" to come back.
 
-- [ ] **Outdoor segments can't be used for indoor sessions.** The AI named an indoor Zwift
+- [x] **Outdoor segments can't be used for indoor sessions.** The AI named an indoor Zwift
   workout after an outdoor Strava segment ("Kendal A 5x2", Thu 5 Nov, from the favourite segment
   "Kendal climb A"). The instructions already say indoor days name no route or segment; enforce it in
   code too: a "Zwift / indoor" (or treadmill) session's workout name and description must not use a

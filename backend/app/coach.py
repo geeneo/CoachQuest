@@ -83,7 +83,9 @@ easy back down").
   - Follow their `uses` and `notes`. Vary them across weeks when several fit.
   - Only outdoor sessions ride them. Indoor sessions ("Zwift / indoor", "Treadmill run") and Strength, \
 Swim, Yoga / mobility and Rest always have `segment_id` 0 and don't name a route or segment: an indoor \
-day is its structured workout only.
+day is its structured workout only. Not in the workout's name or the description either ("Kendal A 5x2" \
+is wrong): name it by what it is ("VO2max 5x2 min") and turn a segment's efforts into plain intervals \
+(minutes at % FTP).
 - Every "Strength" session (main or extra) gets a structured `strength` session; other sessions have \
 `strength` with an empty `focus` and no `exercises`. Use only exercise `id`s from `strength.exercises` \
 (they fit the athlete's equipment and level) and follow `strength.options`: their `sports`, `minutes` per session, \
