@@ -2,6 +2,26 @@
 
 ## Next up
 
+- [ ] **Emails to users from Admin (asked 2 Nov).**
+  1. **"We miss you" after X days without signing in.** Admin → Settings: the number of days (e.g.
+     30), on/off overall, and per user on Admin → Users (an "inactivity emails" switch, e.g. off for
+     the admin's own test accounts). Sent once per absence (not every day), with a link to sign in
+     and to switch it off; the user can also turn it off in Profile → Email.
+  2. **News to all users (new functions etc.).** Admin → "Email users": subject and Markdown text,
+     preview, send a test to yourself, then send to everyone (or only active users / athletes /
+     coaches). Respect a "Product news" opt-out in Profile → Email, add an unsubscribe link, send in
+     small batches (the SMTP provider's limits), and log what was sent and to how many. Could reuse
+     a News & guides post: "Email this post to users".
+  3. **"Your account will be deleted if not used."** For accounts unused for a long time (e.g. 12
+     months): a warning email (30 days before, and again 7 days before) with a "Keep my account"
+     link that signs in or simply counts as activity; after that the account is deleted with
+     accounts.delete_account (as Admin → Users → Delete does, revoking Strava / Intervals.icu).
+     Admin switch (off by default), the months, and a list of accounts due on Admin → Users;
+     never for admins. Fits POPIA/GDPR "keep data no longer than needed": mention it in the privacy
+     notice (see Later).
+  Shared: a Profile → Email section for the user's choices, every email with an unsubscribe link,
+  and Admin → Users showing when each email went out.
+
 - [x] **"The demo screen doesn't look like the actual" (1 Nov).** My screenshots come from a local
   test copy with made-up demo data (Demo plan, Mon–Sun weeks, demo rides); yours from the server
   with your DC Training plan (Sat–Fri weeks). Two kinds of difference:
