@@ -5,6 +5,11 @@
 - [ ] **Emails to users from Admin (asked 2 Nov).**
   1. ✅ **Done (2 Nov): "We haven't seen you" after X days without a visit** (inactivity.py; Admin →
      Settings → Email: on/off, days; per user on Admin → Users; Profile checkbox for the user).
+     Per user it's already there: Admin → Users → Details → "We haven't seen you" email.
+     - [ ] **Exclude users more easily (asked 2 Nov):** under Admin → Settings → Email, a list of who
+       is excluded (and who switched it off themselves), with "Exclude a user…" to add one by name or
+       email, and on Admin → Users a filter "Excluded from reminders" and a small mark on those rows.
+       The same list could exclude people from news emails (Admin → Email users).
      **"We miss you" after X days without signing in.** Admin → Settings: the number of days (e.g.
      30), on/off overall, and per user on Admin → Users (an "inactivity emails" switch, e.g. off for
      the admin's own test accounts). Sent once per absence (not every day), with a link to sign in
