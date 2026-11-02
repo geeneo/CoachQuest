@@ -460,12 +460,7 @@ function CurrentPlan({ plan, athleteId, apiBase, ro }) {
     weeks.findIndex((w) => w.is_current),
   );
   const [idx, setIdx] = useState(nowIdx);
-  const [open, setOpen] = useState(null); // the day whose details show under the week
   const week = weeks[Math.min(idx, weeks.length - 1)];
-  const openDay = week.days.find((d) => d.date === open);
-  const sum = week.summary;
-  const label = (d) => d.weekday.slice(0, 1).toUpperCase() + d.weekday.slice(1);
-  const minutes = (d) => (d.duration_min || 0) + (d.extra_sessions || []).reduce((t, e) => t + (e.duration_min || 0), 0);
   return (
     <section className="card week current">
       <div className="row between wrap">
@@ -498,69 +493,84 @@ function CurrentPlan({ plan, athleteId, apiBase, ro }) {
         </div>
       </div>
       {week.focus && <p className="small muted plan-week-focus">{week.focus}</p>}
-      <div className="mini-week">
-        {week.days.map((d) => {
-          const st = DAY_STATUS[d.status];
-          const changed = d.changed_from;
-          return (
-            <button
-              type="button"
-              key={d.date}
-              className={`mini-day ${st?.cls || ""} ${d.is_today ? "today" : ""} ${d.type === "Rest" ? "rest" : ""} ${open === d.date ? "open" : ""}`}
-              title={d.description}
-              aria-expanded={open === d.date}
-              onClick={() => setOpen(open === d.date ? null : d.date)}
-            >
-              <span className="muted small">
-                {label(d)} {shortDate(d.date)}
-              </span>
-              <strong>{d.type}</strong>
-              {minutes(d) > 0 && (
-                <span className="small muted mini-note">
-                  {duration(minutes(d) * 60)}
-                  {d.planned_tss > 0 && ` · ≈${d.planned_tss} TSS`}
-                </span>
-              )}
-              {d.actual && (
-                <span className="small mini-done">
-                  {duration(d.actual.minutes * 60)}
-                  {d.actual.km > 0 && ` · ${Math.round(d.actual.km)} km`}
-                  {d.actual.tss ? ` · ${d.actual.tss} TSS` : ""}
-                </span>
-              )}
-              {changed && <span className="small muted mini-note">🔄 planned {changed.type}</span>}
-              {d.moved_from && <span className="small muted mini-note">↪️ from {label({ weekday: weekdayOf(d.moved_from) })}</span>}
-              {st && d.status !== "today" && (
-                <span className="small mini-status">
-                  <span className="mini-badge" role="img" aria-hidden="true">
-                    {st.emoji}
-                  </span>{" "}
-                  {d.status === "moved" ? `Done ${label({ weekday: weekdayOf(d.moved_to) })}` : st.label}
-                </span>
-              )}
-              {d.status === "today" && <span className="small accent mini-status">🎯 Today</span>}
-            </button>
-          );
-        })}
-      </div>
-      {openDay && <PlanDayDetail d={openDay} close={() => setOpen(null)} />}
-      {sum && (
-        <WeekTotals
-          t={{
-            planned_min: sum.planned_minutes,
-            done_min: sum.logged_minutes,
-            planned_tss: sum.planned_tss,
-            done_tss: sum.logged_tss,
-            km: sum.logged_km,
-            elevation_m: sum.logged_elevation_m,
-            sessions_done: sum.sessions_done,
-            sessions_due: sum.sessions_due,
-          }}
-          dates={week.days.map((d) => d.date)}
-          load={plan.load}
-        />
-      )}
+      <PlanWeek plan={plan} week={week} />
     </section>
+  );
+}
+
+// A plan week's days (planned and done, how each went; click one for its details) and its totals.
+// Used by the Current plan card and the AI coach tab's "This week so far" (ThisWeek.jsx).
+export function PlanWeek({ plan, week }) {
+  const [open, setOpen] = useState(null); // the day whose details show under the week
+  const openDay = week.days.find((d) => d.date === open);
+  const sum = week.summary;
+  const label = (d) => d.weekday.slice(0, 1).toUpperCase() + d.weekday.slice(1);
+  const minutes = (d) => (d.duration_min || 0) + (d.extra_sessions || []).reduce((t, e) => t + (e.duration_min || 0), 0);
+  return (
+    <>
+  <div className="mini-week">
+    {week.days.map((d) => {
+      const st = DAY_STATUS[d.status];
+      const changed = d.changed_from;
+      return (
+        <button
+          type="button"
+          key={d.date}
+          className={`mini-day ${st?.cls || ""} ${d.is_today ? "today" : ""} ${d.type === "Rest" ? "rest" : ""} ${open === d.date ? "open" : ""}`}
+          title={d.description}
+          aria-expanded={open === d.date}
+          onClick={() => setOpen(open === d.date ? null : d.date)}
+        >
+          <span className="muted small">
+            {label(d)} {shortDate(d.date)}
+          </span>
+          <strong>{d.type}</strong>
+          {minutes(d) > 0 && (
+            <span className="small muted mini-note">
+              {duration(minutes(d) * 60)}
+              {d.planned_tss > 0 && ` · ≈${d.planned_tss} TSS`}
+            </span>
+          )}
+          {d.actual && (
+            <span className="small mini-done">
+              {duration(d.actual.minutes * 60)}
+              {d.actual.km > 0 && ` · ${Math.round(d.actual.km)} km`}
+              {d.actual.tss ? ` · ${d.actual.tss} TSS` : ""}
+            </span>
+          )}
+          {changed && <span className="small muted mini-note">🔄 planned {changed.type}</span>}
+          {d.moved_from && <span className="small muted mini-note">↪️ from {label({ weekday: weekdayOf(d.moved_from) })}</span>}
+          {st && d.status !== "today" && (
+            <span className="small mini-status">
+              <span className="mini-badge" role="img" aria-hidden="true">
+                {st.emoji}
+              </span>{" "}
+              {d.status === "moved" ? `Done ${label({ weekday: weekdayOf(d.moved_to) })}` : st.label}
+            </span>
+          )}
+          {d.status === "today" && <span className="small accent mini-status">🎯 Today</span>}
+        </button>
+      );
+    })}
+  </div>
+  {openDay && <PlanDayDetail d={openDay} close={() => setOpen(null)} />}
+  {sum && (
+    <WeekTotals
+      t={{
+        planned_min: sum.planned_minutes,
+        done_min: sum.logged_minutes,
+        planned_tss: sum.planned_tss,
+        done_tss: sum.logged_tss,
+        km: sum.logged_km,
+        elevation_m: sum.logged_elevation_m,
+        sessions_done: sum.sessions_done,
+        sessions_due: sum.sessions_due,
+      }}
+      dates={week.days.map((d) => d.date)}
+      load={plan.load}
+    />
+  )}
+    </>
   );
 }
 
