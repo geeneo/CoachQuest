@@ -34,7 +34,13 @@ export default function ThisWeek({ id, openTab }) {
           Still to come:{" "}
           {left
             .filter((d) => d.type !== "Rest")
-            .map((d) => `${label(d)} ${d.type === "Zwift / indoor" ? "indoor" : d.type.toLowerCase()} ${duration((d.duration_min || 0) * 60)}`)
+            .map(
+              (d) =>
+                `${label(d)} ` +
+                [d, ...(d.extra_sessions || [])]
+                  .map((x) => `${x.type === "Zwift / indoor" ? "indoor" : x.type.toLowerCase()} ${duration((x.duration_min || 0) * 60)}`)
+                  .join(" + "), // every session that day, as the day's box adds them up
+            )
             .join(" · ") || "rest days only"}
         </p>
       )}

@@ -525,6 +525,9 @@ export function PlanWeek({ plan, week }) {
             {label(d)} {shortDate(d.date)}
           </span>
           <strong>{d.type}</strong>
+          {(d.extra_sessions || []).length > 0 && (
+            <span className="small muted mini-note">+ {d.extra_sessions.map((e) => e.type).join(" + ")}</span>
+          )}
           {minutes(d) > 0 && (
             <span className="small muted mini-note">
               {duration(minutes(d) * 60)}
