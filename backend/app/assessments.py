@@ -63,6 +63,12 @@ against one, say so plainly rather than ignoring it.
 Write about 250 words of Markdown with these headings: "How the week went", "Recovery and wellness",
 "Progress", "Next week". Quote the numbers that matter. Under "Next week" give 2-4 concrete changes,
 within the coach instructions; flag any instruction the week's data argues against.
+
+Dates: `written_on` is today. `load` and `progress` are at the end of the reviewed week (`load.as_of`); when
+`load_today` is there, give both so they don't read as a contradiction ("CTL 52.0 at the end of the week,
+57 today after Saturday's long ride"). When `current_week` is there, the new week has already started:
+open "Next week" with one sentence on how it's going (`current_week.so_far`), then advise only the days in
+`current_week.still_to_come`. Never advise a date before `written_on`.
 Answer as JSON: `review_md` holds the review; `note_suggestions` holds 0-3 suggested athlete notes
 (usually none).
 
@@ -228,9 +234,44 @@ def readiness_facts(db: DbSession, athlete: User, scopes: set[str], today: date)
     return facts
 
 
-def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: date) -> dict:
+def _current_week(db: DbSession, athlete: User, start: date, today: date) -> dict | None:
+    """The week after the reviewed one, when it has begun: its plan days so far and still to come."""
+    acts = activities_since(db, athlete.id, datetime.combine(start - timedelta(days=1), datetime.min.time()))
+    for p in db.scalars(
+        select(Plan).where(Plan.athlete_id == athlete.id, Plan.start_date.is_not(None)).order_by(Plan.created_at.desc())
+    ):
+        weeks = plan_tracker.with_actuals(p.weeks or [], acts, today)
+        week = next((w for w in weeks if w["start"] == start.isoformat()), None)
+        if week is None:
+            continue
+
+        def brief(d: dict) -> dict:
+            return {
+                "date": d["date"],
+                "planned": " + ".join([d["type"], *(e["type"] for e in plan_tracker.extras(d))]),
+                "minutes": plan_tracker.day_minutes(d),
+            }
+
+        return {
+            "start": start.isoformat(),
+            "so_far": [
+                {
+                    **brief(d),
+                    "status": d["status"],
+                    **({"done_minutes": d["actual"]["minutes"], "done_km": d["actual"]["km"]} if d["actual"] else {}),
+                }
+                for d in week["days"]
+                if d["date"] <= today.isoformat()
+            ],
+            "still_to_come": [brief(d) for d in week["days"] if d["date"] > today.isoformat()],
+        }
+    return None
+
+
+def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: date, today: date | None = None) -> dict:
     week_end = week_start + timedelta(days=6)
-    facts: dict = {"week": f"{week_start.isoformat()} to {week_end.isoformat()}"}
+    today = today or week_end + timedelta(days=1)
+    facts: dict = {"week": f"{week_start.isoformat()} to {week_end.isoformat()}", "written_on": today.isoformat()}
     since = datetime.combine(week_start - timedelta(days=7), datetime.min.time())
     acts = [a for a in activities_since(db, athlete.id, since) if a.start_time.date() <= week_end]
     this_week = [a for a in acts if a.start_time.date() >= week_start]
@@ -254,7 +295,15 @@ def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: dat
         ]
     if "fitness" in scopes:
         curve, _ = load_curve(db, athlete.id, 14, week_end)
-        facts["load"] = {"ctl_start": curve[6].ctl, "ctl_end": curve[-1].ctl, "tsb_end": curve[-1].tsb}
+        facts["load"] = {
+            "as_of": week_end.isoformat(),
+            "ctl_start": curve[6].ctl,
+            "ctl_end": curve[-1].ctl,
+            "tsb_end": curve[-1].tsb,
+        }
+        if today > week_end + timedelta(days=1):
+            now = load_curve(db, athlete.id, 1, today)[0][-1]
+            facts["load_today"] = {"date": today.isoformat(), "ctl": now.ctl, "tsb": now.tsb}
         facts["progress"] = progress(db, athlete.id, week_end)
         facts["progress"].pop("ctl_trend", None)
     if "wellness" in scopes:
@@ -307,6 +356,10 @@ def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: dat
                 **{k: v for k, v in done.items() if k not in ("week_start", "is_current")},
                 "workouts": [{k: v for k, v in w.items() if k not in ("id", "planned_if")} for w in done["workouts"]],
             }
+        if today > week_end + timedelta(days=1):
+            current = _current_week(db, athlete, week_end + timedelta(days=1), today)
+            if current:
+                facts["current_week"] = current
         facts["upcoming_races"] = [
             {k: v for k, v in race_out(r).items() if k in ("name", "target_date", "days_to_go", "target_ctl")}
             for r in upcoming(db, athlete.id)
@@ -334,7 +387,7 @@ async def create(db: DbSession, viewer: User, athlete: User, kind: str, schedule
         facts, prompt, period = readiness_facts(db, athlete, scopes, today), READINESS_PROMPT, today
     else:
         last_week = week_start_of(today, athlete.week_start or 0) - timedelta(weeks=1)
-        facts, prompt, period = weekly_facts(db, athlete, scopes, last_week), WEEKLY_PROMPT, last_week
+        facts, prompt, period = weekly_facts(db, athlete, scopes, last_week, today), WEEKLY_PROMPT, last_week
     require_data(db, athlete)
     stored = json.loads(json.dumps(facts, default=str))
     same = _unchanged(db, athlete.id, kind, period, stored)

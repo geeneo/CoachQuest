@@ -74,3 +74,64 @@ def test_week_totals_and_load(make_user):
     cal = p.get(f"/api/athletes/me/calendar?start={start}&end={start + timedelta(days=6)}").json()
     first = cal["days"][0]
     assert first["plan"]["planned_tss"] == mon["planned_tss"] and first["load"]["ctl"] > 0
+
+
+def test_review_written_mid_week_knows_the_new_week(make_user):
+    from app import assessments
+    from app.db import User
+
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    today = date.today()
+    this_monday = today - timedelta(days=today.weekday())
+    last_monday = this_monday - timedelta(days=7)
+    weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+    def week(start):
+        return {
+            "start": start.isoformat(),
+            "phase": "Build",
+            "focus": "",
+            "status": "draft",
+            "days": [
+                {
+                    "date": (start + timedelta(days=i)).isoformat(),
+                    "weekday": weekdays[i],
+                    "type": "Road",
+                    "description": "",
+                    "duration_min": 60,
+                    "intensity": ["Z2"],
+                    "locked": False,
+                }
+                for i in range(7)
+            ],
+        }
+
+    with SessionLocal() as db:
+        db.add(
+            Plan(
+                athlete_id=aid,
+                author_id=aid,
+                title="P",
+                content_md="",
+                model="m",
+                start_date=last_monday,
+                weeks=[week(last_monday), week(this_monday)],
+            )
+        )
+        db.commit()
+        user = db.get(User, aid)
+        written = this_monday + timedelta(days=3)  # Thursday of the new week
+        facts = assessments.weekly_facts(db, user, {"plans", "fitness"}, last_monday, written)
+        assert (
+            facts["written_on"] == written.isoformat()
+            and facts["load"]["as_of"] == (this_monday - timedelta(days=1)).isoformat()
+        )
+        assert facts["load_today"]["date"] == written.isoformat()
+        cw = facts["current_week"]
+        assert [d["date"] for d in cw["so_far"]] == [(this_monday + timedelta(days=i)).isoformat() for i in range(4)]
+        assert len(cw["still_to_come"]) == 3 and cw["still_to_come"][0]["minutes"] == 60
+        # Written the day after the week: no new week yet.
+        facts = assessments.weekly_facts(db, user, {"plans", "fitness"}, last_monday, this_monday)
+        assert "current_week" not in facts and "load_today" not in facts
+    assert "Never advise a date before `written_on`" in assessments.WEEKLY_PROMPT

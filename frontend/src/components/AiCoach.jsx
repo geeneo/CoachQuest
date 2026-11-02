@@ -8,6 +8,7 @@ import { Stat } from "./WellnessPanel.jsx";
 import { CommentsToggle } from "./PlanComments.jsx";
 import { MedicalDisclaimer } from "./HealthConditions.jsx";
 import { useReadOnly } from "../lib/readOnly.js";
+import { PlanWeek } from "../pages/PlansPanel.jsx";
 
 const VERDICT = {
   go: ["GO", "Train as planned", "verdict-go"],
@@ -129,6 +130,9 @@ function Progress({ p }) {
 
 function WeeklyReviews({ id, reviews, busy, onRun }) {
   const [open, setOpen] = useState(reviews[0]?.id);
+  // The reviewed week's days and totals, from the current plan (when the week is in it).
+  const plan = useApi(`/api/athletes/${id}/plans/current`).data;
+  const weekOf = (start) => plan?.weeks?.find((w) => w.start === String(start).slice(0, 10));
   return (
     <section className="card">
       <div className="row between">
@@ -145,6 +149,11 @@ function WeeklyReviews({ id, reviews, busy, onRun }) {
           <summary>
             Week of {formatDate(r.period_start)} <span className="muted small">· {dateTime(r.created_at)}</span>
           </summary>
+          {open === r.id && weekOf(r.period_start) && (
+            <div className="review-week">
+              <PlanWeek plan={plan} week={weekOf(r.period_start)} />
+            </div>
+          )}
           <Markdown>{r.content_md}</Markdown>
           <CommentsToggle athleteId={id} target="assessment" targetId={r.id} count={r.comments} />
         </details>
