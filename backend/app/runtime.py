@@ -85,6 +85,21 @@ EDITABLE: dict[str, Editable] = {
         pattern=r"\S{8,200}",
         help="From the same Manage App page on Intervals.icu.",
     ),
+    "account_cleanup": Editable(
+        "Delete unused accounts",
+        "Accounts",
+        choices=("off", "on"),
+        help="On: an account nobody has used for the months below gets a warning email 30 days and again 7 days "
+        "before it is deleted (with its data, and CoachQuest's access to Strava and Intervals.icu). Signing in "
+        'keeps it. Never admins, disabled or unapproved accounts, or ones marked "Never delete" on Admin → Users. '
+        "Nothing is deleted when the warnings couldn't be emailed.",
+    ),
+    "account_cleanup_months": Editable(
+        "...after this many months unused",
+        "Accounts",
+        pattern=r"\d{1,2}",
+        help="Months without a visit before an account is deleted (default 12, at least 3).",
+    ),
     "registration_mode": Editable(
         "Registration",
         "Accounts",

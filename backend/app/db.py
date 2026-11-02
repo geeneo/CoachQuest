@@ -56,6 +56,10 @@ class User(Base):
     notify_inactivity: Mapped[bool] = mapped_column(Boolean, default=True)
     # Product news emails from the admins (news_email.py).
     notify_news: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Deleting unused accounts (account_cleanup.py): an admin's "never delete", and the warnings sent.
+    keep_account: Mapped[bool] = mapped_column(Boolean, default=False)
+    deletion_warned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deletion_final_warned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     inactivity_emails: Mapped[bool] = mapped_column(Boolean, default=True)
     inactivity_emailed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -775,6 +779,9 @@ _ADDED_COLUMNS = {
         "notify_comments": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_inactivity": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_news": "BOOLEAN NOT NULL DEFAULT 1",
+        "keep_account": "BOOLEAN NOT NULL DEFAULT 0",
+        "deletion_warned_at": "DATETIME",
+        "deletion_final_warned_at": "DATETIME",
         "inactivity_emails": "BOOLEAN NOT NULL DEFAULT 1",
         "inactivity_emailed_at": "DATETIME",
         "birth_date": "DATE",

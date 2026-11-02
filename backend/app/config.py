@@ -61,6 +61,8 @@ class Settings:
     storage_warn_free_gb: str = os.getenv("STORAGE_WARN_FREE_GB", "2")
     inactivity_email: str = os.getenv("INACTIVITY_EMAIL", "off")
     inactivity_days: str = os.getenv("INACTIVITY_DAYS", "30")
+    account_cleanup: str = os.getenv("ACCOUNT_CLEANUP", "off")
+    account_cleanup_months: str = os.getenv("ACCOUNT_CLEANUP_MONTHS", "12")
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
     anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "high")
     # Readiness notes, weekly reviews and chat. Empty model: the same as plans.

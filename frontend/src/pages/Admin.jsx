@@ -854,6 +854,23 @@ function UserDetail({ u, isMe, update, reload }) {
             <label className="check">
               <input
                 type="checkbox"
+                checked={u.keep_account}
+                onChange={(e) => update(u, { keep_account: e.target.checked })}
+              />{" "}
+              Never delete for not being used
+              <span className="hint">
+                {u.deletion
+                  ? `Deleted on ${formatDate(u.deletion.delete_on)} unless they sign in before.` +
+                    (u.deletion.warned_at ? ` Warned ${dateTime(u.deletion.warned_at)}` : " Not warned yet") +
+                    (u.deletion.final_warned_at ? `, final warning ${dateTime(u.deletion.final_warned_at)}.` : ".")
+                  : u.keep_account
+                    ? "Kept, however long it's unused."
+                    : "Unused accounts are deleted after warnings when Settings → Accounts → Delete unused accounts is on (never admins)."}
+              </span>
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
                 checked={!u.plan_approval_off}
                 onChange={(e) => update(u, { plan_approval_off: !e.target.checked })}
               />{" "}

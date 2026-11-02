@@ -271,6 +271,7 @@ class UserUpdate(BaseModel):
     ai_disabled: bool | None = None
     emails_disabled: bool | None = None
     inactivity_emails: bool | None = None
+    keep_account: bool | None = None
     plan_approval_off: bool | None = None
     disabled_reason: str | None = Field(default=None, max_length=200)
     # A number overrides the site's monthly limit for this user (0 = no limit); null goes back to the site's.
@@ -555,6 +556,8 @@ def update_user(
         user.plan_approval_off = body.plan_approval_off
     if body.inactivity_emails is not None:
         user.inactivity_emails = body.inactivity_emails
+    if body.keep_account is not None:
+        user.keep_account = body.keep_account
     if body.ai_disabled is not None and body.ai_disabled != user.ai_disabled:
         user.ai_disabled = body.ai_disabled
         auth_log.admin_action(db, request, "admin_ai_off" if body.ai_disabled else "admin_ai_on", admin, user)

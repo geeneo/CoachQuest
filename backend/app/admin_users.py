@@ -14,7 +14,7 @@ from datetime import timedelta
 from sqlalchemy import case, func, select, text
 from sqlalchemy.orm import Session as DbSession
 
-from . import auth_log, backfill, runtime, sync_options
+from . import account_cleanup, auth_log, backfill, runtime, sync_options
 from .coach import monthly_limit
 from .db import (
     Activity,
@@ -172,6 +172,7 @@ def overview(db: DbSession) -> list[dict]:
         if athlete_id != uid:
             row["for_others"] += n
     storage = _storage(db)
+    cleanup_on = account_cleanup.enabled()
 
     view_data = runtime.get("admin_view_data") == "on"
     super_approval = runtime.get("signup_approval") == "on"
@@ -211,6 +212,12 @@ def overview(db: DbSession) -> list[dict]:
         quiet = seen is None or seen < now - QUIET
         if u.is_active and u.approved and quiet:
             flags.append("no sign-in for 30 days")
+        deletion = None
+        if cleanup_on and u.is_active and u.approved and not u.is_admin and not u.keep_account:
+            deletion = account_cleanup.status(u, seen or u.created_at)
+            if (deletion["delete_on"] - now.date()).days <= account_cleanup.FIRST_DAYS:
+                flags.append(f"deleted {deletion['delete_on']:%d %b} if unused")
+                attention += 1
         if quiet and uc.get("strava", {}).get("app") == "shared":
             # Holds one of the shared Strava app's few athlete slots without using it.
             flags.append("idle on shared Strava app")
@@ -245,6 +252,8 @@ def overview(db: DbSession) -> list[dict]:
                 "inactivity_emails": u.inactivity_emails,
                 "notify_inactivity": u.notify_inactivity,
                 "inactivity_emailed_at": u.inactivity_emailed_at,
+                "keep_account": u.keep_account,
+                "deletion": deletion,
                 "plan_approval_off": u.plan_approval_off,
                 "ai_monthly_limit": u.ai_monthly_limit,
                 "ai_limit": monthly_limit(u),

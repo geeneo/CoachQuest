@@ -23,7 +23,12 @@
      coaches). Respect a "Product news" opt-out in Profile → Email, add an unsubscribe link, send in
      small batches (the SMTP provider's limits), and log what was sent and to how many. Could reuse
      a News & guides post: "Email this post to users".
-  3. **"Your account will be deleted if not used."** For accounts unused for a long time (e.g. 12
+  3. ✅ **Done (2 Nov): deleting unused accounts after two warnings** (account_cleanup.py; Admin →
+     Settings → Accounts: on/off, months; warnings 30 and 7 days before, at least a week after the
+     final one before deleting, nothing deleted when the warnings couldn't be sent; signing in
+     keeps it; never admins, disabled, unapproved or "Never delete" accounts; Admin → Users shows
+     the date and warnings). Still to do: mention it in the privacy notice.
+     **"Your account will be deleted if not used."** For accounts unused for a long time (e.g. 12
      months): a warning email (30 days before, and again 7 days before) with a "Keep my account"
      link that signs in or simply counts as activity; after that the account is deleted with
      accounts.delete_account (as Admin → Users → Delete does, revoking Strava / Intervals.icu).
