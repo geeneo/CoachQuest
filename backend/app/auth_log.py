@@ -38,6 +38,7 @@ EVENTS = {
     "admin_deleted": "Deleted by an admin",
     "admin_deploy": "Update deployed from the admin page",
     "admin_emails_off": "Emails turned off by an admin",
+    "admin_news_email": "News email sent to users",
     "admin_emails_on": "Emails turned on by an admin",
     "admin_ai_off": "AI coach turned off by an admin",
     "admin_ai_on": "AI coach turned on by an admin",

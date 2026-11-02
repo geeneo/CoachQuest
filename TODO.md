@@ -9,7 +9,11 @@
      30), on/off overall, and per user on Admin → Users (an "inactivity emails" switch, e.g. off for
      the admin's own test accounts). Sent once per absence (not every day), with a link to sign in
      and to switch it off; the user can also turn it off in Profile → Email.
-  2. **News to all users (new functions etc.).** Admin → "Email users": subject and Markdown text,
+  2. ✅ **Done (2 Nov): Admin → Email users** (news_email.py; super admins: subject and text, start
+     from a News & guides post, audience everyone / last 30 days / coaches with counts, test to
+     yourself, background send with progress and history; Profile checkbox "Email me CoachQuest
+     news"). Still open from this point: a one-click unsubscribe link that works without signing in.
+     **News to all users (new functions etc.).** Admin → "Email users": subject and Markdown text,
      preview, send a test to yourself, then send to everyone (or only active users / athletes /
      coaches). Respect a "Product news" opt-out in Profile → Email, add an unsubscribe link, send in
      small batches (the SMTP provider's limits), and log what was sent and to how many. Could reuse

@@ -54,6 +54,8 @@ class User(Base):
     # "We haven't seen you" emails (inactivity.py): the user's own switch, an admin's per-user switch,
     # and when the last one went out (one per absence).
     notify_inactivity: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Product news emails from the admins (news_email.py).
+    notify_news: Mapped[bool] = mapped_column(Boolean, default=True)
     inactivity_emails: Mapped[bool] = mapped_column(Boolean, default=True)
     inactivity_emailed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -685,6 +687,24 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class NewsEmail(Base):
+    """A product news email an admin sent to users (Admin → Email users, news_email.py)."""
+
+    __tablename__ = "news_emails"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    subject: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    audience: Mapped[str] = mapped_column(String(20))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    status: Mapped[str] = mapped_column(String(10), default="sending")  # sending | sent
+    recipients: Mapped[int] = mapped_column(Integer, default=0)
+    sent: Mapped[int] = mapped_column(Integer, default=0)
+    failed: Mapped[int] = mapped_column(Integer, default=0)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class StorageReading(Base):
     """One reading a day of the database size and free disk, for Admin → Storage (storage_watch.py)."""
 
@@ -754,6 +774,7 @@ _ADDED_COLUMNS = {
         "notify_sharing": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_comments": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_inactivity": "BOOLEAN NOT NULL DEFAULT 1",
+        "notify_news": "BOOLEAN NOT NULL DEFAULT 1",
         "inactivity_emails": "BOOLEAN NOT NULL DEFAULT 1",
         "inactivity_emailed_at": "DATETIME",
         "birth_date": "DATE",

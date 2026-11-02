@@ -33,6 +33,7 @@ export default function Profile() {
     notify_sharing: user.notify_sharing ?? true,
     notify_comments: user.notify_comments ?? true,
     notify_inactivity: user.notify_inactivity ?? true,
+    notify_news: user.notify_news ?? true,
     timezone: user.timezone || "",
     date_format: user.date_format || "d_mon_y",
     time_format: user.time_format || "24h",
@@ -54,6 +55,7 @@ export default function Profile() {
       notify_sharing: form.notify_sharing,
       notify_comments: form.notify_comments,
       notify_inactivity: form.notify_inactivity,
+      notify_news: form.notify_news,
       ...(form.timezone ? { timezone: form.timezone } : {}),
       // Only when changed, so saving other fields doesn't mark a Garmin birth date as typed in.
       ...((form.birth_date || null) !== (user.birth_date || null) ? { birth_date: form.birth_date || null } : {}),
@@ -161,6 +163,15 @@ export default function Profile() {
             onChange={(e) => setForm({ ...form, notify_inactivity: e.target.checked })}
           />
           Email me a reminder when I haven't been on CoachQuest for a while (what's new since my last visit)
+        </label>
+        <label className="check wide">
+          <input
+            type="checkbox"
+            checked={form.notify_news}
+            disabled={user.emails_disabled}
+            onChange={(e) => setForm({ ...form, notify_news: e.target.checked })}
+          />
+          Email me CoachQuest news (new features and changes, now and then)
         </label>
         <label className="wide">
           Goal

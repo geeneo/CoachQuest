@@ -2884,3 +2884,15 @@ button.mini-day {
 .review-week {
   margin: 0.6rem 0 0.8rem;
 }
+/* Admin → Email users (NewsEmails.jsx). */
+.news-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 760px;
+}
+.news-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}

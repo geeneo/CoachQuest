@@ -8,6 +8,7 @@ import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { dateTime, duration, formatDate } from "../lib/format.js";
 import { AdminSignIns } from "../components/SignInLog.jsx";
+import NewsEmails from "../components/NewsEmails.jsx";
 import UpdateCoachQuest from "../components/UpdateCoachQuest.jsx";
 import WelcomeAdmin from "../components/WelcomeAdmin.jsx";
 import { Backfill } from "./Connections.jsx";
@@ -24,6 +25,7 @@ const ADMIN_TABS = [
   ["ai", "AI usage"],
   ["storage", "Storage"],
   ["sign-ins", "Sign-ins"],
+  ["email", "Email users", "super"],
   ["update", "Update", "super"],
 ];
 
@@ -61,6 +63,7 @@ export default function Admin() {
       {current === "storage" && <Storage rev={rev} />}
       {current === "sign-ins" && <AdminSignIns />}
       {current === "update" && <UpdateCoachQuest />}
+      {current === "email" && <NewsEmails />}
     </>
   );
 }

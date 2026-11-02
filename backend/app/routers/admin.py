@@ -19,6 +19,7 @@ from .. import (
     backfill,
     deploy_requests,
     mailer,
+    news_email,
     platform_catalog,
     runtime,
     storage_watch,
@@ -31,8 +32,10 @@ from ..db import (
     AuthEvent,
     Connection,
     Grant,
+    NewsEmail,
     Plan,
     PlatformWorkout,
+    Post,
     Session,
     StorageReading,
     User,
@@ -413,6 +416,69 @@ async def admin_delete_user(
     except mailer.MailError as exc:
         emailed = f"Not emailed: {exc}"
     return {"ok": True, "deleted": preview["deleted"], "revoked": revoked, "emailed": emailed}
+
+
+class NewsDraft(BaseModel):
+    subject: str = Field(min_length=3, max_length=200)
+    body: str = Field(min_length=10, max_length=20000)
+    audience: str = "all"
+
+
+def _super(admin: User) -> None:
+    if not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only a super admin can email users")
+
+
+@router.get("/news-emails")
+def news_emails(admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Who each audience reaches now, what was sent before, and posts to start from."""
+    _super(admin)
+    sent = db.scalars(select(NewsEmail).order_by(NewsEmail.created_at.desc()).limit(30)).all()
+    posts = db.scalars(select(Post).where(Post.published).order_by(Post.published_at.desc()).limit(20)).all()
+    return {
+        "audiences": [
+            {"id": k, "label": v, "count": len(news_email.recipients(db, k))} for k, v in news_email.AUDIENCES.items()
+        ],
+        "mail_ready": mailer.configured(),
+        "history": [news_email.out(e, db) for e in sent],
+        "posts": [{"id": x.id, "title": x.title, "summary": x.summary, "body_md": x.body_md} for x in posts],
+        "base_url": settings.public_base_url,
+    }
+
+
+@router.post("/news-emails/test")
+async def news_email_test(body: NewsDraft, admin: User = Depends(admin_user)):
+    """Send the draft to the admin themselves, as users would get it."""
+    _super(admin)
+    try:
+        await mailer.send(admin.email, f"[Test] {body.subject}", news_email.text(admin, body.body))
+    except mailer.MailError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "to": admin.email}
+
+
+@router.post("/news-emails")
+def news_email_send(
+    body: NewsDraft,
+    background: BackgroundTasks,
+    request: Request,
+    admin: User = Depends(admin_user),
+    db: DbSession = Depends(get_db),
+):
+    """Send to the chosen audience, in the background; the history shows its progress."""
+    _super(admin)
+    if body.audience not in news_email.AUDIENCES:
+        raise HTTPException(status_code=422, detail="Pick who gets it")
+    if not mailer.configured():
+        raise HTTPException(status_code=409, detail="Email is not set up yet (Admin → Settings → Email).")
+    if db.scalar(select(NewsEmail.id).where(NewsEmail.status == "sending")):
+        raise HTTPException(status_code=409, detail="Another news email is still being sent: wait for it to finish")
+    e = NewsEmail(subject=body.subject.strip(), body=body.body, audience=body.audience, created_by=admin.id)
+    db.add(e)
+    db.commit()
+    auth_log.record(db, request, "admin_news_email", admin, None, f'"{e.subject}" to {body.audience}')
+    background.add_task(news_email.send_all, e.id)
+    return news_email.out(e, db)
 
 
 @router.get("/storage")
