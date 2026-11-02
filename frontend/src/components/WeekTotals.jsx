@@ -24,9 +24,10 @@ export default function WeekTotals({ t, dates, load }) {
           </strong>
         </span>
       )}
-      {t.km > 0 && (
+      {(t.km > 0 || t.planned_km > 0) && (
         <span>
-          <strong>{Math.round(t.km).toLocaleString()} km</strong>
+          <strong>{Math.round(t.km || 0).toLocaleString()} km</strong>
+          {t.planned_km > 0 && <span className="muted"> of ≈{Math.round(t.planned_km).toLocaleString()}</span>}
           <span className="muted"> · {Math.round(t.elevation_m).toLocaleString()} m↑</span>
         </span>
       )}

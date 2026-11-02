@@ -464,6 +464,7 @@ function weekTotals(days) {
     planned_min: days.reduce((t, d) => t + planMinutes(d.plan), 0),
     done_min: acts.reduce((t, a) => t + (a.minutes || 0), 0),
     planned_tss: days.reduce((t, d) => t + (d.plan?.planned_tss || 0), 0),
+    planned_km: days.reduce((t, d) => t + (d.plan?.planned_km || 0), 0),
     done_tss: acts.reduce((t, a) => t + (a.tss || 0), 0),
     km: acts.reduce((t, a) => t + (a.km || 0), 0),
     elevation_m: acts.reduce((t, a) => t + (a.elevation_m || 0), 0),
@@ -527,8 +528,8 @@ function CalDayDetail({ d, close }) {
           <tr>
             <td className="muted">Planned</td>
             <td className="num">{planMinutes(p) ? duration(planMinutes(p) * 60) : "–"}</td>
-            <td className="num">–</td>
-            <td className="num">–</td>
+            <td className="num">{p?.planned_km ? `${p.planned_from === "estimate" ? "≈" : ""}${p.planned_km}` : "–"}</td>
+            <td className="num">{p?.planned_elevation_m ? p.planned_elevation_m.toLocaleString() : "–"}</td>
             <td className="num">{p?.planned_tss ? `≈${p.planned_tss}` : "–"}</td>
           </tr>
           <tr>

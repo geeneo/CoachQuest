@@ -560,6 +560,7 @@ export function PlanWeek({ plan, week }) {
         planned_min: sum.planned_minutes,
         done_min: sum.logged_minutes,
         planned_tss: sum.planned_tss,
+        planned_km: week.days.reduce((t, d) => t + (d.planned_km || 0), 0),
         done_tss: sum.logged_tss,
         km: sum.logged_km,
         elevation_m: sum.logged_elevation_m,
@@ -622,8 +623,8 @@ function PlanDayDetail({ d, close }) {
           <tr>
             <td className="muted">Planned</td>
             <td className="num">{duration(sessions.reduce((t, s) => t + (s.duration_min || 0), 0) * 60) || "–"}</td>
-            <td className="num">–</td>
-            <td className="num">–</td>
+            <td className="num">{d.planned_km ? `${d.planned_from === "estimate" ? "≈" : ""}${d.planned_km}` : "–"}</td>
+            <td className="num">{d.planned_elevation_m ? d.planned_elevation_m.toLocaleString() : "–"}</td>
             <td className="num">{d.planned_tss ? `≈${d.planned_tss}` : "–"}</td>
           </tr>
           <tr>

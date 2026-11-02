@@ -71,6 +71,9 @@ def test_week_totals_and_load(make_user):
     assert s["logged_tss"] == 230 and s["logged_km"] == 120 and s["logged_elevation_m"] == 1300
     assert s["planned_tss"] == mon["planned_tss"] + round(0.68**2 * 100)
     assert out["load"][start.isoformat()]["ctl"] > 0
+    # Planned km: 4 h at the usual 30 km/h (the one ride: 120 km in 4 h), and none for a rest day.
+    assert mon["planned_km"] == 120 and mon["planned_from"] == "estimate"
+    assert "planned_km" not in week["days"][1]
     cal = p.get(f"/api/athletes/me/calendar?start={start}&end={start + timedelta(days=6)}").json()
     first = cal["days"][0]
     assert first["plan"]["planned_tss"] == mon["planned_tss"] and first["load"]["ctl"] > 0
@@ -135,3 +138,14 @@ def test_review_written_mid_week_knows_the_new_week(make_user):
         facts = assessments.weekly_facts(db, user, {"plans", "fitness"}, last_monday, this_monday)
         assert "current_week" not in facts and "load_today" not in facts
     assert "Never advise a date before `written_on`" in assessments.WEEKLY_PROMPT
+
+
+def test_planned_distance_from_a_route():
+    from app.ride_info import planned_distance
+
+    route = {"kind": "route", "distance_m": 128500, "elevation_m": 1288}
+    day = {"type": "Road", "duration_min": 316, "segment": route}
+    assert planned_distance(day, 25) == {"planned_km": 128.5, "planned_elevation_m": 1288, "planned_from": "route"}
+    climb = {"kind": "segment", "distance_m": 700, "elevation_m": 45}
+    assert planned_distance({"type": "Road", "duration_min": 60, "segment": climb}, 25)["planned_from"] == "estimate"
+    assert planned_distance({"type": "Zwift / indoor", "duration_min": 60}, 25) == {}

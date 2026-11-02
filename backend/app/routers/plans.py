@@ -23,6 +23,7 @@ from .. import (
     plan_tracker,
     plan_workouts,
     platform_catalog,
+    ride_info,
     runtime,
     segments,
     strength,
@@ -112,6 +113,10 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
                 out["load"] = load_by_day(db, p.athlete_id, first, last, today)
             out["platform_matching"] = _add_matches(db, athlete, out["weeks"], today)
             _add_segments(db, p.athlete_id, out["weeks"])
+            speed = ride_info.recent_speed(db, p.athlete_id)
+            for w in out["weeks"]:
+                for d in w["days"]:
+                    d.update(ride_info.planned_distance(d, speed))
             out["max_sessions_per_day"] = runtime.max_sessions_per_day()
             out["exercise_photos"] = strength.photos_on()
     return out

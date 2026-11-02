@@ -21,6 +21,7 @@ from .. import (
     localtime,
     plan_follow,
     platforms,
+    ride_info,
     segments,
     sync_engine,
     workouts,
@@ -353,6 +354,9 @@ def calendar(
     n_comments = comments.counts(db, "workout", [sw.id for sw in rows])
     plan_follow.update_all(db, target, start, end)  # the plans follow what was done
     plan_days = _plan_days(db, target.id, start, end)
+    speed = ride_info.recent_speed(db, target.id) if plan_days else None
+    for pd in plan_days.values():
+        pd.update(ride_info.planned_distance(pd, speed))  # planned km (and climbing) for the day panel
     load = load_by_day(db, target.id, start, end, today) if "fitness" in scopes else {}
     days = []
     for i in range((end - start).days + 1):

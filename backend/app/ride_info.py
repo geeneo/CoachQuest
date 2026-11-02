@@ -39,6 +39,24 @@ def recent_speed(db: DbSession, athlete_id: int) -> float | None:
     return round(sum(a.distance_m for a in rides) / seconds * 3.6, 1) if seconds else None
 
 
+OUTDOOR_RIDES = {"Road", "Gravel", "MTB", "E-MTB", "Hill repeats"}
+
+
+def planned_distance(day: dict, speed: float | None) -> dict:
+    """A plan day's planned km and climbing: its route's when it rides one, else roughly from the
+    planned time at the athlete's usual outdoor speed (outdoor rides only). {} when there's nothing."""
+    seg = day.get("segment")
+    if seg and seg.get("kind") != "segment" and seg.get("distance_m"):
+        return {
+            "planned_km": round(seg["distance_m"] / 1000, 1),
+            "planned_elevation_m": seg.get("elevation_m"),
+            "planned_from": "route",
+        }
+    if day.get("type") in OUTDOOR_RIDES and day.get("duration_min") and speed:
+        return {"planned_km": round(speed * day["duration_min"] / 60), "planned_from": "estimate"}
+    return {}
+
+
 def route_history(groups: list[dict], seg: Segment) -> dict | None:
     """The athlete's ridden route (a group from ride_routes.ride_groups) that follows this favourite."""
     if not seg.polyline or not seg.distance_m:
