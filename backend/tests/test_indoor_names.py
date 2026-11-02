@@ -94,3 +94,16 @@ def test_saved_plans_are_fixed_and_the_workout_renamed(make_user):
     with SessionLocal() as db:
         sw = db.query(ScheduledWorkout).filter_by(plan_id=plan_id).one()
         assert sw.name == "Intervals 5×2 min" and "Kendal" not in sw.description
+
+
+def test_tidy_after_cleaning_and_on_old_plans():
+    s = {
+        "type": "Zwift / indoor",
+        "description": "efforts indoors (0.72 km at 6.2%, 45 m climb, about 2 min each): 5x2 min at 97-102% FTP.",
+        "workout": None,
+    }
+    assert indoor_names.scrub_session(s, [])  # cleaned before tidy() existed: tidied now
+    assert s["description"] == "Efforts indoors: 5x2 min at 97-102% FTP."
+    assert not indoor_names.scrub_session(s, [])  # and left alone after that
+    kept = {"type": "Zwift / indoor", "description": "Sweet spot (88-94% FTP).\n\nCool down easy.", "workout": None}
+    assert not indoor_names.scrub_session(kept, [])  # brackets without a climb, and line breaks, stay

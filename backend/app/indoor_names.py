@@ -78,12 +78,24 @@ def _clean_text(text: str, pats: list[re.Pattern], fallback: str) -> str:
         sentence = re.sub(r"\s+([.,!?;:])", r"\1", re.sub(r"\s{2,}", " ", sentence)).strip(" ,;:-")
         if len(re.findall(r"\w+", sentence)) >= 3:
             out.append(sentence)
-    return " ".join(out) or fallback
+    return tidy(" ".join(out)) or fallback
+
+
+# A climb's details in brackets, e.g. "(0.72 km at 6.2%, 45 m climb, about 2 min each)": a distance and a
+# gradient mean nothing on a trainer.
+_CLIMB_DETAILS = re.compile(r"[ \t]*\((?=[^)]*\d\s*km)(?=[^)]*\d\s*%)[^)]*\)")
+
+
+def tidy(text: str) -> str:
+    """An indoor description without a climb's details, starting with a capital letter."""
+    text = _CLIMB_DETAILS.sub("", text or "")
+    text = re.sub(r"[ \t]+([.,!?;:])", r"\1", re.sub(r"[ \t]{2,}", " ", text)).strip(" ,;:-")
+    return text[:1].upper() + text[1:]
 
 
 def scrub_session(session: dict, pats: list[re.Pattern]) -> bool:
     """Take favourite names out of one indoor session; True when it changed."""
-    if session.get("type") not in INDOOR or not pats:
+    if session.get("type") not in INDOOR:
         return False
     changed = False
     w = session.get("workout")
@@ -94,6 +106,10 @@ def scrub_session(session: dict, pats: list[re.Pattern]) -> bool:
         session["description"] = _clean_text(
             session["description"], pats, f"Indoor: {w['name'] if w else session['type']}."
         )
+        changed = True
+    tidied = tidy(session.get("description", ""))
+    if tidied and tidied != session.get("description"):
+        session["description"] = tidied  # also plans cleaned before tidy() existed
         changed = True
     return changed
 

@@ -280,6 +280,12 @@ export default function TrainingCalendar({ id, isMe }) {
                     {view === "day" ? ` · ${d.plan.plan_title}` : ""}
                   </span>
                 )}
+                {(d.plan.extra_sessions || []).map((e, i) => (
+                  <span key={i} className="cal-followed small muted" title={e.description}>
+                    + {e.type}
+                    {e.duration_min ? ` ${e.duration_min}′` : ""}
+                  </span>
+                ))}
                 {d.plan.changed_from && (
                   <span className="cal-followed small muted" title={d.plan.changed_from.description}>
                     🔄 planned {d.plan.changed_from.type}
