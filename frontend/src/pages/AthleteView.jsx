@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import Activities from "../components/ActivitiesTable.jsx";
 import FitnessChart from "../components/FitnessChart.jsx";
 import AiCoach from "../components/AiCoach.jsx";
+import ThisWeek from "../components/ThisWeek.jsx";
 import AthleteNotes from "../components/AthleteNotes.jsx";
 import CoachInstructions from "../components/CoachInstructions.jsx";
 import TrainingCalendar from "../components/TrainingCalendar.jsx";
@@ -82,6 +83,7 @@ export default function AthleteView({ self }) {
       {current === "calendar" && <TrainingCalendar id={id} isMe={!!self} />}
       {current === "coach" && (
         <>
+          <ThisWeek id={id} openTab={setTab} />
           <CoachInstructions id={id} isMe={!!self} />
           <AthleteNotes id={id} isMe={!!self} />
           <AiCoach id={id} isMe={!!self} />

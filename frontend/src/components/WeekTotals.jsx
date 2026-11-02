@@ -12,8 +12,8 @@ export default function WeekTotals({ t, dates, load }) {
     <div className="week-totals small">
       <span>
         <span className="muted">Time </span>
-        <strong>{duration(t.done_min * 60) || "0m"}</strong>
-        <span className="muted"> of {duration(t.planned_min * 60) || "0m"}</span>
+        <strong>{t.done_min ? duration(t.done_min * 60) : "0m"}</strong>
+        <span className="muted"> of {t.planned_min ? duration(t.planned_min * 60) : "0m"}</span>
         {pct != null && t.done_min > 0 && <span className={pct >= 70 ? "ok-text" : "warn-text"}> ({pct}%)</span>}
       </span>
       {t.sessions_due > 0 && (
