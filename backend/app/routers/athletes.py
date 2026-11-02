@@ -42,6 +42,7 @@ class ProfileUpdate(BaseModel):
     week_start: int | None = Field(default=None, ge=0, le=6)
     notify_sharing: bool | None = None
     notify_comments: bool | None = None
+    notify_inactivity: bool | None = None
     timezone: str | None = Field(default=None, max_length=64)
     birth_date: date | None = None
     date_format: Literal[DATE_FORMATS] | None = None

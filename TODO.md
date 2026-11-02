@@ -3,7 +3,9 @@
 ## Next up
 
 - [ ] **Emails to users from Admin (asked 2 Nov).**
-  1. **"We miss you" after X days without signing in.** Admin → Settings: the number of days (e.g.
+  1. ✅ **Done (2 Nov): "We haven't seen you" after X days without a visit** (inactivity.py; Admin →
+     Settings → Email: on/off, days; per user on Admin → Users; Profile checkbox for the user).
+     **"We miss you" after X days without signing in.** Admin → Settings: the number of days (e.g.
      30), on/off overall, and per user on Admin → Users (an "inactivity emails" switch, e.g. off for
      the admin's own test accounts). Sent once per absence (not every day), with a link to sign in
      and to switch it off; the user can also turn it off in Profile → Email.

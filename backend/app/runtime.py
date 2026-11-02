@@ -158,6 +158,20 @@ EDITABLE: dict[str, Editable] = {
         help="Empty: the free Open-Meteo API, for non-commercial use. When CoachQuest is used commercially, take a "
         "plan at open-meteo.com/en/pricing and paste its key here (weather then comes from the customer API).",
     ),
+    "inactivity_email": Editable(
+        "Email users who haven't been back",
+        "Email",
+        choices=("off", "on"),
+        help="On: a user who hasn't used CoachQuest for the number of days below gets one friendly email "
+        "(what's new since their last visit, and a link back); one per absence. Users can switch it off "
+        "in Profile, admins per user under Admin → Users.",
+    ),
+    "inactivity_days": Editable(
+        "...after this many days",
+        "Email",
+        pattern=r"\d{1,3}",
+        help="Days without a visit before the email goes out (default 30).",
+    ),
     "storage_warn_free_gb": Editable(
         "Warn when free disk is below (GB)",
         "Storage",

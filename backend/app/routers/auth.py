@@ -55,6 +55,7 @@ def user_out(user: User) -> dict:
         "week_start": user.week_start or 0,
         "notify_sharing": user.notify_sharing,
         "notify_comments": user.notify_comments,
+        "notify_inactivity": user.notify_inactivity,
         "timezone": user.timezone,
         "emails_disabled": user.emails_disabled,
         "strava_notes": user.strava_notes or "off",

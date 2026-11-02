@@ -51,6 +51,11 @@ class User(Base):
     notify_sharing: Mapped[bool] = mapped_column(Boolean, default=True)
     # Email me when someone comments on one of my plans (or a plan I coach).
     notify_comments: Mapped[bool] = mapped_column(Boolean, default=True)
+    # "We haven't seen you" emails (inactivity.py): the user's own switch, an admin's per-user switch,
+    # and when the last one went out (one per absence).
+    notify_inactivity: Mapped[bool] = mapped_column(Boolean, default=True)
+    inactivity_emails: Mapped[bool] = mapped_column(Boolean, default=True)
+    inactivity_emailed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     # Athlete profile, used for TSS and by the AI coach
@@ -748,6 +753,9 @@ _ADDED_COLUMNS = {
         "is_super_admin": "BOOLEAN NOT NULL DEFAULT 0",
         "notify_sharing": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_comments": "BOOLEAN NOT NULL DEFAULT 1",
+        "notify_inactivity": "BOOLEAN NOT NULL DEFAULT 1",
+        "inactivity_emails": "BOOLEAN NOT NULL DEFAULT 1",
+        "inactivity_emailed_at": "DATETIME",
         "birth_date": "DATE",
         "timezone": "VARCHAR(64)",
         "platform_prefs": "JSON",

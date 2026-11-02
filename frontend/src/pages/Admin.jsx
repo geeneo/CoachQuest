@@ -837,6 +837,20 @@ function UserDetail({ u, isMe, update, reload }) {
             <label className="check">
               <input
                 type="checkbox"
+                checked={u.inactivity_emails}
+                disabled={u.emails_disabled}
+                onChange={(e) => update(u, { inactivity_emails: e.target.checked })}
+              />{" "}
+              "We haven't seen you" email
+              <span className="hint">
+                When they're away longer than Settings → Email says (and that's on).
+                {!u.notify_inactivity && " They switched it off in their Profile."}
+                {u.inactivity_emailed_at ? ` Last sent ${dateTime(u.inactivity_emailed_at)}.` : " Never sent."}
+              </span>
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
                 checked={!u.plan_approval_off}
                 onChange={(e) => update(u, { plan_approval_off: !e.target.checked })}
               />{" "}
