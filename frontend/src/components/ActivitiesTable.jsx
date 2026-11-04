@@ -333,7 +333,7 @@ export default function Activities({ id, editable }) {
                       <input type="checkbox" aria-label="Select" checked={picked.has(a.id)} onChange={() => toggle(a.id)} />
                     </td>
                   )}
-                  <td>{shortDate(a.start_time)}</td>
+                  <td className="nowrap">{formatDate(a.start_time)}</td>
                   <td>
                     {editable ? (
                       <select

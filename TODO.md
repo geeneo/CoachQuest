@@ -2,12 +2,18 @@
 
 ## Next up
 
-- [ ] **Training load vs TrainingPeaks (4 Nov): runs, walks and strength fixed; check again after the
-  update with FTP and LTHR from TrainingPeaks in Profile (docs/load-audit.md, findings).** Before: The audit is built
-  (docs/load-audit.md; My training → Overview → "See how it's calculated and compare"), and days now
-  count on the local date. To do: run it for Natalie (180 days) with her TrainingPeaks export, find the
-  first day that differs, then fix with that evidence: FTP used for history, estimated TSS for sessions
-  without power or heart rate (50 an hour, Relative Effort as TSS), provider load where there is one.
+- [ ] **Overview: look back at a chosen year or dates (asked 4 Nov).** The period buttons go back from
+  today (7 days to 5 years). Add a way to pick a year (2024, 2025, ...) or a from-to date range, e.g. a
+  "Pick dates…" chip after "5 years" with two date fields, and the year in the chips' row. Volume,
+  training load and wellness for that range (the APIs take `days` back from today now: add `start` and
+  `end`; training load still needs its warm-up before the start). The headings then say "1 Jan – 31 Dec
+  2025". Remember the choice like the period. Also in the Activities list: filter by year or dates.
+
+- [x] **Training load vs TrainingPeaks (4 Nov): done.** Natalie's CTL / ATL / TSB 53.1 / 56.8 / -5.6
+  against TrainingPeaks' 56 / 59 / -5 after: sport-aware TSS (runs by run threshold power, strength and
+  walks by heart rate), FTP by date with a threshold history, thresholds from a TrainingPeaks export
+  (Profile, or a coach on the athlete's Overview), "correct earlier workouts too" (docs/load-audit.md).
+  Later, if needed: the TrainingPeaks API (partner application) instead of the CSV.
 
 - [ ] **Emails to users from Admin (asked 2 Nov).**
   1. ✅ **Done (2 Nov): "We haven't seen you" after X days without a visit** (inactivity.py; Admin →
