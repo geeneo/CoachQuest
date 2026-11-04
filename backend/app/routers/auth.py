@@ -47,6 +47,7 @@ def user_out(user: User) -> dict:
         "ftp_watts": user.ftp_watts,
         "run_ftp_watts": user.run_ftp_watts,
         "lthr_bpm": user.lthr_bpm,
+        "threshold_history": user.threshold_history or [],
         "max_hr_bpm": user.max_hr_bpm,
         "weight_kg": user.weight_kg,
         "weight_source": user.weight_source,

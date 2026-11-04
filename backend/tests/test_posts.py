@@ -8,7 +8,7 @@ def test_shipped_posts_are_added_once(make_user):
     admin = make_user("admin@example.com")
     rider = make_user("rider@example.com")
     listing = admin.get("/api/posts").json()
-    assert len(listing["guides"]) == 8 and len(listing["news"]) == 3  # a fresh install gets them all
+    assert len(listing["guides"]) == 8 and len(listing["news"]) == 4  # a fresh install gets them all
     drafts = [p["title"] for p in listing["guides"] + listing["news"] if not p["published"]]
     assert len(drafts) == len(posts_seed.FIRST_BATCH)  # the first batch waits for the admin
     assert listing["can_edit"] is True
@@ -20,7 +20,11 @@ def test_shipped_posts_are_added_once(make_user):
         posts_seed.STRENGTH_GUIDE[0],
         posts_seed.LOAD_GUIDE[0],
     ]
-    assert {n["title"] for n in seen["news"]} == {posts_seed.ROUTES_NEWS[0], posts_seed.STRENGTH_NEWS[0]}
+    assert {n["title"] for n in seen["news"]} == {
+        posts_seed.ROUTES_NEWS[0],
+        posts_seed.STRENGTH_NEWS[0],
+        posts_seed.WHATS_NEW_2[0],
+    }
     draft = next(p for p in listing["guides"] if not p["published"])
     assert rider.get(f"/api/posts/{draft['id']}").status_code == 404
     with SessionLocal() as db:
@@ -40,7 +44,7 @@ def test_an_existing_install_gets_only_the_new_posts(make_user):
         titles = {p.title for p in db.query(Post)}
         shipped_later = {posts_seed.ROUTES_GUIDE[0], posts_seed.ROUTES_NEWS[0]}
         shipped_later |= {posts_seed.STRENGTH_GUIDE[0], posts_seed.STRENGTH_NEWS[0], posts_seed.ZWIFT_GUIDE[0]}
-        shipped_later |= {posts_seed.LOAD_GUIDE[0]}
+        shipped_later |= {posts_seed.LOAD_GUIDE[0], posts_seed.WHATS_NEW_2[0]}
         assert titles == {"Getting started (edited)"} | shipped_later
         # Deleting a shipped post doesn't bring it back.
         db.query(Post).filter_by(title=posts_seed.ROUTES_NEWS[0]).delete()
@@ -77,3 +81,23 @@ def test_guides_follow_their_position(make_user):
     rider = make_user("rider@example.com")
     titles = [g["title"] for g in rider.get("/api/posts").json()["guides"]]
     assert [t for t in titles if t in "ABC"] == ["C", "B", "A"]
+
+
+def test_a_rewritten_guide_is_updated_unless_edited(make_user):
+    make_user("admin@example.com")
+    with SessionLocal() as db:
+        guide = db.query(Post).filter_by(title=posts_seed.LOAD_GUIDE[0]).one()
+        assert guide.body_md == posts_seed.LOAD_GUIDE_V2[2]  # a fresh install has the new text
+        # A server that had the first text: it's rewritten once.
+        guide.body_md = posts_seed.LOAD_GUIDE[2]
+        row = db.get(AppSetting, posts_seed.SEEDED)
+        keys = [k for k in posts_seed._seeded(db) if k != "training-load-compare@2"]
+        row.value_enc = posts_seed.encrypt_json({"v": keys})
+        db.commit()
+        posts_seed.seed(db)
+        assert db.get(Post, guide.id).body_md == posts_seed.LOAD_GUIDE_V2[2]
+        # Edited by an admin afterwards: left alone even if seeding ran again.
+        db.get(Post, guide.id).body_md = "mine"
+        db.commit()
+        posts_seed.seed(db)
+        assert db.get(Post, guide.id).body_md == "mine"

@@ -71,6 +71,9 @@ class User(Base):
     # Running power threshold: running power isn't on the cycling scale (fitness.score).
     run_ftp_watts: Mapped[int | None] = mapped_column(Integer, nullable=True)
     lthr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Earlier FTP / run threshold power / LTHR, so each workout is scored with the value of its own date
+    # (fitness.threshold_at): [{"field": "ftp_watts", "from": "2026-06-01" or None (= before), "value": 230}].
+    threshold_history: Mapped[list | None] = mapped_column(JSON, nullable=True)
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     # From Garmin or typed in; coaches (profile scope) and the AI coach only ever see the age.
@@ -786,6 +789,7 @@ _ADDED_COLUMNS = {
         "keep_account": "BOOLEAN NOT NULL DEFAULT 0",
         "data_analysis": "BOOLEAN NOT NULL DEFAULT 1",
         "run_ftp_watts": "INTEGER",
+        "threshold_history": "JSON",
         "deletion_warned_at": "DATETIME",
         "deletion_final_warned_at": "DATETIME",
         "inactivity_emails": "BOOLEAN NOT NULL DEFAULT 1",

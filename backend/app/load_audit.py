@@ -20,12 +20,12 @@ from sqlalchemy.orm import Session as DbSession
 from . import localtime
 from .activity_types import category
 from .db import Activity, User
-from .fitness import ATL_DAYS, CTL_DAYS, dedupe, pmc, same_session
+from .fitness import ATL_DAYS, CTL_DAYS, RUNS, dedupe, pmc, same_session, threshold_at
 from .localtime import local_date
 from .queries import WARMUP_DAYS
 from .sync_options import hidden_sources, primary_source
 
-VERSION = "load-audit 2"
+VERSION = "load-audit 3"
 METHODS = {
     "power": "Power and FTP",
     "hr": "Heart rate and LTHR",
@@ -79,6 +79,8 @@ def audit(db: DbSession, athlete: User, days: int = 180, today: date | None = No
             canonical = counted_as(a)
             status = "duplicate"
         power = a.norm_power or a.avg_power
+        sport = category(a)
+        ftp = threshold_at(athlete, "run_ftp_watts" if sport in RUNS else "ftp_watts", a.start_time.date())
         activities.append(
             {
                 "date": day.isoformat(),
@@ -90,13 +92,14 @@ def audit(db: DbSession, athlete: User, days: int = 180, today: date | None = No
                 "canonical_id": canonical,
                 "status": status,
                 "name": a.name,
-                "sport": category(a),
+                "sport": sport,
                 "minutes": round((a.duration_s or 0) / 60),
                 "tss": round(a.tss or 0, 1),
                 "counted_tss": round(a.tss or 0, 1) if status == "counted" else 0,
                 "method": a.tss_method,
                 "power_w": round(power) if power else None,
-                "intensity": round(power / athlete.ftp_watts, 2) if power and athlete.ftp_watts else None,
+                "ftp_w": ftp,
+                "intensity": round(power / ftp, 2) if power and ftp else None,
                 "avg_hr": round(a.avg_hr) if a.avg_hr else None,
                 "relative_effort": a.relative_effort,
             }
@@ -140,6 +143,7 @@ def audit(db: DbSession, athlete: User, days: int = 180, today: date | None = No
             "timezone": athlete.timezone or "UTC",
             "ftp_watts": athlete.ftp_watts,
             "lthr_bpm": athlete.lthr_bpm,
+            "threshold_history": athlete.threshold_history or [],
             "primary_source": primary,
             "hidden_sources": sorted(hidden),
             "calculation": (
@@ -176,11 +180,11 @@ def _warnings(athlete: User, activities: list[dict], by_method: dict, total: flo
             f"{round(100 * estimated / total)}% of the TSS is estimated ({parts}). Other platforms often score "
             "these sessions lower or not at all."
         )
-    if athlete.ftp_watts:
+    if athlete.ftp_watts and not any(h.get("field") == "ftp_watts" for h in athlete.threshold_history or []):
         out.append(
-            f"Power TSS uses FTP {athlete.ftp_watts} W for every ride, also older ones (it's recalculated when FTP "
-            "changes); TrainingPeaks keeps each workout's TSS from the FTP it had then. A lower FTP here raises "
-            "TSS by the square: 10% lower FTP is about 23% more TSS."
+            f"No FTP history: every ride is scored with today's FTP {athlete.ftp_watts} W. TrainingPeaks keeps "
+            "each workout's TSS from the FTP it had then; add earlier values in Profile → Threshold history. "
+            "A lower FTP raises TSS by the square: 10% lower FTP is about 23% more TSS."
         )
     dup = [x for x in activities if x["status"] == "duplicate"]
     if dup:

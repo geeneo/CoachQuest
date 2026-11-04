@@ -72,6 +72,7 @@ class ProfileUpdate(BaseModel):
 def update_profile(body: ProfileUpdate, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     changes = body.model_dump(exclude_unset=True)
     for key, value in changes.items():
+        profile_sync.record_change(user, key, getattr(user, key), value)  # thresholds: from today on
         setattr(user, key, value)
     if "weight_kg" in changes:
         # A value typed in by hand wins until Garmin records a newer weigh-in.
@@ -80,6 +81,38 @@ def update_profile(body: ProfileUpdate, user: User = Depends(current_user), db: 
     profile_sync.mark_manual(user, changes)
     if {"ftp_watts", "lthr_bpm", "run_ftp_watts"} & changes.keys():
         profile_sync.recalculate_tss(db, user)
+    db.commit()
+    return user_out(user)
+
+
+class ThresholdEntry(BaseModel):
+    field: Literal["ftp_watts", "run_ftp_watts", "lthr_bpm"]
+    start: date | None = Field(default=None, alias="from")  # None: before the first change
+    value: int | None = Field(default=None, ge=50, le=800)
+
+
+class ThresholdHistory(BaseModel):
+    entries: list[ThresholdEntry] = Field(max_length=200)
+
+
+@router.put("/me/threshold-history")
+def set_threshold_history(body: ThresholdHistory, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """FTP, run threshold power and LTHR over time: each workout is scored with the value of its date."""
+    today = localtime.today(user)
+    seen = set()
+    for e in body.entries:
+        if e.start and e.start > today:
+            raise HTTPException(status_code=422, detail="Dates can't be in the future")
+        if e.field == "lthr_bpm" and e.value is not None and not 80 <= e.value <= 220:
+            raise HTTPException(status_code=422, detail="Threshold heart rate must be 80-220 bpm")
+        if (e.field, e.start) in seen:
+            raise HTTPException(status_code=422, detail="Two values for the same date")
+        seen.add((e.field, e.start))
+    hist = [
+        {"field": e.field, "from": e.start.isoformat() if e.start else None, "value": e.value} for e in body.entries
+    ]
+    profile_sync.set_history(db, user, hist)
+    profile_sync.mark_manual(user, {e.field for e in body.entries})
     db.commit()
     return user_out(user)
 

@@ -7,9 +7,10 @@ import { useAuth } from "../lib/auth.jsx";
 import { DATE_FORMATS, dateTime, formatDate } from "../lib/format.js";
 import { EVENT as THEME_EVENT, getTheme, setTheme } from "../lib/theme.js";
 import { MySignIns } from "../components/SignInLog.jsx";
+import ThresholdHistory from "../components/ThresholdHistory.jsx";
 
 const NUMBER_FIELDS = [
-  ["ftp_watts", "FTP (watts)", "Cycling: used for power-based TSS on rides"],
+  ["ftp_watts", "FTP (watts)", "Cycling: used for power-based TSS on rides. A change counts from today; earlier rides keep theirs"],
   ["run_ftp_watts", "Run threshold power (watts)", "Running power from your watch or footpod; runs use heart rate until it's set"],
   ["lthr_bpm", "Lactate threshold HR (bpm)", "Used for heart-rate TSS when there is no power"],
   ["max_hr_bpm", "Max HR (bpm)", ""],
@@ -192,6 +193,13 @@ export default function Profile() {
         {msg?.error && <div className="error wide">{msg.error}</div>}
         <button className="btn primary">Save</button>
       </form>
+      <ThresholdHistory
+        user={user}
+        onSaved={(u) => {
+          setUser(u);
+          setForm((f) => ({ ...f, ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, u[k] ?? ""])) }));
+        }}
+      />
       <PullFromGarmin
         onPulled={(u) => {
           setUser(u);

@@ -12,8 +12,9 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from . import localtime
 from .db import Activity, AppSetting, User, utcnow
-from .fitness import TSS_VERSION, rescore
+from .fitness import THRESHOLD_FIELDS, TSS_VERSION, rescore, threshold_at
 from .security import decrypt_json, encrypt_json
 
 log = logging.getLogger("coachquest.profile_sync")
@@ -30,9 +31,40 @@ def age(birth_date: date | None, today: date | None = None) -> int | None:
 
 
 def recalculate_tss(db: DbSession, user: User) -> None:
-    """FTP or LTHR changed, so every activity's TSS changes too (hidden sources included)."""
+    """Thresholds changed: score every activity again (hidden sources included), each with the thresholds
+    of its own date, so workouts before a change keep their TSS."""
     for a in db.scalars(select(Activity).where(Activity.user_id == user.id)):
         rescore(a, user)
+
+
+def record_change(user: User, field: str, old, new, day: date | None = None) -> None:
+    """FTP, run threshold power or LTHR changed: the new value counts from today, earlier workouts keep
+    the value they had (the old one, kept as "before" when there was no history yet)."""
+    if field not in THRESHOLD_FIELDS or old == new:
+        return
+    day = day or localtime.today(user)
+    hist = [dict(h) for h in user.threshold_history or []]
+    if not any(h.get("field") == field for h in hist) and old is not None:
+        hist.append({"field": field, "from": None, "value": old})
+    hist = [h for h in hist if not (h.get("field") == field and h.get("from") == day.isoformat())]
+    hist.append({"field": field, "from": day.isoformat(), "value": new})
+    user.threshold_history = sort_history(hist)
+
+
+def sort_history(hist: list[dict]) -> list[dict]:
+    order = {f: i for i, f in enumerate(THRESHOLD_FIELDS)}
+    return sorted(hist, key=lambda h: (order.get(h["field"], 9), h.get("from") or ""))
+
+
+def set_history(db: DbSession, user: User, hist: list[dict]) -> None:
+    """The athlete edited their threshold history: Profile shows the value of today, and every activity
+    is scored again with the value of its own date."""
+    user.threshold_history = sort_history(hist)
+    today = localtime.today(user)
+    for field in THRESHOLD_FIELDS:
+        if any(h["field"] == field for h in hist):
+            setattr(user, field, threshold_at(user, field, today))
+    recalculate_tss(db, user)
 
 
 def rescore_all_once(db: DbSession) -> int:
@@ -74,6 +106,7 @@ def apply_from_provider(db: DbSession, user: User, provider: str, values: dict, 
             continue  # nothing new from the provider
         sources[field] = {**info, "source": provider, "at": utcnow().isoformat(), f"{provider}_seen": seen}
         if getattr(user, field) != value:
+            record_change(user, field, getattr(user, field), value)
             setattr(user, field, value)
             changed.append(field)
     user.profile_sources = sources

@@ -69,3 +69,12 @@ activity rows showed:
 `fitness.score()` scores by sport (TSS_VERSION 2); `profile_sync.rescore_all_once()` scores everyone's
 stored activities again once after the update (from the stored power and heart rate; Intervals.icu's
 own load stays for rides and runs). Run the comparison again after the update and the Profile change.
+
+## Each workout's FTP at its date (4 November 2026)
+
+TrainingPeaks keeps each workout's TSS from the FTP it had then; CoachQuest used today's FTP for all history.
+Now `User.threshold_history` holds earlier FTP / run threshold power / LTHR values (`fitness.threshold_at`):
+a workout uses the latest value from on or before its date (before the first entry, the first one; without
+history, the Profile value). A Profile or Garmin change is recorded from today (`profile_sync.record_change`,
+keeping the old value as "before"), so earlier workouts keep their TSS. Athletes add past values in
+**Profile → Threshold history** (`PUT /api/me/threshold-history`); everything is scored again.

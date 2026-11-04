@@ -65,6 +65,9 @@ export default function LoadAudit() {
               {a.meta.lthr_bpm ? `${a.meta.lthr_bpm} bpm` : "not set"} · time zone {a.meta.timezone} · main source{" "}
               {a.meta.primary_source || "not chosen"}
               {a.meta.hidden_sources.length ? ` · hidden sources: ${a.meta.hidden_sources.join(", ")}` : ""}
+              {a.meta.threshold_history?.length
+                ? " · each workout scored with the thresholds of its date (Profile → Threshold history)"
+                : ""}
             </p>
             <p className="small muted">
               {a.meta.calculation} ({a.meta.version})
@@ -221,7 +224,9 @@ export default function LoadAudit() {
                       <td className="num">{x.minutes}</td>
                       <td className="num">{x.tss}</td>
                       <td className="small">{x.method}</td>
-                      <td className="num">{x.intensity ?? "–"}</td>
+                      <td className="num" title={x.ftp_w ? `FTP ${x.ftp_w} W on that date` : undefined}>
+                        {x.intensity ?? "–"}
+                      </td>
                       <td className="small">
                         {x.status === "duplicate" ? `copy of #${x.canonical_id}` : x.status}
                       </td>

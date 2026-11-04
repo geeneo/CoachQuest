@@ -422,6 +422,126 @@ TrainingPeaks CSV.
 """,
 )
 
+LOAD_GUIDE_V2 = (
+    "Compare your training load with TrainingPeaks",
+    "Fitness, fatigue and form different from TrainingPeaks? See how CoachQuest got its numbers and find the "
+    "first day the two part.",
+    """CoachQuest and TrainingPeaks both show **fitness (CTL)**, **fatigue (ATL)** and **form (TSB)**, worked out
+the same way from each day's training stress (TSS). When the numbers differ, it's almost always the TSS of
+some sessions, not the sums. This guide shows how to find which.
+
+## 1. Open the training load audit
+
+1. Go to **My training → Overview**.
+2. Under **Training load**, click **See how it's calculated and compare**.
+3. Pick **180 days**.
+
+The page shows, without changing anything:
+
+- the **FTP**, **threshold heart rate (LTHR)** and **time zone** CoachQuest used;
+- **warnings**, for example no FTP, or a large share of estimated TSS;
+- **where the TSS came from**: power and FTP, heart rate, Strava's Relative Effort, or an estimate from the
+  duration (50 TSS an hour) when there's nothing else;
+- every **day** (TSS, CTL, ATL, TSB) and every **activity** (source, counted or a copy, TSS, how).
+
+Use **Days (CSV)** and **Activities (CSV)** to keep a copy.
+
+## 2. Export the same period from TrainingPeaks
+
+1. In TrainingPeaks on the web, click your name in the top right and open **Settings**.
+2. Scroll down to **Export Data**.
+3. On the **Workout Summary** row (format CSV), set **From** and **To** to the same dates as the audit
+   (at most 12 months at a time) and click **Export**. You get a CSV of your workouts, possibly in a ZIP:
+   CoachQuest takes either. You don't need **Workout Files** or **Custom Metrics**.
+
+Coaches find the same export in each athlete's account settings. Bulk export may need a paid TrainingPeaks
+plan.
+
+## 3. Compare
+
+1. Back on the audit page, under **Compare with TrainingPeaks**, click **Choose the TrainingPeaks file**
+   and pick the CSV or ZIP.
+2. CoachQuest adds up each day's workouts and compares every day in the file's date range. A day without a
+   workout in TrainingPeaks counts as 0 there, so a walk only CoachQuest counted shows up.
+3. Read the totals (and how many times higher or lower), then the **first day that differs**.
+
+The file needs a date column (WorkoutDay or Date) and a TSS column. If CoachQuest says it can't find them,
+open the file and check the first row's column names.
+
+## 4. What the difference usually is
+
+- **FTP.** Power TSS goes with the square of power ÷ FTP: an FTP 10% lower makes about 23% more TSS. Both
+  CoachQuest and TrainingPeaks score each workout with the FTP you had on its date. Copy your thresholds from
+  TrainingPeaks (**Settings → Zones**) into **Profile**, and your earlier FTPs into **Profile → Threshold
+  history**, so older rides score as they did then.
+- **Runs.** Runs use your **Run threshold power** (running power isn't on the cycling scale), or heart rate
+  until you set it.
+- **Walks, strength and yoga.** Scored as TrainingPeaks does: strength, yoga and other workouts 0; walks and
+  hikes light, at most 15 TSS an hour.
+- **The same session twice.** A ride from Strava and Garmin counts once in CoachQuest (the Activities list
+  in the audit says "copy of"). Check that TrainingPeaks doesn't have it twice either.
+- **History.** CoachQuest starts counting 120 days before the period shown; TrainingPeaks from your first
+  workout there. Long histories make small differences in CTL.
+- **Form (TSB)** is the day before's fitness minus fatigue, on both. So today's CTL minus today's ATL isn't
+  the form shown.
+
+## Still not right?
+
+Open **Data health** (from the same Training load card, or **Connections**) to check your connections,
+duplicates and profile values, then **Download diagnostics** and send the file to your admin with the
+TrainingPeaks CSV.
+""",
+)
+
+WHATS_NEW_2 = (
+    "What's new in CoachQuest",
+    "Training load that counts like TrainingPeaks, weather on your rides, how your week is going, and more.",
+    """## Training load counts like TrainingPeaks
+
+Your **fitness (CTL)**, **fatigue (ATL)** and **form (TSB)** are now much closer to TrainingPeaks:
+
+- **Runs** are scored with a new **Run threshold power** in Profile (running power isn't on the cycling
+  scale), or by heart rate until you set it. Before, runs could count two or three times too much.
+- **Walks and hikes** count as light (at most 15 TSS an hour); **strength, yoga and other workouts** count 0,
+  as on TrainingPeaks.
+- **Each workout keeps the FTP of its date.** A new FTP counts from the day you change it; earlier rides keep
+  their training load. Add your earlier FTPs (and threshold heart rate) in **Profile → Threshold history** so
+  older rides score as they did then.
+- Sessions count on your **local date**, so an early-morning ride no longer lands on the day before.
+- **See how it's calculated and compare** (under Training load): every day and activity, and a day-by-day
+  comparison with a TrainingPeaks export. The guide *Compare your training load with TrainingPeaks* has the
+  steps.
+
+To do: copy your **FTP**, **threshold heart rate** and **run threshold power** from TrainingPeaks
+(**Settings → Zones**) into **Profile**.
+
+## Your week
+
+- **AI coach → This week so far**, with **How is your week going?**: on track, worth watching or off track,
+  and what to look out for.
+- **Weekly reviews** follow your plan's weeks and stick to the sessions planned for next week. You can delete
+  a review.
+- Extra sessions (e.g. Zwift + Strength on one day) show in the Calendar and in *Still to come*.
+
+## Plans and calendar
+
+- **The plan follows what you did**: a session done on another day or as another type is matched, and the
+  days ahead adjust.
+- **Weather** along your routes on outdoor plan days, and the AI coach plans with it (Weather page,
+  home location and favourite routes).
+- Calendar: done / partly / missed marks, planned km and climbing, week totals, rest days 😴.
+- **Multi-day events**: a stage race's days with totals.
+
+## Your data
+
+- **Data health** (Overview, or Connections): checks your connections, activities, profile values, wellness
+  and plan, with what to fix, and a report to download for your admin.
+- Emails you can switch off in Profile: a reminder after a while away, and CoachQuest news.
+- Profile: choose whether your training data, anonymised, may be used to improve CoachQuest (never Strava
+  data).
+""",
+)
+
 # Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
 POSTS = [
     *(
@@ -434,7 +554,8 @@ POSTS = [
     {"key": "strength", "kind": "guide", "position": 27, "published": True, "post": STRENGTH_GUIDE},
     {"key": "strength-news", "kind": "news", "position": 0, "published": True, "post": STRENGTH_NEWS},
     {"key": "zwift-intervals", "kind": "guide", "position": 15, "published": True, "post": ZWIFT_GUIDE},
-    {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE},
+    {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE_V2},
+    {"key": "whats-new-2", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_2},
 ]
 FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
 SEEDED = "posts_seeded"
@@ -448,11 +569,29 @@ def _seeded(db: DbSession) -> set[str]:
     return set(FIRST_BATCH) if db.scalar(select(func.count()).select_from(Post)) else set()
 
 
+# Shipped posts rewritten later: (key, old post, new post). The text is replaced once, only where an admin
+# hasn't edited it since.
+REVISIONS = [("training-load-compare@2", LOAD_GUIDE, LOAD_GUIDE_V2)]
+
+
+def _revise(db: DbSession, done: set[str]) -> set[str]:
+    applied = set()
+    for key, (title, _, body), (new_title, new_summary, new_body) in REVISIONS:
+        if key in done:
+            continue
+        for post in db.scalars(select(Post).where(Post.title == title)):
+            if post.body_md == body:
+                post.title, post.summary, post.body_md = new_title, new_summary, new_body
+        applied.add(key)
+    return applied
+
+
 def seed(db: DbSession) -> None:
-    """Add the shipped posts not added before (a fresh install gets them all)."""
+    """Add the shipped posts not added before (a fresh install gets them all), and apply rewrites."""
     done = _seeded(db)
     new = [p for p in POSTS if p["key"] not in done]
-    if not new:
+    revised = _revise(db, done)  # before the new ones go in: a fresh install gets the new text
+    if not new and not revised:
         return
     for p in new:
         title, summary, body = p["post"]
@@ -468,7 +607,7 @@ def seed(db: DbSession) -> None:
             )
         )
     row = db.get(AppSetting, SEEDED) or AppSetting(key=SEEDED, value_enc="")
-    row.value_enc = encrypt_json({"v": sorted(done | {p["key"] for p in new})})
+    row.value_enc = encrypt_json({"v": sorted(done | {p["key"] for p in new} | revised)})
     row.updated_at = utcnow()
     db.merge(row)
     db.commit()

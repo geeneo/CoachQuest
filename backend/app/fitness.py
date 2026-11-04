@@ -50,6 +50,30 @@ NOT_SCORED = {"Strength", "Workout", "Yoga", "Climbing"}  # no training stress, 
 LIGHT_MAX_PER_H = 15
 LIGHT_PER_H = 10
 TSS_VERSION = 2  # 2: sport-aware (runs by run threshold power, walks light, strength 0)
+THRESHOLD_FIELDS = ("ftp_watts", "run_ftp_watts", "lthr_bpm")
+
+
+def threshold_at(user, field: str, day: date | None):
+    """The athlete's FTP, run threshold power or LTHR on `day`, as TrainingPeaks keeps each workout's TSS
+    from the threshold it had then. From the user's threshold_history: the latest entry from on or before
+    the day; before the first entry, the first one. Without history, today's Profile value."""
+    rows = [h for h in (getattr(user, "threshold_history", None) or []) if h.get("field") == field]
+    if not rows or day is None:
+        return getattr(user, field, None)
+    rows.sort(key=lambda h: h.get("from") or "")
+    found = rows[0]
+    for h in rows:
+        if (h.get("from") or "") <= day.isoformat():
+            found = h
+    return found.get("value")
+
+
+class _At:
+    """The user's thresholds on one day (what score() reads)."""
+
+    def __init__(self, user, day):
+        for f in THRESHOLD_FIELDS:
+            setattr(self, f, threshold_at(user, f, day))
 
 
 def score(a, user) -> tuple[float, str]:
@@ -60,9 +84,13 @@ def score(a, user) -> tuple[float, str]:
       else heart rate, else Relative Effort, else duration;
     - walks and hikes: light, from heart rate but at most LIGHT_MAX_PER_H an hour (LIGHT_PER_H without);
     - strength, yoga, other workouts and climbing: 0;
-    - everything else (swimming, rowing, skiing...): heart rate, else Relative Effort, else duration."""
+    - everything else (swimming, rowing, skiing...): heart rate, else Relative Effort, else duration.
+
+    Thresholds are the ones the athlete had on the activity's date (threshold_at)."""
     c = category(a)
     duration = a.duration_s or 0
+    start = getattr(a, "start_time", None)
+    user = _At(user, start.date() if start else None)
     if c in NOT_SCORED:
         return 0.0, "not scored"
     if c in LIGHT:
@@ -74,7 +102,7 @@ def score(a, user) -> tuple[float, str]:
     if c in RIDES:
         ftp = user.ftp_watts
     elif c in RUNS:
-        ftp = getattr(user, "run_ftp_watts", None)
+        ftp = user.run_ftp_watts
     else:
         ftp = None  # power on other sports isn't on the cycling scale
     return estimate_tss(
