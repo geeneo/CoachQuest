@@ -222,7 +222,8 @@
 
 ## Later
 
-- [ ] Account export (download all my data), privacy notice and consent text on the Sharing page
+- [ ] Account export (download all my data), privacy notice and consent text on the Sharing page;
+      the notice must mention the anonymised data for improving CoachQuest (Admin → Data, Profile opt-out)
       (POPIA/GDPR). Deleting an account is done (Admin → Users, with Strava/Intervals revoked).
 - [ ] Optional two-factor sign-in (TOTP)
 - [ ] Strava webhooks instead of 6-hourly polling

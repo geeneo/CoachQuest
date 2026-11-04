@@ -2,11 +2,12 @@
 
 import base64
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import anthropic
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session as DbSession
@@ -17,6 +18,7 @@ from .. import (
     admin_users,
     auth_log,
     backfill,
+    data_export,
     deploy_requests,
     mailer,
     news_email,
@@ -480,6 +482,66 @@ def news_email_send(
     auth_log.record(db, request, "admin_news_email", admin, None, f'"{e.subject}" to {body.audience}')
     background.add_task(news_email.send_all, e.id)
     return news_email.out(e, db)
+
+
+def _data_range(since: date | None, until: date | None) -> tuple[date, date]:
+    until = until or date.today()
+    since = since or until - timedelta(days=365)
+    if since > until or (until - since).days > 3 * 366:
+        raise HTTPException(status_code=422, detail="Pick a range of up to three years")
+    return since, until
+
+
+@router.get("/data")
+def data_overview(
+    since: date | None = None,
+    until: date | None = None,
+    admin: User = Depends(admin_user),
+    db: DbSession = Depends(get_db),
+):
+    """The anonymised data (data_export.py): counts and the first rows of each table."""
+    if not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only a super admin can see the data export")
+    since, until = _data_range(since, until)
+    data = data_export.tables(db, since, until)
+    left_out = db.scalar(
+        select(func.count())
+        .select_from(Activity)
+        .where(
+            Activity.source.in_(data_export.LEFT_OUT),
+            Activity.start_time >= datetime.combine(since, datetime.min.time()),
+            Activity.start_time < datetime.combine(until + timedelta(days=1), datetime.min.time()),
+        )
+    )
+    opted_out = db.scalar(select(func.count()).select_from(User).where(User.data_analysis.is_(False)))
+    return {
+        "since": since,
+        "until": until,
+        "counts": {k: len(v) for k, v in data.items()},
+        "preview": {k: v[:15] for k, v in data.items()},
+        "strava_left_out": left_out,
+        "users_opted_out": opted_out,
+        "version": data_export.VERSION,
+    }
+
+
+@router.get("/data/export.zip")
+def data_zip(
+    request: Request,
+    since: date | None = None,
+    until: date | None = None,
+    admin: User = Depends(admin_user),
+    db: DbSession = Depends(get_db),
+):
+    if not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only a super admin can download the data export")
+    since, until = _data_range(since, until)
+    body = data_export.zip_bytes(data_export.tables(db, since, until), since, until)
+    auth_log.record(db, request, "admin_data_export", admin, None, f"{since} to {until}")
+    name = f"coachquest-data-{since}-{until}.zip"
+    return Response(
+        body, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'}
+    )
 
 
 @router.get("/storage")

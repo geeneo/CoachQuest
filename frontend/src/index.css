@@ -2961,3 +2961,14 @@ button.mini-day {
   gap: 0.5rem;
   align-items: flex-start;
 }
+/* Admin → Data (DataExport.jsx): the table counts are buttons for the preview. */
+.stat-btn {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.stat-btn.on {
+  border-color: var(--accent);
+}

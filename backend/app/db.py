@@ -58,6 +58,8 @@ class User(Base):
     notify_news: Mapped[bool] = mapped_column(Boolean, default=True)
     # Deleting unused accounts (account_cleanup.py): an admin's "never delete", and the warnings sent.
     keep_account: Mapped[bool] = mapped_column(Boolean, default=False)
+    # In the anonymised data for improving CoachQuest (data_export.py), unless the user opts out.
+    data_analysis: Mapped[bool] = mapped_column(Boolean, default=True)
     deletion_warned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deletion_final_warned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     inactivity_emails: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -780,6 +782,7 @@ _ADDED_COLUMNS = {
         "notify_inactivity": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_news": "BOOLEAN NOT NULL DEFAULT 1",
         "keep_account": "BOOLEAN NOT NULL DEFAULT 0",
+        "data_analysis": "BOOLEAN NOT NULL DEFAULT 1",
         "deletion_warned_at": "DATETIME",
         "deletion_final_warned_at": "DATETIME",
         "inactivity_emails": "BOOLEAN NOT NULL DEFAULT 1",

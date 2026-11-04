@@ -34,6 +34,7 @@ export default function Profile() {
     notify_comments: user.notify_comments ?? true,
     notify_inactivity: user.notify_inactivity ?? true,
     notify_news: user.notify_news ?? true,
+    data_analysis: user.data_analysis ?? true,
     timezone: user.timezone || "",
     date_format: user.date_format || "d_mon_y",
     time_format: user.time_format || "24h",
@@ -56,6 +57,7 @@ export default function Profile() {
       notify_comments: form.notify_comments,
       notify_inactivity: form.notify_inactivity,
       notify_news: form.notify_news,
+      data_analysis: form.data_analysis,
       ...(form.timezone ? { timezone: form.timezone } : {}),
       // Only when changed, so saving other fields doesn't mark a Garmin birth date as typed in.
       ...((form.birth_date || null) !== (user.birth_date || null) ? { birth_date: form.birth_date || null } : {}),
@@ -172,6 +174,14 @@ export default function Profile() {
             onChange={(e) => setForm({ ...form, notify_news: e.target.checked })}
           />
           Email me CoachQuest news (new features and changes, now and then)
+        </label>
+        <label className="check wide">
+          <input
+            type="checkbox"
+            checked={form.data_analysis}
+            onChange={(e) => setForm({ ...form, data_analysis: e.target.checked })}
+          />
+          Use my training data, anonymised, to improve CoachQuest (no name or email; Strava data never)
         </label>
         <label className="wide">
           Goal
