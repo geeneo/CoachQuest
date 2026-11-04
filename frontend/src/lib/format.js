@@ -126,3 +126,10 @@ export function formLabel(tsb) {
   if (tsb <= 15) return "Fresh";
   return "Very fresh";
 }
+
+// A chart tick over several years: "Aug 25".
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function monthYear(value) {
+  const s = String(value || "");
+  return s.length >= 7 ? `${MONTH_SHORT[Number(s.slice(5, 7)) - 1]} ${s.slice(2, 4)}` : s;
+}

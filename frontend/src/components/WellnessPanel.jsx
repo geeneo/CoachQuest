@@ -1,5 +1,5 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { shortDate } from "../lib/format.js";
+import { formatDate, monthYear, shortDate } from "../lib/format.js";
 
 export default function WellnessPanel({ rows }) {
   if (!rows?.length) return <p className="muted">No Garmin wellness data yet.</p>;
@@ -24,11 +24,11 @@ export default function WellnessPanel({ rows }) {
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={rows} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
             <CartesianGrid stroke="var(--grid)" vertical={false} />
-            <XAxis dataKey="day" tickFormatter={shortDate} minTickGap={32} stroke="var(--muted)" fontSize={12} />
+            <XAxis dataKey="day" tickFormatter={rows.length > 370 ? monthYear : shortDate} minTickGap={32} stroke="var(--muted)" fontSize={12} />
             <YAxis stroke="var(--muted)" fontSize={12} />
             <Tooltip
               contentStyle={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8 }}
-              labelFormatter={shortDate}
+              labelFormatter={(v) => formatDate(v)}
             />
             <Legend />
             <Line dataKey="hrv_ms" name="HRV (ms)" stroke="var(--c1)" dot={false} connectNulls />

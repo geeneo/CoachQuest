@@ -73,7 +73,7 @@ def calories(a: Activity) -> float | None:
 
 def volume_summary(acts: list[Activity], days: int, today: date, week_start: int = 0) -> dict:
     """Totals for the last `days`, activity mix, elevation over the same period (per day up to two
-    weeks, per week beyond), and weekly elevation for the last 12 weeks."""
+    weeks, per week up to a year, per month beyond), and weekly elevation for the last 12 weeks."""
     since = datetime.combine(today - timedelta(days=days - 1), datetime.min.time())
     period = [a for a in acts if a.start_time >= since]
     cals = [c for c in (calories(a) for a in period) if c]
@@ -95,9 +95,16 @@ def volume_summary(acts: list[Activity], days: int, today: date, week_start: int
     if days <= 14:
         buckets = [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
         bucket_of = lambda d: d  # noqa: E731
-    else:
+    elif days <= 366:
         buckets = [this_week - timedelta(weeks=i) for i in range(-(-days // 7) - 1, -1, -1)]
         bucket_of = lambda d: week_start_of(d, week_start)  # noqa: E731
+    else:  # 2-3 years: per month, or the bars get too thin
+        first = today - timedelta(days=days - 1)
+        buckets, m = [], date(first.year, first.month, 1)
+        while m <= today:
+            buckets.append(m)
+            m = date(m.year + (m.month == 12), m.month % 12 + 1, 1)
+        bucket_of = lambda d: date(d.year, d.month, 1)  # noqa: E731
     series = {b: 0.0 for b in buckets}
     for a in acts:
         b = bucket_of(a.start_time.date())
@@ -118,7 +125,7 @@ def volume_summary(acts: list[Activity], days: int, today: date, week_start: int
         ),
         "weekly_elevation": [{"week_start": w.isoformat(), "elevation_m": round(elevation[w])} for w in weeks],
         "elevation": {
-            "by": "day" if days <= 14 else "week",
+            "by": "day" if days <= 14 else "week" if days <= 366 else "month",
             "points": [{"start": b.isoformat(), "elevation_m": round(series[b])} for b in buckets],
         },
     }

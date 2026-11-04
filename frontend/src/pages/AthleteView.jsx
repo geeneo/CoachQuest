@@ -116,10 +116,10 @@ export default function AthleteView({ self }) {
   );
 }
 
-const PERIODS = [7, 30, 90, 180, 365];
-const periodLabel = (d) => (d === 365 ? "1 year" : `${d} days`);
+const PERIODS = [7, 30, 90, 180, 365, 730, 1095];
+const periodLabel = (d) => (d >= 365 ? `${Math.round(d / 365)} year${d > 365 ? "s" : ""}` : `${d} days`);
 // "the last 90 days", "the last year"
-const lastPeriod = (d) => (d === 365 ? "year" : `${d} days`);
+const lastPeriod = (d) => (d === 365 ? "year" : periodLabel(d));
 
 // The overview's period, remembered per browser (falls back to 30 days when storage is unavailable).
 function usePeriod() {

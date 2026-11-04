@@ -6,13 +6,16 @@ const tooltipStyle = { background: "var(--panel)", border: "1px solid var(--bord
 const number = (n) => (n == null ? null : Math.round(n).toLocaleString());
 
 // Totals, activity mix and elevation for the period chosen at the top of the overview.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export default function VolumeStats({ id, days }) {
   const res = useApi(`/api/athletes/${id}/summary?days=${days}`);
   const s = res.data;
   const byDay = s?.elevation?.by === "day";
+  const byMonth = s?.elevation?.by === "month";
   return (
     <section className="card">
-      <h2>Volume (last {days === 365 ? "year" : `${days} days`})</h2>
+      <h2>Volume (last {days >= 365 ? (days === 365 ? "year" : `${Math.round(days / 365)} years`) : `${days} days`})</h2>
       {res.error && <div className="error">{res.error.message}</div>}
       {s && (
         <>
@@ -55,14 +58,18 @@ export default function VolumeStats({ id, days }) {
             </figure>
             <figure>
               <figcaption>
-                {byDay ? `Daily elevation (${days} days)` : `Weekly elevation (${s.elevation.points.length} weeks)`}
+                {byDay
+                  ? `Daily elevation (${days} days)`
+                  : byMonth
+                    ? `Monthly elevation (${s.elevation.points.length} months)`
+                    : `Weekly elevation (${s.elevation.points.length} weeks)`}
               </figcaption>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={s.elevation.points} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
                   <CartesianGrid stroke="var(--grid)" vertical={false} />
                   <XAxis
                     dataKey="start"
-                    tickFormatter={(w) => w.slice(5)}
+                    tickFormatter={(w) => (byMonth ? `${MONTHS[Number(w.slice(5, 7)) - 1]} ${w.slice(2, 4)}` : w.slice(5))}
                     stroke="var(--muted)"
                     fontSize={12}
                     tickLine={false}
@@ -72,7 +79,9 @@ export default function VolumeStats({ id, days }) {
                   <Tooltip
                     contentStyle={tooltipStyle}
                     cursor={{ fill: "var(--panel-2)" }}
-                    labelFormatter={(w) => (byDay ? w : `Week of ${w}`)}
+                    labelFormatter={(w) =>
+                      byDay ? w : byMonth ? `${MONTHS[Number(w.slice(5, 7)) - 1]} ${w.slice(0, 4)}` : `Week of ${w}`
+                    }
                     formatter={(v) => [`${v.toLocaleString()} m`, "Elevation"]}
                   />
                   <Bar dataKey="elevation_m" name="Elevation" fill="var(--c3)" radius={[4, 4, 0, 0]} maxBarSize={40} />
