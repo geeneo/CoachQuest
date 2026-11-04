@@ -12,7 +12,7 @@ export default function VolumeStats({ id, days }) {
   const byDay = s?.elevation?.by === "day";
   return (
     <section className="card">
-      <h2>Volume (last {days} days)</h2>
+      <h2>Volume (last {days === 365 ? "year" : `${days} days`})</h2>
       {res.error && <div className="error">{res.error.message}</div>}
       {s && (
         <>

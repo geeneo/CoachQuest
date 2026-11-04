@@ -116,7 +116,10 @@ export default function AthleteView({ self }) {
   );
 }
 
-const PERIODS = [7, 30, 90];
+const PERIODS = [7, 30, 90, 180, 365];
+const periodLabel = (d) => (d === 365 ? "1 year" : `${d} days`);
+// "the last 90 days", "the last year"
+const lastPeriod = (d) => (d === 365 ? "year" : `${d} days`);
 
 // The overview's period, remembered per browser (falls back to 30 days when storage is unavailable).
 function usePeriod() {
@@ -149,7 +152,7 @@ function Overview({ id, scopes, isMe }) {
       {scopes.has("plans") && <UpcomingRaces id={id} isMe={isMe} ctl={today?.ctl} />}
       {(scopes.has("activities") || scopes.has("fitness") || scopes.has("wellness")) && (
         <div className="row between period-bar">
-          <span className="muted small">Volume, elevation, training load and wellness for the last {days} days</span>
+          <span className="muted small">Volume, elevation, training load and wellness for the last {lastPeriod(days)}</span>
           <div className="chips" role="radiogroup" aria-label="Period">
             {PERIODS.map((d) => (
               <button
@@ -160,7 +163,7 @@ function Overview({ id, scopes, isMe }) {
                 className={`chip ${days === d ? "on" : ""}`}
                 onClick={() => setDays(d)}
               >
-                {d} days
+                {periodLabel(d)}
               </button>
             ))}
           </div>
@@ -169,7 +172,7 @@ function Overview({ id, scopes, isMe }) {
       {scopes.has("activities") && <VolumeStats id={id} days={days} />}
       {scopes.has("fitness") && (
         <section className="card">
-          <h2>Training load (last {days} days)</h2>
+          <h2>Training load (last {lastPeriod(days)})</h2>
           <div className="stats">
             <Stat label="Fitness (CTL)" value={today?.ctl} />
             <Stat label="Fatigue (ATL)" value={today?.atl} />
@@ -188,7 +191,7 @@ function Overview({ id, scopes, isMe }) {
       )}
       {scopes.has("wellness") && (
         <section className="card">
-          <h2>Wellness (last {days} days)</h2>
+          <h2>Wellness (last {lastPeriod(days)})</h2>
           {wellness.error ? <div className="error">{wellness.error.message}</div> : <WellnessPanel rows={wellness.data} />}
         </section>
       )}
