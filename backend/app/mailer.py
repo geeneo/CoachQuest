@@ -29,6 +29,10 @@ def _send(to: str, subject: str, text: str, html: str | None = None) -> None:
     msg.set_content(text)
     if html:
         msg.add_alternative(html, subtype="html")  # mail apps show this; the text is the fallback
+        if f"cid:{email_md.LOGO_CID}" in html and email_md.LOGO.exists():
+            msg.get_payload()[1].add_related(
+                email_md.LOGO.read_bytes(), maintype="image", subtype="png", cid=f"<{email_md.LOGO_CID}>"
+            )
     context = ssl.create_default_context()
     if security == "ssl":
         server = smtplib.SMTP_SSL(host, port, timeout=20, context=context)

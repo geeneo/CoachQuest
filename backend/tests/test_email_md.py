@@ -74,3 +74,44 @@ def test_ai_coach_email():
     text, page = email_bodies(SimpleNamespace(display_name="Natalie"), "Today: GO", READINESS)
     assert text.startswith("Hi Natalie,") and "**" not in text and "Verdict: GO for Wed 4 Nov 2026" in text
     assert "<strong>Verdict: GO</strong>" in page and "Open CoachQuest" in page
+
+
+def test_logo_inside_the_email(monkeypatch):
+    import asyncio
+
+    from app import mailer, runtime
+
+    got = {}
+
+    class FakeSMTP:
+        def __init__(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self, **kw):
+            pass
+
+        def login(self, *a):
+            pass
+
+        def send_message(self, msg):
+            got["msg"] = msg
+
+    settings = {"smtp_host": "mail.example", "smtp_from": "cq@example.com", "smtp_security": "starttls"}
+    monkeypatch.setattr(runtime, "get", lambda k: settings.get(k))
+    monkeypatch.setattr(mailer.smtplib, "SMTP", FakeSMTP)
+    asyncio.run(mailer.send("a@example.com", "Today: GO", "**Verdict: GO**"))
+    msg = got["msg"]
+    assert msg.get_content_type() == "multipart/alternative"
+    plain, rich = msg.get_payload()
+    assert plain.get_content_type() == "text/plain" and "**" not in plain.get_content()
+    assert rich.get_content_type() == "multipart/related"
+    html_part, logo = rich.get_payload()
+    assert 'src="cid:logo@coachquest"' in html_part.get_content()
+    assert logo.get_content_type() == "image/png" and logo["Content-ID"] == "<logo@coachquest>"
+    assert logo.get_payload(decode=True)[:4] == b"\x89PNG"

@@ -8,8 +8,13 @@ HTML-escaped.
 
 import html
 import re
+from pathlib import Path
 
 TEXT = "color:#1f2937;font-size:15px;line-height:1.55"
+# The logo, sent inside each email (mailer.py) so mail apps show it without loading remote images;
+# the same dark blue as its background, so it sits in the header band.
+LOGO_CID = "logo@coachquest"
+LOGO = Path(__file__).parent / "static" / "email-logo.png"
 BLOCK = re.compile(r"^(#{1,3})\s+(.*)$|^\s*([-*]|\d+\.)\s+(.*)$")
 
 
@@ -136,8 +141,9 @@ def page(title: str, body_html: str, button: tuple[str, str] | None = None, foot
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
  style="max-width:600px;background:#ffffff;border-radius:10px;overflow:hidden;
  font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
-<tr><td style="background:#032440;padding:18px 28px;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:.5px">
-COACH<span style="color:#f28c28">QUEST</span></td></tr>
+<tr><td style="background:#02243f;padding:14px 24px">
+<img src="cid:{LOGO_CID}" width="190" height="80" alt="CoachQuest"
+ style="display:block;border:0;outline:none;color:#ffffff;font-size:20px;font-weight:700"></td></tr>
 <tr><td style="padding:26px 28px 8px">
 <h1 style="color:#032440;font-size:22px;margin:0 0 16px">{html.escape(title)}</h1>
 {body_html}
