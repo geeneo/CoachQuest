@@ -25,15 +25,17 @@ from .localtime import local_date
 from .queries import WARMUP_DAYS
 from .sync_options import hidden_sources, primary_source
 
-VERSION = "load-audit 3"
+VERSION = "load-audit 4"
 METHODS = {
     "power": "Power and FTP",
     "hr": "Heart rate and LTHR",
     "effort": "Strava Relative Effort, used as TSS",
     "duration": "Estimate: 50 TSS an hour",
     "intervals_icu": "Intervals.icu training load",
-    "light": "Walk or hike: light (heart rate, at most 15 an hour)",
-    "not scored": "Strength, yoga, workouts: not scored (0)",
+    "walk hr": "Walk or hike: heart rate and LTHR, x 0.65",
+    "no heart rate": "Strength, yoga, walk without heart rate: 0",
+    "light": "Walk or hike: light (old scoring)",
+    "not scored": "Strength, yoga: not scored (old scoring)",
     "none": "No duration",
 }
 ESTIMATES = ("effort", "duration")

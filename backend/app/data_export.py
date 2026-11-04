@@ -233,7 +233,8 @@ for users who record only on Strava they show no training.
 Files:
 - users.csv: age_band, ftp_w, lthr_bpm, max_hr_bpm, weight_kg (to 5 kg), week_start (0 = Monday), races.
 - activities.csv: one row per session (copies from two sources counted once); tss_method = power, hr,
-  effort (Strava Relative Effort), duration (50 an hour estimate) or intervals_icu.
+  walk hr (heart rate x 0.65), no heart rate (0), effort (Strava Relative Effort), duration (50 an hour
+  estimate) or intervals_icu.
 - load.csv: per day: tss, ctl (42-day), atl (7-day), tsb (the previous day's ctl - atl).
 - plan_days.csv: per planned day: plan number per user, week, phase, type, planned minutes and TSS
   (estimated for outdoor sessions), zones, status (goal_met, partial, missed, rest, extra, moved,

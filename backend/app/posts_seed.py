@@ -542,6 +542,46 @@ To do: copy your **FTP**, **threshold heart rate** and **run threshold power** f
 """,
 )
 
+
+def _revised(post, pairs):
+    title, summary, body = post
+    for a, b in pairs:
+        assert a in body, a[:40]
+        body = body.replace(a, b)
+    return (title, summary, body)
+
+
+LOAD_GUIDE_V3 = _revised(
+    LOAD_GUIDE_V2,
+    [
+        (
+            "(running power isn't on the cycling scale), or heart rate\n  until you set it.",
+            "(TrainingPeaks: run power threshold), or heart rate until\n  you set it. Runs by heart rate count "
+            "far less than by power, so set it.",
+        ),
+        (
+            "Scored as TrainingPeaks does: strength, yoga and other workouts 0; walks and\n"
+            "  hikes light, at most 15 TSS an hour.",
+            "Scored from heart rate against your **threshold heart rate**, as\n  TrainingPeaks does; walks a bit "
+            "lower (TrainingPeaks scores them by pace). Without heart rate\n  they count 0.",
+        ),
+    ],
+)
+
+WHATS_NEW_2B = _revised(
+    WHATS_NEW_2,
+    [
+        (
+            "- **Walks and hikes** count as light (at most 15 TSS an hour); **strength, yoga and other workouts** "
+            "count 0,\n  as on TrainingPeaks.",
+            "- **Strength, yoga, walks and hikes** are scored from heart rate against your threshold heart rate, as\n"
+            "  TrainingPeaks does (walks a bit lower); without heart rate they count 0.",
+        ),
+        (" Before, runs could count two or three times too much.", " Set it: runs by heart rate count far less."),
+    ],
+)
+
+
 # Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
 POSTS = [
     *(
@@ -554,8 +594,8 @@ POSTS = [
     {"key": "strength", "kind": "guide", "position": 27, "published": True, "post": STRENGTH_GUIDE},
     {"key": "strength-news", "kind": "news", "position": 0, "published": True, "post": STRENGTH_NEWS},
     {"key": "zwift-intervals", "kind": "guide", "position": 15, "published": True, "post": ZWIFT_GUIDE},
-    {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE_V2},
-    {"key": "whats-new-2", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_2},
+    {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE_V3},
+    {"key": "whats-new-2", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_2B},
 ]
 FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
 SEEDED = "posts_seeded"
@@ -571,7 +611,11 @@ def _seeded(db: DbSession) -> set[str]:
 
 # Shipped posts rewritten later: (key, old post, new post). The text is replaced once, only where an admin
 # hasn't edited it since.
-REVISIONS = [("training-load-compare@2", LOAD_GUIDE, LOAD_GUIDE_V2)]
+REVISIONS = [
+    ("training-load-compare@2", LOAD_GUIDE, LOAD_GUIDE_V2),
+    ("training-load-compare@3", LOAD_GUIDE_V2, LOAD_GUIDE_V3),
+    ("whats-new-2@2", WHATS_NEW_2, WHATS_NEW_2B),
+]
 
 
 def _revise(db: DbSession, done: set[str]) -> set[str]:

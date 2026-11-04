@@ -45,11 +45,13 @@ def estimate_tss(
 
 
 RUNS = {"Run", "Trail run", "Treadmill run"}
-LIGHT = {"Walk", "Hike"}  # scored light, as TrainingPeaks does
-NOT_SCORED = {"Strength", "Workout", "Yoga", "Climbing"}  # no training stress, as on TrainingPeaks
-LIGHT_MAX_PER_H = 15
-LIGHT_PER_H = 10
-TSS_VERSION = 2  # 2: sport-aware (runs by run threshold power, walks light, strength 0)
+LIGHT = {"Walk", "Hike"}  # heart rate, scaled down (WALK_FACTOR)
+HR_ONLY = {"Strength", "Workout", "Yoga", "Climbing"}  # heart rate only; nothing without it
+# Measured against an athlete's TrainingPeaks export (May-Nov 2026, threshold HR 181): heart rate as below
+# gave strength 1.1x and mountain biking 1.0x TrainingPeaks' TSS, walks 1.55x (TrainingPeaks scores walks
+# by pace, lower), so walks are scaled by 0.65. Without heart rate TrainingPeaks gives these no TSS.
+WALK_FACTOR = 0.65
+TSS_VERSION = 3  # 2: sport-aware; 3: strength and walks by heart rate, as TrainingPeaks scores them
 THRESHOLD_FIELDS = ("ftp_watts", "run_ftp_watts", "lthr_bpm")
 
 
@@ -82,8 +84,8 @@ def score(a, user) -> tuple[float, str]:
     - rides: power against FTP, else heart rate against LTHR, else Strava's Relative Effort, else duration;
     - runs: power against the *run* threshold power (running power isn't comparable to cycling FTP),
       else heart rate, else Relative Effort, else duration;
-    - walks and hikes: light, from heart rate but at most LIGHT_MAX_PER_H an hour (LIGHT_PER_H without);
-    - strength, yoga, other workouts and climbing: 0;
+    - strength, yoga, other workouts and climbing: heart rate against LTHR; without it 0;
+    - walks and hikes: heart rate against LTHR, times WALK_FACTOR; without it 0;
     - everything else (swimming, rowing, skiing...): heart rate, else Relative Effort, else duration.
 
     Thresholds are the ones the athlete had on the activity's date (threshold_at)."""
@@ -91,14 +93,11 @@ def score(a, user) -> tuple[float, str]:
     duration = a.duration_s or 0
     start = getattr(a, "start_time", None)
     user = _At(user, start.date() if start else None)
-    if c in NOT_SCORED:
-        return 0.0, "not scored"
-    if c in LIGHT:
-        hours = duration / 3600
-        if a.avg_hr and user.lthr_bpm:
-            tss, _ = estimate_tss(duration, None, None, a.avg_hr, None, None, user.lthr_bpm)
-            return round(min(tss, LIGHT_MAX_PER_H * hours), 1), "light"
-        return round(LIGHT_PER_H * hours, 1), "light"
+    if c in HR_ONLY | LIGHT:
+        if not (a.avg_hr and user.lthr_bpm):
+            return 0.0, "no heart rate"
+        tss, _ = estimate_tss(duration, None, None, a.avg_hr, None, None, user.lthr_bpm)
+        return (round(tss * WALK_FACTOR, 1), "walk hr") if c in LIGHT else (tss, "hr")
     if c in RIDES:
         ftp = user.ftp_watts
     elif c in RUNS:
@@ -119,7 +118,7 @@ def score(a, user) -> tuple[float, str]:
 def rescore(a, user) -> None:
     """Score an activity again (thresholds changed, or the scoring did). An Intervals.icu training load
     stays for rides and runs, as it came from the provider."""
-    if a.tss_method == "intervals_icu" and category(a) not in NOT_SCORED | LIGHT:
+    if a.tss_method == "intervals_icu" and category(a) not in HR_ONLY | LIGHT:
         return
     a.tss, a.tss_method = score(a, user)
 

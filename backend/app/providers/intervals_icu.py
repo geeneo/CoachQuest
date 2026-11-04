@@ -27,7 +27,7 @@ from ..activity_types import category
 from ..db import Activity, Connection, User, WellnessDay, utcnow
 from ..delivery import intervals_icu as api
 from ..delivery.base import AuthFailed, DeliveryError, Forbidden
-from ..fitness import LIGHT, NOT_SCORED, score
+from ..fitness import HR_ONLY, LIGHT, score
 from ..security import decrypt_json
 
 log = logging.getLogger("coachquest.intervals")
@@ -84,7 +84,7 @@ def upsert_activity(db: DbSession, user: User, item: dict) -> Activity | None:
     act.indoor = bool(item.get("trainer")) or act.sport.startswith("Virtual")
     act.is_race = bool(item.get("race"))
     # Intervals.icu's own training load for rides and runs; walks and strength as CoachQuest scores them.
-    if item.get("icu_training_load") is not None and category(act) not in NOT_SCORED | LIGHT:
+    if item.get("icu_training_load") is not None and category(act) not in HR_ONLY | LIGHT:
         act.tss, act.tss_method = float(item["icu_training_load"]), SOURCE
     else:
         act.tss, act.tss_method = score(act, user)

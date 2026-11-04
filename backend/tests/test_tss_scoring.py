@@ -36,12 +36,13 @@ def test_runs_never_use_cycling_ftp():
     assert score(_a("Run", 60, np=330), with_run_ftp) == (round((330 / 300) ** 2 * 100, 1), "power")
 
 
-def test_walks_light_and_strength_not_scored():
-    assert score(_a("Walk", 60, hr=110), USER) == (15.0, "light")  # capped at 15 an hour
-    assert score(_a("Walk", 60, hr=60), USER)[0] == round((60 / 160) ** 2 * 100, 1)  # under the cap
-    assert score(_a("Walk", 30), USER) == (5.0, "light")  # no heart rate: 10 an hour
+def test_walks_and_strength_by_heart_rate():
+    hr = round((120 / 160) ** 2 * 100, 1)
     for sport in ("WeightTraining", "Yoga", "Workout", "strength_training"):
-        assert score(_a(sport, 45, hr=120, re=40), USER) == (0.0, "not scored")
+        assert score(_a(sport, 60, hr=120, re=40), USER) == (hr, "hr")
+        assert score(_a(sport, 45, re=40), USER) == (0.0, "no heart rate")  # no estimate, as TrainingPeaks
+    assert score(_a("Walk", 60, hr=120), USER) == (round(hr * 0.65, 1), "walk hr")
+    assert score(_a("Walk", 30), USER) == (0.0, "no heart rate")
 
 
 def test_rescore_keeps_intervals_load_for_rides_only():
@@ -52,7 +53,7 @@ def test_rescore_keeps_intervals_load_for_rides_only():
     walk = _a("Walk", 60, hr=110, method="intervals_icu")
     walk.tss = 48.0
     rescore(walk, USER)
-    assert (walk.tss, walk.tss_method) == (15.0, "light")
+    assert walk.tss_method == "walk hr"  # walks are CoachQuest's own scoring
 
 
 def test_existing_activities_scored_again_once(make_user):
@@ -83,5 +84,5 @@ def test_existing_activities_scored_again_once(make_user):
         db.commit()
         assert profile_sync.rescore_all_once(db) >= 1
         a = db.query(Activity).filter_by(user_id=uid).one()
-        assert (a.tss, a.tss_method) == (0.0, "not scored")
+        assert a.tss_method == "hr" and a.tss == round((120 / 160) ** 2 * 100 * 40 / 60, 1)
         assert profile_sync.rescore_all_once(db) == 0  # once

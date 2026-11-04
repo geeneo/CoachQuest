@@ -78,3 +78,22 @@ a workout uses the latest value from on or before its date (before the first ent
 history, the Profile value). A Profile or Garmin change is recorded from today (`profile_sync.record_change`,
 keeping the old value as "before"), so earlier workouts keep their TSS. Athletes add past values in
 **Profile → Threshold history** (`PUT /api/me/threshold-history`); everything is scored again.
+
+## Second comparison: Natalie's TrainingPeaks workouts export (4 Nov 2025 to 4 Nov 2026)
+
+After TSS version 2 CoachQuest was too low (CTL 49 against 56; about 22 lower in August). The export showed:
+
+- TrainingPeaks' thresholds were steady all year (run power / IF about 188 W every month; threshold heart rate
+  from heart-rate sessions about 181), so FTP history wasn't the cause.
+- **Runs**: about 175 TSS an hour (IF 1.2-1.47 against a run power threshold of ~188 W); 1,000-1,470 TSS a
+  month from May to August. CoachQuest scored them by heart rate (no Run threshold power set): about 65 an hour.
+  A setting: Run threshold power = TrainingPeaks' run power threshold.
+- **Strength**: TrainingPeaks about 40 an hour from heart rate (version 2 gave 0). Heart rate against LTHR 181
+  gives 1.1x TrainingPeaks; mountain biking 1.0x.
+- **Walks**: TrainingPeaks 15-37 an hour (pace-based), heart rate gives 1.55x, so x 0.65 (version 2 capped
+  them at 15).
+- Without heart rate or power TrainingPeaks gives no TSS.
+
+TSS version 3: strength, yoga, workouts, climbing by heart rate, walks and hikes by heart rate x 0.65, 0
+without heart rate. My earlier "TrainingPeaks scores strength 0" came from one walk (3 Sep, 0.7 TSS), not the
+pattern.
