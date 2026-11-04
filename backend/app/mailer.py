@@ -19,7 +19,7 @@ def configured() -> bool:
     return bool(runtime.get("smtp_host") and runtime.get("smtp_from"))
 
 
-def _send(to: str, subject: str, text: str) -> None:
+def _send(to: str, subject: str, text: str, html: str | None = None) -> None:
     host, port = runtime.get("smtp_host"), int(runtime.get("smtp_port") or 587)
     security = runtime.get("smtp_security") or "starttls"
     msg = EmailMessage()
@@ -27,6 +27,8 @@ def _send(to: str, subject: str, text: str) -> None:
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(text)
+    if html:
+        msg.add_alternative(html, subtype="html")  # mail apps show this; the text is the fallback
     context = ssl.create_default_context()
     if security == "ssl":
         server = smtplib.SMTP_SSL(host, port, timeout=20, context=context)
@@ -40,12 +42,12 @@ def _send(to: str, subject: str, text: str) -> None:
         server.send_message(msg)
 
 
-async def send(to: str, subject: str, text: str) -> None:
-    """Send a plain-text email. Raises MailError with a message an admin can act on."""
+async def send(to: str, subject: str, text: str, html: str | None = None) -> None:
+    """Send an email: plain text, and HTML when given. Raises MailError with a message an admin can act on."""
     if not configured():
         raise MailError("Email is not set up yet (Admin → Settings → Email).")
     try:
-        await asyncio.to_thread(_send, to, subject, text)
+        await asyncio.to_thread(_send, to, subject, text, html)
     except smtplib.SMTPAuthenticationError as exc:
         raise MailError("The mail server rejected the username or password.") from exc
     except smtplib.SMTPRecipientsRefused as exc:

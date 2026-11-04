@@ -19,8 +19,8 @@ def _super(make_user, email="boss@example.com"):
 def _mail(monkeypatch):
     sent = []
 
-    async def fake_send(to, subject, text):
-        sent.append((to, subject, text))
+    async def fake_send(to, subject, text, html=None):
+        sent.append((to, subject, text, html))
 
     monkeypatch.setattr(mailer, "send", fake_send)
     monkeypatch.setattr(mailer, "configured", lambda: True)

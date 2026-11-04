@@ -454,7 +454,7 @@ async def news_email_test(body: NewsDraft, admin: User = Depends(admin_user)):
     """Send the draft to the admin themselves, as users would get it."""
     _super(admin)
     try:
-        await mailer.send(admin.email, f"[Test] {body.subject}", news_email.text(admin, body.body))
+        await news_email.send_one(admin, f"[Test] {body.subject}", body.body)
     except mailer.MailError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "to": admin.email}

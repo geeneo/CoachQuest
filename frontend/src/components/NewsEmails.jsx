@@ -62,7 +62,7 @@ export default function NewsEmails() {
           <Mail size={18} /> Email users
         </h2>
         <p className="small muted">
-          Tell users about new features and changes. Plain text (Markdown like **bold** and lists read fine). Every
+          Tell users about new features and changes. Markdown like the News posts (## headings, - lists, **bold**, links): it goes out laid out, with a plain-text copy for mail apps that only show text. Every
           email starts "Hi &lt;name&gt;", ends with a link to CoachQuest and says how to stop news emails (Profile).
           Users who switched news off, and users whose emails an admin stopped, don't get it.
         </p>
