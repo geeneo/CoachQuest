@@ -2947,3 +2947,17 @@ button.mini-day {
   align-items: center;
   gap: 0.3rem;
 }
+/* Data health (Diagnostics.jsx). */
+.diag-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.diag-list li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}

@@ -176,7 +176,8 @@ function Overview({ id, scopes, isMe }) {
           {scopes.has("activities") && (
             <p className="small muted">
               Different from TrainingPeaks or another app?{" "}
-              <Link to={`/load-audit/${id}`}>See how it's calculated and compare →</Link>
+              <Link to={`/load-audit/${id}`}>See how it's calculated and compare →</Link> ·{" "}
+              <Link to={`/diagnostics/${id}`}>Data health →</Link>
             </p>
           )}
         </section>

@@ -32,6 +32,7 @@ from .routers import (
     coach_ai,
     comments,
     connections,
+    diagnostics,
     exercises,
     grants,
     health,
@@ -145,6 +146,7 @@ for r in (
     welcome.admin,
     exercises.router,
     load_audit.router,
+    diagnostics.router,
 ):
     app.include_router(r)
 

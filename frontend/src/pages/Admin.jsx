@@ -513,6 +513,11 @@ function UserRow({ u, isMe, canDecide, open, toggle, update, reload }) {
                   View data
                 </Link>
               )}
+              {(isMe || u.can_view_data) && (
+                <Link className="small" to={`/diagnostics/${isMe ? "me" : u.id}`}>
+                  Data health
+                </Link>
+              )}
             </span>
           )}
         </td>

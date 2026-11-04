@@ -52,7 +52,7 @@ export default function Connections() {
       <h1>Connections</h1>
       <p className="muted">
         Link your accounts so CoachQuest can import your training. Nothing is shared with anyone until you add them on the{" "}
-        <Link to="/sharing">Sharing</Link> page.
+        <Link to="/sharing">Sharing</Link> page. Something not coming in? <Link to="/diagnostics/me">Check your data health →</Link>
       </p>
       {params.get("connected") === "strava" && <div className="ok">Strava connected. Your first sync is running.</div>}
       {params.get("connected") === "intervals" && (
