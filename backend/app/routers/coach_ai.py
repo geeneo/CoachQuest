@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import assessments, coach_chat, comments, race_target
+from .. import assessments, coach_chat, comments, race_target, week_status
 from ..coach import CoachError
 from ..db import Assessment, CoachChat, Race, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -37,6 +37,14 @@ def overview(athlete: str, user: User = Depends(current_user), db: DbSession = D
     if athlete_id == user.id:
         out["ai_settings"] = {"daily": False, "weekly": False, "email": False, **(user.ai_settings or {})}
     return out
+
+
+@router.get("/athletes/{athlete}/coach/week")
+def week(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """How the current plan week is going, checked in code (no AI call): null without a current plan."""
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "plans")
+    return week_status.status(db, db.get(User, athlete_id), allowed_scopes(db, user, athlete_id))
 
 
 class AssessmentRequest(BaseModel):

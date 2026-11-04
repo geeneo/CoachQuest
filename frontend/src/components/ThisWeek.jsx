@@ -6,6 +6,7 @@ import { PlanWeek } from "../pages/PlansPanel.jsx";
 // as the Current plan card on the Plans tab, and what's still to come. Nothing shows without a current plan.
 export default function ThisWeek({ id, openTab }) {
   const res = useApi(`/api/athletes/${id}/plans/current`);
+  const status = useApi(`/api/athletes/${id}/coach/week`).data;
   const plan = res.data;
   const week = plan?.weeks?.find((w) => w.is_current);
   if (!week) return null;
@@ -28,6 +29,7 @@ export default function ThisWeek({ id, openTab }) {
         {plan.title} · {week.phase}
         {week.focus ? ` · ${week.focus}` : ""}
       </p>
+      {status && <HowItsGoing s={status} />}
       <PlanWeek plan={plan} week={week} />
       {left.length > 0 && (
         <p className="small muted">
@@ -47,3 +49,24 @@ export default function ThisWeek({ id, openTab }) {
     </section>
   );
 }
+
+const MARK = { ok: "✅", warn: "⚠️", bad: "❌" };
+
+// "How is your week going?" (backend week_status.py): a verdict and what's behind it, worked out in code
+// each time the tab opens.
+function HowItsGoing({ s }) {
+  return (
+    <div className={`week-status ${s.verdict}`}>
+      <strong>How is your week going? {s.headline}</strong>
+      <ul>
+        {s.points.map((p, i) => (
+          <li key={i} className={p.level}>
+            <span aria-hidden="true">{MARK[p.level]}</span> {p.text}
+          </li>
+        ))}
+      </ul>
+      {s.projection && <p className="small muted">{s.projection}</p>}
+    </div>
+  );
+}
+
