@@ -49,6 +49,15 @@ export default function AiCoach({ id, isMe }) {
         reviews={d.weekly}
         busy={busy === "weekly"}
         onRun={ro ? null : () => generate("weekly")}
+        onDelete={
+          ro
+            ? null
+            : (r) =>
+                confirm(`Delete the review of the week of ${formatDate(r.period_start)}? Its comments go too.`) &&
+                api(`/api/athletes/${id}/coach/assessments/${r.id}`, { method: "DELETE" }).then(res.reload, (e) =>
+                  setError(e.message),
+                )
+        }
       />
       {isMe && d.ai_settings && <Schedule settings={d.ai_settings} />}
       <MedicalDisclaimer />
@@ -128,7 +137,7 @@ function Progress({ p }) {
   );
 }
 
-function WeeklyReviews({ id, reviews, busy, onRun }) {
+function WeeklyReviews({ id, reviews, busy, onRun, onDelete }) {
   const [open, setOpen] = useState(reviews[0]?.id);
   // The reviewed week's days and totals, from the current plan (when the week is in it).
   const plan = useApi(`/api/athletes/${id}/plans/current`).data;
@@ -155,7 +164,14 @@ function WeeklyReviews({ id, reviews, busy, onRun }) {
             </div>
           )}
           <Markdown>{r.content_md}</Markdown>
-          <CommentsToggle athleteId={id} target="assessment" targetId={r.id} count={r.comments} />
+          <div className="row tight">
+            <CommentsToggle athleteId={id} target="assessment" targetId={r.id} count={r.comments} />
+            {onDelete && (
+              <button type="button" className="link-btn small" onClick={() => onDelete(r)}>
+                Delete this review
+              </button>
+            )}
+          </div>
         </details>
       ))}
     </section>

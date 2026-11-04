@@ -115,3 +115,17 @@ def test_reviews_follow_the_plan_weeks(make_user):
         assert this_week_start(db, u, today) == saturday
         # Without a plan for this week: the Profile's day.
         assert this_week_start(db, u, today + timedelta(days=30)).weekday() == 0
+
+
+def test_delete_a_review(make_user):
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        a = Assessment(athlete_id=aid, kind="weekly", period_start=date.today(), content_md="x", facts={}, model="m")
+        db.add(a)
+        db.commit()
+        rid = a.id
+    other = make_user("b@example.com")
+    assert other.request("DELETE", f"/api/athletes/{aid}/coach/assessments/{rid}").status_code == 404
+    assert p.request("DELETE", f"/api/athletes/me/coach/assessments/{rid}").json() == {"ok": True}
+    assert p.get("/api/athletes/me/coach").json()["weekly"] == []

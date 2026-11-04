@@ -6,12 +6,12 @@ athlete can always use it for themself. Reading progress needs fitness.
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import assessments, coach_chat, comments, race_target, week_status
 from ..coach import CoachError
-from ..db import Assessment, CoachChat, Race, User, get_db
+from ..db import Assessment, CoachChat, Comment, Race, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
 
 router = APIRouter(prefix="/api", tags=["ai coach"])
@@ -134,6 +134,22 @@ async def ask(athlete: str, body: Question, user: User = Depends(current_user), 
     except CoachError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     return chat_out(chat)
+
+
+@router.delete("/athletes/{athlete}/coach/assessments/{assessment_id}")
+def delete_assessment(
+    athlete: str, assessment_id: int, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """Remove a readiness note or weekly review (e.g. one whose advice is out of date), with its comments."""
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "plans")
+    a = db.get(Assessment, assessment_id)
+    if a is None or a.athlete_id != athlete_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    db.execute(delete(Comment).where(Comment.target == "assessment", Comment.target_id == a.id))
+    db.delete(a)
+    db.commit()
+    return {"ok": True}
 
 
 @router.delete("/athletes/{athlete}/coach/chats/{chat_id}")

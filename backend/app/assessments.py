@@ -16,7 +16,7 @@ from . import athlete_notes, comments, compliance, instructions, mailer, plan_ap
 from .activity_types import category, is_ride
 from .coach import CoachError, ask_claude, facts_json, require_data
 from .config import settings
-from .db import Assessment, Plan, SessionLocal, User
+from .db import Assessment, Plan, Segment, SessionLocal, User
 from .deps import allowed_scopes
 from .fitness import avg, week_start_of
 from .instructions import PROMPT_RULE
@@ -66,15 +66,19 @@ within the coach instructions; flag any instruction the week's data argues again
 
 Dates: `written_on` is today. `load` and `progress` are at the end of the reviewed week (`load.as_of`); when
 `load_today` is there, give both so they don't read as a contradiction ("CTL 52.0 at the end of the week,
-57 today after Saturday's long ride"). When `current_week` is there, the new week has already started:
-open "Next week" with one sentence on how it's going (`current_week.so_far`), then advise only the days in
-`current_week.still_to_come`. Never advise a date before `written_on`.
+57 today after Saturday's long ride").
 
-The review can't change the plan. Under "Next week" suggest adjustments to the planned sessions (the days
-in `current_week.still_to_come`, or the coming week's plan): keep them to what's planned, just easier,
-shorter, moved or swapped. Don't write a new schedule of your own. When a comment asks you to change or
-update the plan, say in one line that "Re-plan from this week" on the Plans tab (or a day's re-plan
-button) does that, and give the reasons it should use.
+"Next week" is about the plan the athlete already has. `current_week` holds the week that has begun (or
+begins today): `so_far` is what's done, `still_to_come` the planned days ahead, `following_week` the
+plan's week after that. When `so_far` has days, open with one sentence on how the week is going. Then
+take the planned days in `still_to_come` (and `following_week` for days beyond it) as written: name
+their route, distance and targets as they are, and never contradict them. Never advise a date before
+`written_on`, and a day missing from them isn't planned yet.
+
+The review can't change the plan: suggest adjustments to those planned sessions (easier, shorter, moved
+or swapped) and don't write a schedule of your own. When a comment asks you to change or update the plan,
+say in one line that "Re-plan from this week" on the Plans tab (or a day's re-plan button) does that, and
+give the reasons it should use.
 Answer as JSON: `review_md` holds the review; `note_suggestions` holds 0-3 suggested athlete notes
 (usually none).
 
@@ -240,38 +244,68 @@ def readiness_facts(db: DbSession, athlete: User, scopes: set[str], today: date)
     return facts
 
 
-def _current_week(db: DbSession, athlete: User, start: date, today: date) -> dict | None:
-    """The week after the reviewed one, when it has begun: its plan days so far and still to come."""
+def _brief(db: DbSession, d: dict) -> dict:
+    """A plan day as the review needs it: what, how long, and the session itself (route included)."""
+    out = {
+        "date": d["date"],
+        "planned": " + ".join([d["type"], *(e["type"] for e in plan_tracker.extras(d))]),
+        "minutes": plan_tracker.day_minutes(d),
+    }
+    if d.get("description"):
+        out["description"] = d["description"][:300]
+    seg = db.get(Segment, d["segment_id"]) if d.get("segment_id") else None
+    if seg is not None and plan_tracker.takes_route(d["type"]):
+        out["route"] = seg.name + (f", {round(seg.distance_m / 1000, 1)} km" if seg.distance_m else "")
+    return out
+
+
+def _plan_weeks(db: DbSession, athlete: User, start: date, today: date) -> tuple[dict, dict | None] | None:
+    """The plan week starting on `start` (with actuals) and the plan week after it, if any."""
     acts = activities_since(db, athlete.id, datetime.combine(start - timedelta(days=1), datetime.min.time()))
     for p in db.scalars(
         select(Plan).where(Plan.athlete_id == athlete.id, Plan.start_date.is_not(None)).order_by(Plan.created_at.desc())
     ):
         weeks = plan_tracker.with_actuals(p.weeks or [], acts, today)
-        week = next((w for w in weeks if w["start"] == start.isoformat()), None)
-        if week is None:
-            continue
-
-        def brief(d: dict) -> dict:
-            return {
-                "date": d["date"],
-                "planned": " + ".join([d["type"], *(e["type"] for e in plan_tracker.extras(d))]),
-                "minutes": plan_tracker.day_minutes(d),
-            }
-
-        return {
-            "start": start.isoformat(),
-            "so_far": [
-                {
-                    **brief(d),
-                    "status": d["status"],
-                    **({"done_minutes": d["actual"]["minutes"], "done_km": d["actual"]["km"]} if d["actual"] else {}),
-                }
-                for d in week["days"]
-                if d["date"] <= today.isoformat()
-            ],
-            "still_to_come": [brief(d) for d in week["days"] if d["date"] > today.isoformat()],
-        }
+        i = next((i for i, w in enumerate(weeks) if w["start"] == start.isoformat()), None)
+        if i is not None:
+            return weeks[i], weeks[i + 1] if i + 1 < len(weeks) else None
     return None
+
+
+def _current_week(db: DbSession, athlete: User, start: date, today: date) -> dict | None:
+    """The week after the reviewed one (it has begun, or begins today): its plan days so far and
+    still to come, and the plan's following week, so "Next week" can stick to what's planned."""
+    found = _plan_weeks(db, athlete, start, today)
+    if found is None:
+        return None
+    week, following = found
+    out = {
+        "start": start.isoformat(),
+        "phase": week["phase"],
+        "focus": week["focus"],
+        "so_far": [
+            {
+                **_brief(db, d),
+                "status": d["status"],
+                **({"done_minutes": d["actual"]["minutes"], "done_km": d["actual"]["km"]} if d["actual"] else {}),
+            }
+            for d in week["days"]
+            if d["date"] < today.isoformat() or (d["date"] == today.isoformat() and d["actual"])
+        ],
+        "still_to_come": [
+            _brief(db, d)
+            for d in week["days"]
+            if d["date"] > today.isoformat() or (d["date"] == today.isoformat() and not d["actual"])
+        ],
+    }
+    if following is not None:
+        out["following_week"] = {
+            "start": following["start"],
+            "phase": following["phase"],
+            "focus": following["focus"],
+            "days": [_brief(db, d) for d in following["days"]],
+        }
+    return out
 
 
 def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: date, today: date | None = None) -> dict:
@@ -362,7 +396,7 @@ def weekly_facts(db: DbSession, athlete: User, scopes: set[str], week_start: dat
                 **{k: v for k, v in done.items() if k not in ("week_start", "is_current")},
                 "workouts": [{k: v for k, v in w.items() if k not in ("id", "planned_if")} for w in done["workouts"]],
             }
-        if today > week_end + timedelta(days=1):
+        if today >= week_end + timedelta(days=1):
             current = _current_week(db, athlete, week_end + timedelta(days=1), today)
             if current:
                 facts["current_week"] = current

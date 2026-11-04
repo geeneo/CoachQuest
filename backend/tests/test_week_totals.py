@@ -132,12 +132,15 @@ def test_review_written_mid_week_knows_the_new_week(make_user):
         )
         assert facts["load_today"]["date"] == written.isoformat()
         cw = facts["current_week"]
-        assert [d["date"] for d in cw["so_far"]] == [(this_monday + timedelta(days=i)).isoformat() for i in range(4)]
-        assert len(cw["still_to_come"]) == 3 and cw["still_to_come"][0]["minutes"] == 60
-        # Written the day after the week: no new week yet.
+        # Thursday has nothing logged: it's still to come, with Friday to Sunday.
+        assert [d["date"] for d in cw["so_far"]] == [(this_monday + timedelta(days=i)).isoformat() for i in range(3)]
+        assert len(cw["still_to_come"]) == 4 and cw["still_to_come"][0]["minutes"] == 60
+        # Written on the new week's first day: all of it still to come; today's load is the week's end.
         facts = assessments.weekly_facts(db, user, {"plans", "fitness"}, last_monday, this_monday)
-        assert "current_week" not in facts and "load_today" not in facts
-    assert "Never advise a date before `written_on`" in assessments.WEEKLY_PROMPT
+        assert facts["current_week"]["so_far"] == [] and len(facts["current_week"]["still_to_come"]) == 7
+        assert "load_today" not in facts
+    assert "never contradict them" in assessments.WEEKLY_PROMPT
+    assert "Never advise a date before\n`written_on`" in assessments.WEEKLY_PROMPT
 
 
 def test_planned_distance_from_a_route():
@@ -149,3 +152,69 @@ def test_planned_distance_from_a_route():
     climb = {"kind": "segment", "distance_m": 700, "elevation_m": 45}
     assert planned_distance({"type": "Road", "duration_min": 60, "segment": climb}, 25)["planned_from"] == "estimate"
     assert planned_distance({"type": "Zwift / indoor", "duration_min": 60}, 25) == {}
+
+
+def test_review_sees_the_planned_sessions_and_the_following_week(make_user):
+    """The days ahead carry their description and route, and the plan's next week comes along."""
+    from app import assessments
+    from app.db import Segment, User
+
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    today = date.today()
+    this_sat = today - timedelta(days=(today.weekday() - 5) % 7)
+    last_sat = this_sat - timedelta(days=7)
+    names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    with SessionLocal() as db:
+        seg = Segment(athlete_id=aid, strava_id=9, kind="route", name="OuMeul Out and Back", distance_m=86400)
+        db.add(seg)
+        db.flush()
+
+        def week(start, long_ride=False):
+            days = []
+            for i in range(7):
+                d = start + timedelta(days=i)
+                day = {
+                    "date": d.isoformat(),
+                    "weekday": names[d.weekday()],
+                    "type": "Rest",
+                    "description": "",
+                    "duration_min": 0,
+                    "intensity": [],
+                    "locked": False,
+                }
+                if long_ride and i == 0:
+                    day.update(
+                        type="Road",
+                        duration_min=212,
+                        description="OuMeul as planned: 2x15 min tempo.",
+                        segment_id=seg.id,
+                    )
+                days.append(day)
+            return {
+                "start": start.isoformat(),
+                "phase": "Peak",
+                "focus": "Last quality week",
+                "status": "draft",
+                "days": days,
+            }
+
+        db.add(
+            Plan(
+                athlete_id=aid,
+                author_id=aid,
+                title="P",
+                content_md="",
+                model="m",
+                start_date=last_sat,
+                approval="approved",
+                weeks=[week(last_sat), week(this_sat), week(this_sat + timedelta(days=7), long_ride=True)],
+            )
+        )
+        db.commit()
+        user = db.get(User, aid)
+        facts = assessments.weekly_facts(db, user, {"plans"}, last_sat, this_sat + timedelta(days=2))
+        nxt = facts["current_week"]["following_week"]
+        sat = nxt["days"][0]
+        assert nxt["focus"] == "Last quality week"
+        assert sat["route"] == "OuMeul Out and Back, 86.4 km" and sat["description"].startswith("OuMeul as planned")
