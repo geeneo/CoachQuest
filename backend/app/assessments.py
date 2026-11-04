@@ -8,11 +8,12 @@ left to the model.
 import json
 import logging
 from datetime import date, datetime, timedelta
+from html import escape
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, comments, compliance, instructions, mailer, plan_approval, plan_tracker
+from . import athlete_notes, comments, compliance, email_md, instructions, mailer, plan_approval, plan_tracker
 from .activity_types import category, is_ride
 from .coach import CoachError, ask_claude, facts_json, require_data
 from .config import settings
@@ -501,6 +502,19 @@ def has_recent_data(db: DbSession, user: User, days: int = 14) -> bool:
     )
 
 
+def email_bodies(user: User, subject: str, content_md: str) -> tuple[str, str]:
+    """The AI coach's note as an email: plain text without Markdown markers, and laid out as HTML."""
+    base = settings.public_base_url
+    hi = f"Hi {user.display_name},"
+    text = f"{hi}\n\n{email_md.plain(content_md)}\n\n{base}/\n"
+    body = f'<p style="{email_md.TEXT};margin:0 0 14px">{escape(hi)}</p>' + email_md.to_html(content_md, breaks=True)
+    footer = (
+        "From your CoachQuest AI coach. Switch these emails off on the AI coach tab "
+        f'(<a href="{base}/" style="color:#6b7280">CoachQuest</a>).'
+    )
+    return text, email_md.page(subject, body, ("Open CoachQuest", f"{base}/"), footer)
+
+
 async def run_scheduled(kind: str) -> None:
     """Scheduler job, every morning: readiness, and the weekly review on the first day of each athlete's week."""
     db = SessionLocal()
@@ -518,7 +532,7 @@ async def run_scheduled(kind: str) -> None:
             if (user.ai_settings or {}).get("email") and not user.emails_disabled and mailer.configured():
                 subject = "Your CoachQuest weekly review" if kind == "weekly" else f"Today: {a.verdict.upper()}"
                 try:
-                    await mailer.send(user.email, subject, f"{a.content_md}\n\n{settings.public_base_url}/")
+                    await mailer.send(user.email, subject, *email_bodies(user, subject, a.content_md))
                 except mailer.MailError as exc:
                     log.warning("Emailing %s assessment to user %s failed: %s", kind, user.id, exc)
     finally:

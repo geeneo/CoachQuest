@@ -6,7 +6,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 
-from . import runtime
+from . import email_md, runtime
 
 log = logging.getLogger("coachquest.mail")
 
@@ -46,6 +46,11 @@ async def send(to: str, subject: str, text: str, html: str | None = None) -> Non
     """Send an email: plain text, and HTML when given. Raises MailError with a message an admin can act on."""
     if not configured():
         raise MailError("Email is not set up yet (Admin → Settings → Email).")
+    if html is None:
+        # Every email is laid out: its text (often Markdown, e.g. the AI coach's notes) as HTML, and the
+        # plain-text copy without the ** and ## markers.
+        html = email_md.page(subject, email_md.to_html(text, breaks=True))
+        text = email_md.plain(text)
     try:
         await asyncio.to_thread(_send, to, subject, text, html)
     except smtplib.SMTPAuthenticationError as exc:

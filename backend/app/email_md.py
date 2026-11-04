@@ -13,14 +13,14 @@ TEXT = "color:#1f2937;font-size:15px;line-height:1.55"
 BLOCK = re.compile(r"^(#{1,3})\s+(.*)$|^\s*([-*]|\d+\.)\s+(.*)$")
 
 
-def _blocks(md: str) -> list[tuple[str, object]]:
+def _blocks(md: str, breaks: bool = False) -> list[tuple[str, object]]:
     """[(kind, content)]: ("h1".."h3", text), ("ul"/"ol", [items]), ("p", text)."""
     out: list[tuple[str, object]] = []
     para: list[str] = []
 
     def flush():
         if para:
-            out.append(("p", " ".join(para)))
+            out.append(("p", ("\n" if breaks else " ").join(para)))
             para.clear()
 
     for raw in md.replace("\r\n", "\n").split("\n"):
@@ -72,10 +72,12 @@ def _inline_text(t: str) -> str:
     return t.replace("`", "")
 
 
-def to_html(md: str) -> str:
+def to_html(md: str, breaks: bool = False) -> str:
+    """`breaks`: keep the text's line breaks inside a paragraph (emails written line by line); posts
+    are hard-wrapped, so their lines are joined."""
     parts = []
     sizes = {"h1": 22, "h2": 18, "h3": 16}
-    for kind, content in _blocks(md):
+    for kind, content in _blocks(md, breaks):
         if kind in sizes:
             parts.append(
                 f'<h{kind[1]} style="color:#032440;font-size:{sizes[kind]}px;margin:24px 0 8px">'
@@ -85,7 +87,8 @@ def to_html(md: str) -> str:
             items = "".join(f'<li style="margin:0 0 6px">{_inline_html(i)}</li>' for i in content)
             parts.append(f'<{kind} style="{TEXT};margin:0 0 14px;padding-left:22px">{items}</{kind}>')
         else:
-            parts.append(f'<p style="{TEXT};margin:0 0 14px">{_inline_html(content)}</p>')
+            body = "<br>".join(_inline_html(line) for line in content.split("\n"))
+            parts.append(f'<p style="{TEXT};margin:0 0 14px">{body}</p>')
     return "\n".join(parts)
 
 
@@ -102,6 +105,17 @@ def to_text(md: str) -> str:
         else:
             lines += [_inline_text(content), ""]
     return "\n".join(lines).strip() + "\n"
+
+
+def plain(text: str) -> str:
+    """An email's own text without the Markdown markers, line by line (its layout stays)."""
+    out = []
+    for line in text.replace("\r\n", "\n").split("\n"):
+        m = re.match(r"^(#{1,3})\s+(.*)$", line)
+        line = m.group(2) if m else line
+        line = re.sub(r"^(\s*)[-*]\s+", r"\1• ", line)
+        out.append(_inline_text(line))
+    return "\n".join(out)
 
 
 def page(title: str, body_html: str, button: tuple[str, str] | None = None, footer_html: str = "") -> str:

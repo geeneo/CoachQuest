@@ -45,3 +45,32 @@ def test_news_email_is_a_page():
     assert page.startswith("<!doctype html>") and "Hi Michael &lt;Nel&gt;," in page
     assert "Open CoachQuest" in page and "/profile" in page
     assert "Hi Michael <Nel>," in news_email.text(u, MD) and "**" not in news_email.text(u, MD)
+
+
+READINESS = """**Verdict: GO** for Wed 4 Nov 2026
+
+Your recovery markers are in your normal range.
+
+**Today:** Keep the session as planned: 3x10 min tempo at 165-175 W (Z3)."""
+
+
+def test_every_email_is_laid_out(monkeypatch):
+    import asyncio
+
+    from app import mailer
+
+    sent = {}
+    monkeypatch.setattr(mailer, "configured", lambda: True)
+    monkeypatch.setattr(mailer, "_send", lambda to, subject, text, html=None: sent.update(text=text, html=html))
+    asyncio.run(mailer.send("a@example.com", "Reset", "Hi Ann,\n\n**Click** below:\nhttps://x.example/reset?t=1"))
+    assert "**" not in sent["text"] and "Click below:" in sent["text"]
+    assert "<strong>Click</strong> below:<br>" in sent["html"]  # its own line breaks stay
+    assert '<a href="https://x.example/reset?t=1"' in sent["html"] and "<h1" in sent["html"]
+
+
+def test_ai_coach_email():
+    from app.assessments import email_bodies
+
+    text, page = email_bodies(SimpleNamespace(display_name="Natalie"), "Today: GO", READINESS)
+    assert text.startswith("Hi Natalie,") and "**" not in text and "Verdict: GO for Wed 4 Nov 2026" in text
+    assert "<strong>Verdict: GO</strong>" in page and "Open CoachQuest" in page
