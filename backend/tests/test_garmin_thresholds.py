@@ -45,6 +45,7 @@ def test_garmin_thresholds_fill_profile_and_recalculate_tss(monkeypatch, make_us
                 user_id=uid,
                 source="strava",
                 external_id="1",
+                sport="Ride",
                 start_time=datetime(2026, 10, 1),
                 duration_s=3600,
                 norm_power=250,

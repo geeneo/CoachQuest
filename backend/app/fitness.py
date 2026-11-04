@@ -44,6 +44,58 @@ def estimate_tss(
     return round(hours * 50, 1), "duration"
 
 
+RUNS = {"Run", "Trail run", "Treadmill run"}
+LIGHT = {"Walk", "Hike"}  # scored light, as TrainingPeaks does
+NOT_SCORED = {"Strength", "Workout", "Yoga", "Climbing"}  # no training stress, as on TrainingPeaks
+LIGHT_MAX_PER_H = 15
+LIGHT_PER_H = 10
+TSS_VERSION = 2  # 2: sport-aware (runs by run threshold power, walks light, strength 0)
+
+
+def score(a, user) -> tuple[float, str]:
+    """An activity's TSS by its sport, the way TrainingPeaks counts it:
+
+    - rides: power against FTP, else heart rate against LTHR, else Strava's Relative Effort, else duration;
+    - runs: power against the *run* threshold power (running power isn't comparable to cycling FTP),
+      else heart rate, else Relative Effort, else duration;
+    - walks and hikes: light, from heart rate but at most LIGHT_MAX_PER_H an hour (LIGHT_PER_H without);
+    - strength, yoga, other workouts and climbing: 0;
+    - everything else (swimming, rowing, skiing...): heart rate, else Relative Effort, else duration."""
+    c = category(a)
+    duration = a.duration_s or 0
+    if c in NOT_SCORED:
+        return 0.0, "not scored"
+    if c in LIGHT:
+        hours = duration / 3600
+        if a.avg_hr and user.lthr_bpm:
+            tss, _ = estimate_tss(duration, None, None, a.avg_hr, None, None, user.lthr_bpm)
+            return round(min(tss, LIGHT_MAX_PER_H * hours), 1), "light"
+        return round(LIGHT_PER_H * hours, 1), "light"
+    if c in RIDES:
+        ftp = user.ftp_watts
+    elif c in RUNS:
+        ftp = getattr(user, "run_ftp_watts", None)
+    else:
+        ftp = None  # power on other sports isn't on the cycling scale
+    return estimate_tss(
+        duration,
+        a.norm_power if ftp else None,
+        a.avg_power if ftp else None,
+        a.avg_hr,
+        a.relative_effort,
+        ftp,
+        user.lthr_bpm,
+    )
+
+
+def rescore(a, user) -> None:
+    """Score an activity again (thresholds changed, or the scoring did). An Intervals.icu training load
+    stays for rides and runs, as it came from the provider."""
+    if a.tss_method == "intervals_icu" and category(a) not in NOT_SCORED | LIGHT:
+        return
+    a.tss, a.tss_method = score(a, user)
+
+
 @dataclass
 class DayLoad:
     day: date

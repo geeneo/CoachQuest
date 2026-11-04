@@ -45,6 +45,7 @@ def user_out(user: User) -> dict:
         "is_admin": user.is_admin,
         "is_super_admin": user.is_super_admin,
         "ftp_watts": user.ftp_watts,
+        "run_ftp_watts": user.run_ftp_watts,
         "lthr_bpm": user.lthr_bpm,
         "max_hr_bpm": user.max_hr_bpm,
         "weight_kg": user.weight_kg,

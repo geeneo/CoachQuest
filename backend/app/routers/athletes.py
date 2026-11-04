@@ -35,6 +35,7 @@ router = APIRouter(prefix="/api", tags=["athletes"])
 class ProfileUpdate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=100)
     ftp_watts: int | None = Field(default=None, ge=50, le=600)
+    run_ftp_watts: int | None = Field(default=None, ge=50, le=800)
     lthr_bpm: int | None = Field(default=None, ge=80, le=220)
     max_hr_bpm: int | None = Field(default=None, ge=100, le=240)
     weight_kg: float | None = Field(default=None, ge=30, le=200)
@@ -77,7 +78,7 @@ def update_profile(body: ProfileUpdate, user: User = Depends(current_user), db: 
         user.weight_source = "manual" if changes["weight_kg"] is not None else None
         user.weight_updated_at = utcnow()
     profile_sync.mark_manual(user, changes)
-    if {"ftp_watts", "lthr_bpm"} & changes.keys():
+    if {"ftp_watts", "lthr_bpm", "run_ftp_watts"} & changes.keys():
         profile_sync.recalculate_tss(db, user)
     db.commit()
     return user_out(user)

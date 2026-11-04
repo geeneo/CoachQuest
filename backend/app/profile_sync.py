@@ -6,13 +6,17 @@ provider reports a change, and an unchanged provider value never overwrites
 a manual edit.
 """
 
+import logging
 from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .db import Activity, User, utcnow
-from .fitness import estimate_tss
+from .db import Activity, AppSetting, User, utcnow
+from .fitness import TSS_VERSION, rescore
+from .security import decrypt_json, encrypt_json
+
+log = logging.getLogger("coachquest.profile_sync")
 
 THRESHOLDS = ("ftp_watts", "lthr_bpm", "max_hr_bpm")
 FIELDS = (*THRESHOLDS, "birth_date")
@@ -28,9 +32,25 @@ def age(birth_date: date | None, today: date | None = None) -> int | None:
 def recalculate_tss(db: DbSession, user: User) -> None:
     """FTP or LTHR changed, so every activity's TSS changes too (hidden sources included)."""
     for a in db.scalars(select(Activity).where(Activity.user_id == user.id)):
-        a.tss, a.tss_method = estimate_tss(
-            a.duration_s, a.norm_power, a.avg_power, a.avg_hr, a.relative_effort, user.ftp_watts, user.lthr_bpm
-        )
+        rescore(a, user)
+
+
+def rescore_all_once(db: DbSession) -> int:
+    """After a change in how TSS is scored (fitness.TSS_VERSION): score everyone's activities again, once.
+    TSS comes from the stored power and heart rate, so this only recalculates; nothing else changes."""
+    row = db.get(AppSetting, "tss_version")
+    done = int(decrypt_json(row.value_enc)["v"]) if row else 0
+    if done >= TSS_VERSION:
+        return 0
+    users = db.scalars(select(User)).all()
+    for u in users:
+        recalculate_tss(db, u)
+    row = row or AppSetting(key="tss_version", value_enc="")
+    row.value_enc = encrypt_json({"v": TSS_VERSION})
+    db.merge(row)
+    db.commit()
+    log.info("Training load scored again for %d users (TSS version %d)", len(users), TSS_VERSION)
+    return len(users)
 
 
 def mark_manual(user: User, fields) -> None:
@@ -57,6 +77,6 @@ def apply_from_provider(db: DbSession, user: User, provider: str, values: dict, 
             setattr(user, field, value)
             changed.append(field)
     user.profile_sources = sources
-    if {"ftp_watts", "lthr_bpm"} & set(changed):
+    if {"ftp_watts", "lthr_bpm", "run_ftp_watts"} & set(changed):
         recalculate_tss(db, user)
     return changed

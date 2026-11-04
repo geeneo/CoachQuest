@@ -68,6 +68,8 @@ class User(Base):
 
     # Athlete profile, used for TSS and by the AI coach
     ftp_watts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Running power threshold: running power isn't on the cycling scale (fitness.score).
+    run_ftp_watts: Mapped[int | None] = mapped_column(Integer, nullable=True)
     lthr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -783,6 +785,7 @@ _ADDED_COLUMNS = {
         "notify_news": "BOOLEAN NOT NULL DEFAULT 1",
         "keep_account": "BOOLEAN NOT NULL DEFAULT 0",
         "data_analysis": "BOOLEAN NOT NULL DEFAULT 1",
+        "run_ftp_watts": "INTEGER",
         "deletion_warned_at": "DATETIME",
         "deletion_final_warned_at": "DATETIME",
         "inactivity_emails": "BOOLEAN NOT NULL DEFAULT 1",

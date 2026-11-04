@@ -2,7 +2,8 @@
 
 ## Next up
 
-- [ ] **Training load vs TrainingPeaks (Natalie, 4 Nov): finish with her data.** The audit is built
+- [ ] **Training load vs TrainingPeaks (4 Nov): runs, walks and strength fixed; check again after the
+  update with FTP and LTHR from TrainingPeaks in Profile (docs/load-audit.md, findings).** Before: The audit is built
   (docs/load-audit.md; My training → Overview → "See how it's calculated and compare"), and days now
   count on the local date. To do: run it for Natalie (180 days) with her TrainingPeaks export, find the
   first day that differs, then fix with that evidence: FTP used for history, estimated TSS for sessions

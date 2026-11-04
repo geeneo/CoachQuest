@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session as DbSession
 from .. import activity_delete, runtime, sync_options
 from ..config import settings
 from ..db import Activity, Connection, User, UserStravaApp, utcnow
-from ..fitness import estimate_tss
+from ..fitness import score
 from ..security import decrypt_json, encrypt_json
 
 log = logging.getLogger("coachquest.strava")
@@ -233,15 +233,7 @@ def _upsert(db: DbSession, user: User, item: dict) -> None:
     # Strava's workout_type: 1 = race (runs), 11 = race (rides)
     act.is_race = item.get("workout_type") in (1, 11)
     act.polyline = (item.get("map") or {}).get("summary_polyline") or act.polyline
-    act.tss, act.tss_method = estimate_tss(
-        act.duration_s,
-        act.norm_power,
-        act.avg_power,
-        act.avg_hr,
-        act.relative_effort,
-        user.ftp_watts,
-        user.lthr_bpm,
-    )
+    act.tss, act.tss_method = score(act, user)
 
 
 async def sync(db: DbSession, conn: Connection) -> int:

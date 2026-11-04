@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from .. import activity_delete, profile_sync, sync_options
 from ..db import Activity, Connection, PendingMfa, User, WellnessDay, utcnow
-from ..fitness import estimate_tss
+from ..fitness import score
 from ..security import decrypt_json, encrypt_json
 
 log = logging.getLogger("coachquest.garmin")
@@ -286,9 +286,7 @@ def _upsert_activity(db: DbSession, user: User, item: dict) -> None:
     act.avg_speed_ms = item.get("averageSpeed")
     act.calories = item.get("calories")
     act.indoor = act.sport in ("virtual_ride", "indoor_cycling", "treadmill_running", "indoor_running")
-    act.tss, act.tss_method = estimate_tss(
-        act.duration_s, act.norm_power, act.avg_power, act.avg_hr, None, user.ftp_watts, user.lthr_bpm
-    )
+    act.tss, act.tss_method = score(act, user)
 
 
 async def sync(db: DbSession, conn: Connection) -> int:

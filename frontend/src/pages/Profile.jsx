@@ -9,7 +9,8 @@ import { EVENT as THEME_EVENT, getTheme, setTheme } from "../lib/theme.js";
 import { MySignIns } from "../components/SignInLog.jsx";
 
 const NUMBER_FIELDS = [
-  ["ftp_watts", "FTP (watts)", "Used for power-based TSS"],
+  ["ftp_watts", "FTP (watts)", "Cycling: used for power-based TSS on rides"],
+  ["run_ftp_watts", "Run threshold power (watts)", "Running power from your watch or footpod; runs use heart rate until it's set"],
   ["lthr_bpm", "Lactate threshold HR (bpm)", "Used for heart-rate TSS when there is no power"],
   ["max_hr_bpm", "Max HR (bpm)", ""],
   ["weight_kg", "Weight (kg)", ""],

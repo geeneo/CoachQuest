@@ -49,3 +49,23 @@ My training → Overview → Training load → **"See how it's calculated and co
 
 No stored data was changed by the audit or the date fix; CTL / ATL / TSB are calculated again from the
 activities each time (deterministic, nothing to back fill or undo).
+
+## Findings with real data (4 November 2026, 180 days)
+
+CoachQuest 17,521 TSS against TrainingPeaks 11,183 (×1.57), different from the first day. The audit's
+activity rows showed:
+
+1. **Duplicates were fine**: a Zwift ride arrives up to four times (Strava ×2, Garmin ×2) and counted once.
+2. **Runs scored with the cycling FTP** (bug): running power against a 212 W cycling FTP gave IF 1.4-1.8,
+   e.g. a 30 min run at 161 TSS. Fixed: runs use a separate **Run threshold power** (Profile), and heart
+   rate until it's set; power on other sports isn't used.
+3. **Walks and strength heavily scored**: ~45-50 TSS an hour from average heart rate, where TrainingPeaks
+   gives ~0-15 (e.g. 3 Sep: 63.7 against 0.7). Fixed, as TrainingPeaks does: strength, yoga, workouts and
+   climbing 0; walks and hikes light (heart rate, at most 15 an hour; 10 an hour without).
+4. **Rides about 1.4× on power and on heart rate**: CoachQuest's FTP (and LTHR) are about 18% lower than
+   TrainingPeaks' (24 Oct: IF 0.84 here, about 0.71 there). A setting, not code: copy TrainingPeaks'
+   bike power threshold and threshold heart rate into Profile (it scores all past rides again).
+
+`fitness.score()` scores by sport (TSS_VERSION 2); `profile_sync.rescore_all_once()` scores everyone's
+stored activities again once after the update (from the stored power and heart rate; Intervals.icu's
+own load stays for rides and runs). Run the comparison again after the update and the Profile change.

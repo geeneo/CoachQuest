@@ -23,10 +23,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import activity_delete, sync_options
+from ..activity_types import category
 from ..db import Activity, Connection, User, WellnessDay, utcnow
 from ..delivery import intervals_icu as api
 from ..delivery.base import AuthFailed, DeliveryError, Forbidden
-from ..fitness import estimate_tss
+from ..fitness import LIGHT, NOT_SCORED, score
 from ..security import decrypt_json
 
 log = logging.getLogger("coachquest.intervals")
@@ -82,12 +83,11 @@ def upsert_activity(db: DbSession, user: User, item: dict) -> Activity | None:
     act.kilojoules = round(item["icu_joules"] / 1000, 1) if item.get("icu_joules") else None
     act.indoor = bool(item.get("trainer")) or act.sport.startswith("Virtual")
     act.is_race = bool(item.get("race"))
-    if item.get("icu_training_load") is not None:
+    # Intervals.icu's own training load for rides and runs; walks and strength as CoachQuest scores them.
+    if item.get("icu_training_load") is not None and category(act) not in NOT_SCORED | LIGHT:
         act.tss, act.tss_method = float(item["icu_training_load"]), SOURCE
     else:
-        act.tss, act.tss_method = estimate_tss(
-            act.duration_s, act.norm_power, act.avg_power, act.avg_hr, None, user.ftp_watts, user.lthr_bpm
-        )
+        act.tss, act.tss_method = score(act, user)
     return act
 
 

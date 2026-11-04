@@ -17,6 +17,7 @@ from . import (
     inactivity,
     plan_approval,
     posts_seed,
+    profile_sync,
     runtime,
     storage_watch,
     sync_engine,
@@ -78,6 +79,7 @@ async def lifespan(app: FastAPI):
         runtime.load(db)
         accounts.promote_super_admins(db)
         posts_seed.seed(db)
+        profile_sync.rescore_all_once(db)  # after a change in how TSS is scored
         if settings.enable_scheduler:
             backfill.refresh_outdated(db)  # picked up by the backfill job below
     if settings.enable_scheduler:
