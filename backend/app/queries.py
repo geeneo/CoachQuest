@@ -5,9 +5,9 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import profile_sync
+from . import localtime, profile_sync
 from .activity_types import category, is_outdoor, is_ride
-from .db import Activity, WellnessDay
+from .db import Activity, User, WellnessDay
 from .fitness import daily_tss, dedupe, pmc, week_start_of
 from .sync_options import hidden_sources, primary_source
 
@@ -36,12 +36,19 @@ def wellness_since(db: DbSession, athlete_id: int, since: date) -> list[Wellness
     )
 
 
+WARMUP_DAYS = 120  # the PMC starts from 0 this long before the period, so CTL is meaningful
+
+
 def load_curve(db: DbSession, athlete_id: int, days: int, today: date | None = None):
-    """PMC for the last `days`, warmed up over 120 extra days so CTL is meaningful."""
+    """PMC for the last `days`, warmed up over WARMUP_DAYS extra days. Each activity counts on its
+    local date (the athlete's time zone), as in the calendar, not its UTC date."""
     today = today or date.today()
-    warmup_start = today - timedelta(days=days + 120)
-    acts = activities_since(db, athlete_id, datetime.combine(warmup_start, datetime.min.time()))
-    curve = pmc(daily_tss([(a.start_time, a.tss) for a in acts]), warmup_start, today)
+    warmup_start = today - timedelta(days=days + WARMUP_DAYS)
+    # A day early: a session late on the first local day is stored as the day before in UTC.
+    acts = activities_since(db, athlete_id, datetime.combine(warmup_start - timedelta(days=1), datetime.min.time()))
+    athlete = db.get(User, athlete_id)
+    tz = localtime.zone(athlete.timezone if athlete else None)
+    curve = pmc(daily_tss([(a.start_time, a.tss) for a in acts], tz), warmup_start, today)
     return curve[-days:], acts
 
 

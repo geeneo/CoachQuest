@@ -2,6 +2,12 @@
 
 ## Next up
 
+- [ ] **Training load vs TrainingPeaks (Natalie, 4 Nov): finish with her data.** The audit is built
+  (docs/load-audit.md; My training → Overview → "See how it's calculated and compare"), and days now
+  count on the local date. To do: run it for Natalie (180 days) with her TrainingPeaks export, find the
+  first day that differs, then fix with that evidence: FTP used for history, estimated TSS for sessions
+  without power or heart rate (50 an hour, Relative Effort as TSS), provider load where there is one.
+
 - [ ] **Emails to users from Admin (asked 2 Nov).**
   1. ✅ **Done (2 Nov): "We haven't seen you" after X days without a visit** (inactivity.py; Admin →
      Settings → Email: on/off, days; per user on Admin → Users; Profile checkbox for the user).

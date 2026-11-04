@@ -173,6 +173,12 @@ function Overview({ id, scopes, isMe }) {
             <Stat label="Status" value={formLabel(today?.tsb)} />
           </div>
           {fitness.error ? <div className="error">{fitness.error.message}</div> : <FitnessChart data={fitness.data} />}
+          {scopes.has("activities") && (
+            <p className="small muted">
+              Different from TrainingPeaks or another app?{" "}
+              <Link to={`/load-audit/${id}`}>See how it's calculated and compare →</Link>
+            </p>
+          )}
         </section>
       )}
       {scopes.has("wellness") && (

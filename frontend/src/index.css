@@ -2933,3 +2933,17 @@ button.mini-day {
 .week-status p {
   margin: 0.2rem 0 0;
 }
+/* Training load audit (LoadAudit.jsx). */
+.audit-table {
+  max-height: 520px;
+  overflow-y: auto;
+}
+.audit-table tr.diff td {
+  color: var(--warn);
+}
+.file-btn {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}

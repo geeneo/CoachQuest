@@ -9,7 +9,7 @@ TSS per activity, then the classic Banister/PMC model:
 from bisect import bisect_left, insort
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from itertools import islice
 
 from .activity_types import RIDES, category
@@ -53,10 +53,12 @@ class DayLoad:
     tsb: float
 
 
-def daily_tss(activities: list[tuple[datetime, float]]) -> dict[date, float]:
+def daily_tss(activities: list[tuple[datetime, float]], tz=None) -> dict[date, float]:
+    """TSS per day; with `tz` (the athlete's time zone) by local date, as start times are stored in UTC."""
     totals: dict[date, float] = defaultdict(float)
     for start, tss in activities:
-        totals[start.date()] += tss
+        day = start.replace(tzinfo=UTC).astimezone(tz).date() if tz else start.date()
+        totals[day] += tss or 0
     return dict(totals)
 
 

@@ -15,6 +15,7 @@ import Races from "./pages/Races.jsx";
 import RoutesPage from "./pages/Routes.jsx";
 import Sharing from "./pages/Sharing.jsx";
 import Weather from "./pages/Weather.jsx";
+import LoadAudit from "./pages/LoadAudit.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Workouts from "./pages/Workouts.jsx";
 
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="workouts" element={<Workouts />} />
         <Route path="routes" element={<RoutesPage />} />
         <Route path="weather" element={<Weather />} />
+        <Route path="load-audit/:athleteId" element={<LoadAudit />} />
         <Route path="races" element={<Races />} />
         <Route path="profile" element={<Profile />} />
         <Route path="glossary" element={<Glossary />} />

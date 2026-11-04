@@ -36,6 +36,7 @@ from .routers import (
     grants,
     health,
     instructions,
+    load_audit,
     plans,
     posts,
     preferences,
@@ -143,6 +144,7 @@ for r in (
     welcome.public,
     welcome.admin,
     exercises.router,
+    load_audit.router,
 ):
     app.include_router(r)
 
