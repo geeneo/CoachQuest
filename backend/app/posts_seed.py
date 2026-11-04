@@ -353,6 +353,75 @@ than your plan.
 """,
 )
 
+LOAD_GUIDE = (
+    "Compare your training load with TrainingPeaks",
+    "Fitness, fatigue and form different from TrainingPeaks? See how CoachQuest got its numbers and find the "
+    "first day the two part.",
+    """CoachQuest and TrainingPeaks both show **fitness (CTL)**, **fatigue (ATL)** and **form (TSB)**, worked out
+the same way from each day's training stress (TSS). When the numbers differ, it's almost always the TSS of
+some sessions, not the sums. This guide shows how to find which.
+
+## 1. Open the training load audit
+
+1. Go to **My training → Overview**.
+2. Under **Training load**, click **See how it's calculated and compare**.
+3. Pick **180 days**.
+
+The page shows, without changing anything:
+
+- the **FTP**, **threshold heart rate (LTHR)** and **time zone** CoachQuest used;
+- **warnings**, for example no FTP, or a large share of estimated TSS;
+- **where the TSS came from**: power and FTP, heart rate, Strava's Relative Effort, or an estimate from the
+  duration (50 TSS an hour) when there's nothing else;
+- every **day** (TSS, CTL, ATL, TSB) and every **activity** (source, counted or a copy, TSS, how).
+
+Use **Days (CSV)** and **Activities (CSV)** to keep a copy.
+
+## 2. Export the same period from TrainingPeaks
+
+1. In TrainingPeaks on the web, click your name in the top right and open **Settings**.
+2. Scroll down to **Export Data**.
+3. On the **Workout Summary** row (format CSV), set **From** and **To** to the same dates as the audit
+   (at most 12 months at a time) and click **Export**. You get a CSV of your workouts, possibly in a ZIP:
+   CoachQuest takes either. You don't need **Workout Files** or **Custom Metrics**.
+
+Coaches find the same export in each athlete's account settings. Bulk export may need a paid TrainingPeaks
+plan.
+
+## 3. Compare
+
+1. Back on the audit page, under **Compare with TrainingPeaks**, click **Choose the TrainingPeaks file**
+   and pick the CSV or ZIP.
+2. CoachQuest adds up each day's workouts and compares every day in the file's date range. A day without a
+   workout in TrainingPeaks counts as 0 there, so a walk only CoachQuest counted shows up.
+3. Read the totals (and how many times higher or lower), then the **first day that differs**.
+
+The file needs a date column (WorkoutDay or Date) and a TSS column. If CoachQuest says it can't find them,
+open the file and check the first row's column names.
+
+## 4. What the difference usually is
+
+- **FTP.** Power TSS goes with the square of power ÷ FTP: an FTP 10% lower makes about 23% more TSS. CoachQuest
+  scores every ride with the FTP in your **Profile** today; TrainingPeaks keeps each workout's TSS from the
+  FTP it had then. Check both FTPs first.
+- **Sessions without power or heart rate.** Walks, strength and yoga get an estimate in CoachQuest (Relative
+  Effort, or 50 an hour); TrainingPeaks often gives them little or none. Setting your **threshold heart
+  rate** in Profile lets CoachQuest score them by heart rate instead.
+- **The same session twice.** A ride from Strava and Garmin counts once in CoachQuest (the Activities list
+  in the audit says "copy of"). Check that TrainingPeaks doesn't have it twice either.
+- **History.** CoachQuest starts counting 120 days before the period shown; TrainingPeaks from your first
+  workout there. Long histories make small differences in CTL.
+- **Form (TSB)** is the day before's fitness minus fatigue, on both. So today's CTL minus today's ATL isn't
+  the form shown.
+
+## Still not right?
+
+Open **Data health** (from the same Training load card, or **Connections**) to check your connections,
+duplicates and profile values, then **Download diagnostics** and send the file to your admin with the
+TrainingPeaks CSV.
+""",
+)
+
 # Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
 POSTS = [
     *(
@@ -365,6 +434,7 @@ POSTS = [
     {"key": "strength", "kind": "guide", "position": 27, "published": True, "post": STRENGTH_GUIDE},
     {"key": "strength-news", "kind": "news", "position": 0, "published": True, "post": STRENGTH_NEWS},
     {"key": "zwift-intervals", "kind": "guide", "position": 15, "published": True, "post": ZWIFT_GUIDE},
+    {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE},
 ]
 FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
 SEEDED = "posts_seeded"

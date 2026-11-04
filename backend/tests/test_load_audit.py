@@ -144,3 +144,20 @@ def test_others_need_fitness_and_activities(athlete, make_user):
     _, uid = athlete
     stranger = make_user("x@example.com")
     assert stranger.get(f"/api/athletes/{uid}/load-audit").status_code in (403, 404)
+
+
+def test_compare_takes_the_trainingpeaks_zip(athlete):
+    import base64
+    import io
+    import zipfile
+
+    p, uid = athlete
+    d1 = date.today() - timedelta(days=2)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("workouts.csv", f"Title,WorkoutDay,TSS\nRide,{d1.isoformat()},55\n")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    c = p.post("/api/athletes/me/load-audit/compare", json={"zip_b64": b64, "days": 7}).json()
+    assert c["other_tss"] == 55 and c["days_compared"] == 1
+    bad = p.post("/api/athletes/me/load-audit/compare", json={"zip_b64": "bm90IGEgemlw", "days": 7})
+    assert bad.status_code == 422 and "ZIP" in bad.json()["detail"]

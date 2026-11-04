@@ -19,7 +19,10 @@ export default function LoadAudit() {
     setError(null);
     setCmp(null);
     try {
-      setCmp(await api(`${base}/compare`, { method: "POST", body: { csv: await file.text(), days } }));
+      // TrainingPeaks may hand the summary over as a ZIP: send it as it is (base64), the server opens it.
+      const zip = /\.zip$/i.test(file.name) || file.type.includes("zip");
+      const body = zip ? { zip_b64: await toBase64(file), days } : { csv: await file.text(), days };
+      setCmp(await api(`${base}/compare`, { method: "POST", body }));
     } catch (e) {
       setError(e.message);
     }
@@ -103,13 +106,14 @@ export default function LoadAudit() {
           <section className="card">
             <h2>Compare with TrainingPeaks</h2>
             <p className="small muted">
-              Export your workouts (or the Performance Management Chart) from TrainingPeaks as CSV and choose the file:
-              it needs a date column (WorkoutDay or Date) and TSS (CTL and ATL are compared too when there). Workouts
-              on one day are added up. The first day that differs is usually where the cause is.
+              In TrainingPeaks: your name (top right) → Settings → Export Data → <strong>Workout Summary</strong>, the same
+              dates as here, Export. Choose that file here (CSV, or the ZIP as it comes). Workouts on one day are added up;
+              the first day that differs is usually where the cause is. Guide: News &amp; guides → Compare your training
+              load with TrainingPeaks.
             </p>
             <label className="btn small file-btn">
-              <Upload size={14} /> Choose a TrainingPeaks CSV
-              <input type="file" accept=".csv,text/csv" hidden onChange={(e) => e.target.files[0] && compare(e.target.files[0])} />
+              <Upload size={14} /> Choose the TrainingPeaks file
+              <input type="file" accept=".csv,.zip,text/csv,application/zip" hidden onChange={(e) => e.target.files[0] && compare(e.target.files[0])} />
             </label>
             {error && <div className="error">{error}</div>}
             {cmp && (
@@ -232,3 +236,11 @@ export default function LoadAudit() {
     </>
   );
 }
+
+async function toBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
