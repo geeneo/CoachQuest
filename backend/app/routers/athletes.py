@@ -372,7 +372,7 @@ def summary(
 @router.get("/athletes/{athlete}/fitness")
 def fitness(
     athlete: str,
-    days: int = Query(default=90, ge=7, le=1100),  # up to 3 years
+    days: int = Query(default=90, ge=7, le=1830),  # up to 5 years
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),
 ):
@@ -385,7 +385,7 @@ def fitness(
 @router.get("/athletes/{athlete}/wellness")
 def wellness(
     athlete: str,
-    days: int = Query(default=30, ge=1, le=1100),  # up to 3 years
+    days: int = Query(default=30, ge=1, le=1830),  # up to 5 years
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),
 ):

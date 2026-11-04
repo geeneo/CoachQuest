@@ -37,6 +37,6 @@ def test_by_month_beyond_a_year():
 
 def test_longer_periods_allowed(make_user):
     p = make_user("a@example.com")
-    assert p.get("/api/athletes/me/fitness?days=1095").status_code == 200
-    assert p.get("/api/athletes/me/wellness?days=1095").status_code == 200
-    assert p.get("/api/athletes/me/summary?days=1095").status_code == 200
+    assert p.get("/api/athletes/me/fitness?days=1825").status_code == 200
+    assert p.get("/api/athletes/me/wellness?days=1825").status_code == 200
+    assert p.get("/api/athletes/me/summary?days=1825").status_code == 200
