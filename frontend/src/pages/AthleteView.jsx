@@ -17,9 +17,10 @@ import TrainingPreferences from "../components/TrainingPreferences.jsx";
 import HealthConditions from "../components/HealthConditions.jsx";
 import { ReadOnly } from "../lib/readOnly.js";
 import PlansPanel from "./PlansPanel.jsx";
+import AthleteThresholds from "../components/AthleteThresholds.jsx";
 
 const TABS = [
-  { id: "overview", label: "Overview", needs: ["activities", "fitness", "wellness", "plans"] },
+  { id: "overview", label: "Overview", needs: ["activities", "fitness", "wellness", "plans", "profile"] },
   { id: "activities", label: "Activities", needs: ["activities"] },
   { id: "calendar", label: "Calendar", needs: ["plans"] },
   { id: "coach", label: "AI coach", needs: ["plans"] },
@@ -79,6 +80,9 @@ export default function AthleteView({ self }) {
         ))}
       </div>
       {current === "overview" && <Overview id={id} scopes={scopes} isMe={!!self} />}
+      {current === "overview" && !self && scopes.has("profile") && (
+        <AthleteThresholds id={id} athlete={s} readOnly={!!(s.view_only || s.admin_view)} />
+      )}
       {current === "activities" && <Activities id={id} editable={!!self} />}
       {current === "calendar" && <TrainingCalendar id={id} isMe={!!self} />}
       {current === "coach" && (

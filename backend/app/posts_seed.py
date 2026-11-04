@@ -582,6 +582,19 @@ WHATS_NEW_2B = _revised(
 )
 
 
+WHATS_NEW_2C = _revised(
+    WHATS_NEW_2B,
+    [
+        (
+            "To do: copy your **FTP**",
+            "- **Coaches** with your *profile* share can set your FTP, run threshold power and threshold heart rate\n"
+            "  (athlete → Overview → Thresholds); your Profile says who set each value.\n"
+            "- When a value was simply wrong, tick **Correct earlier workouts too** so it counts for all of them.\n\n"
+            "To do: copy your **FTP**",
+        )
+    ],
+)
+
 # Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
 POSTS = [
     *(
@@ -595,7 +608,7 @@ POSTS = [
     {"key": "strength-news", "kind": "news", "position": 0, "published": True, "post": STRENGTH_NEWS},
     {"key": "zwift-intervals", "kind": "guide", "position": 15, "published": True, "post": ZWIFT_GUIDE},
     {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE_V3},
-    {"key": "whats-new-2", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_2B},
+    {"key": "whats-new-2", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_2C},
 ]
 FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
 SEEDED = "posts_seeded"
@@ -615,6 +628,7 @@ REVISIONS = [
     ("training-load-compare@2", LOAD_GUIDE, LOAD_GUIDE_V2),
     ("training-load-compare@3", LOAD_GUIDE_V2, LOAD_GUIDE_V3),
     ("whats-new-2@2", WHATS_NEW_2, WHATS_NEW_2B),
+    ("whats-new-2@3", WHATS_NEW_2B, WHATS_NEW_2C),
 ]
 
 

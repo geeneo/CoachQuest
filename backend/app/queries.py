@@ -130,7 +130,12 @@ def profile_out(athlete, scopes: set[str]) -> dict:
     if "profile" in scopes:
         out.update(
             ftp_watts=athlete.ftp_watts,
+            run_ftp_watts=athlete.run_ftp_watts,
             lthr_bpm=athlete.lthr_bpm,
+            threshold_history=athlete.threshold_history or [],
+            profile_sources={
+                k: v for k, v in (athlete.profile_sources or {}).items() if k != "birth_date"
+            },  # who set each value
             max_hr_bpm=athlete.max_hr_bpm,
             goal=athlete.goal,
             age=profile_sync.age(athlete.birth_date),  # the age, never the birth date itself

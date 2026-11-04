@@ -37,13 +37,17 @@ def recalculate_tss(db: DbSession, user: User) -> None:
         rescore(a, user)
 
 
-def record_change(user: User, field: str, old, new, day: date | None = None) -> None:
+def record_change(user: User, field: str, old, new, day: date | None = None, correct: bool = False) -> None:
     """FTP, run threshold power or LTHR changed: the new value counts from today, earlier workouts keep
-    the value they had (the old one, kept as "before" when there was no history yet)."""
-    if field not in THRESHOLD_FIELDS or old == new:
+    the value they had (the old one, kept as "before" when there was no history yet). `correct`: the old
+    value was wrong, so the new one counts for every workout (that value's history is cleared)."""
+    if field not in THRESHOLD_FIELDS or (old == new and not correct):
+        return
+    hist = [dict(h) for h in user.threshold_history or []]
+    if correct:
+        user.threshold_history = [h for h in hist if h.get("field") != field]
         return
     day = day or localtime.today(user)
-    hist = [dict(h) for h in user.threshold_history or []]
     if not any(h.get("field") == field for h in hist) and old is not None:
         hist.append({"field": field, "from": None, "value": old})
     hist = [h for h in hist if not (h.get("field") == field and h.get("from") == day.isoformat())]
@@ -91,6 +95,22 @@ def mark_manual(user: User, fields) -> None:
         if field in FIELDS:
             sources[field] = {**sources.get(field, {}), "source": "manual", "at": utcnow().isoformat()}
     user.profile_sources = sources
+
+
+def mark_set_by(athlete: User, fields, by: User) -> None:
+    """Values the athlete typed in, or their coach set for them (the athlete's Profile says who)."""
+    if by.id == athlete.id:
+        return mark_manual(athlete, fields)
+    sources = dict(athlete.profile_sources or {})
+    for field in fields:
+        if field in FIELDS or field == "run_ftp_watts":
+            sources[field] = {
+                **sources.get(field, {}),
+                "source": "coach",
+                "by": by.display_name,
+                "at": utcnow().isoformat(),
+            }
+    athlete.profile_sources = sources
 
 
 def apply_from_provider(db: DbSession, user: User, provider: str, values: dict, force: bool = False) -> list[str]:

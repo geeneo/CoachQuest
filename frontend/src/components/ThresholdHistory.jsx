@@ -13,7 +13,8 @@ const fromHistory = (h) => (h || []).map((e) => ({ field: e.field, from: e.from 
 
 // FTP, run threshold power and LTHR over time: each workout's training load uses the value of its date,
 // as TrainingPeaks does, so a new FTP doesn't change the TSS of earlier rides.
-export default function ThresholdHistory({ user, onSaved }) {
+// `user` is the athlete (the signed-in user, or an athlete a coach sees with the profile share).
+export default function ThresholdHistory({ user, onSaved, url = "/api/me/threshold-history", readOnly = false }) {
   const [rows, setRows] = useState(() => fromHistory(user.threshold_history));
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -25,7 +26,7 @@ export default function ThresholdHistory({ user, onSaved }) {
       .filter((r) => r.value !== "" || r.from)
       .map((r) => ({ field: r.field, from: r.from || null, value: r.value === "" ? null : Number(r.value) }));
     try {
-      const u = await api("/api/me/threshold-history", { method: "PUT", body: { entries } });
+      const u = await api(url, { method: "PUT", body: { entries } });
       setRows(fromHistory(u.threshold_history));
       onSaved(u);
       setOpen(false);
@@ -67,9 +68,11 @@ export default function ThresholdHistory({ user, onSaved }) {
           ) : (
             <p className="small">No history yet: every workout uses today's values.</p>
           )}
-          <button type="button" className="btn" onClick={edit}>
-            Edit history
-          </button>
+          {!readOnly && (
+            <button type="button" className="btn" onClick={edit}>
+              Edit history
+            </button>
+          )}
         </>
       ) : (
         <>

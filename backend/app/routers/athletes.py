@@ -16,6 +16,7 @@ from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
 from ..deps import active_grant, allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
+from ..fitness import THRESHOLD_FIELDS
 from ..providers import garmin, strava
 from ..queries import (
     activities_since,
@@ -50,6 +51,8 @@ class ProfileUpdate(BaseModel):
     birth_date: date | None = None
     date_format: Literal[DATE_FORMATS] | None = None
     time_format: Literal[TIME_FORMATS] | None = None
+    # The threshold values sent were corrections: they count for all earlier workouts too.
+    correct_history: bool = False
     # Your plan in your Strava activity descriptions (strava_notes.py).
     strava_notes: Literal["off", "manual", "auto"] | None = None
 
@@ -71,15 +74,20 @@ class ProfileUpdate(BaseModel):
 @router.patch("/me")
 def update_profile(body: ProfileUpdate, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     changes = body.model_dump(exclude_unset=True)
+    correct = changes.pop("correct_history", False)
+    changed = {k for k, v in changes.items() if getattr(user, k) != v}  # the form sends every field
+    if correct:
+        changed |= {k for k in changes if k in THRESHOLD_FIELDS}
     for key, value in changes.items():
-        profile_sync.record_change(user, key, getattr(user, key), value)  # thresholds: from today on
+        # Thresholds: from today on, or for every workout when it's a correction.
+        profile_sync.record_change(user, key, getattr(user, key), value, correct=correct)
         setattr(user, key, value)
     if "weight_kg" in changes:
         # A value typed in by hand wins until Garmin records a newer weigh-in.
         user.weight_source = "manual" if changes["weight_kg"] is not None else None
         user.weight_updated_at = utcnow()
-    profile_sync.mark_manual(user, changes)
-    if {"ftp_watts", "lthr_bpm", "run_ftp_watts"} & changes.keys():
+    profile_sync.mark_manual(user, changed)  # a value a coach or Garmin set stays theirs until changed
+    if {"ftp_watts", "lthr_bpm", "run_ftp_watts"} & changed:
         profile_sync.recalculate_tss(db, user)
     db.commit()
     return user_out(user)
@@ -95,10 +103,8 @@ class ThresholdHistory(BaseModel):
     entries: list[ThresholdEntry] = Field(max_length=200)
 
 
-@router.put("/me/threshold-history")
-def set_threshold_history(body: ThresholdHistory, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    """FTP, run threshold power and LTHR over time: each workout is scored with the value of its date."""
-    today = localtime.today(user)
+def _apply_history(db: DbSession, target: User, body: ThresholdHistory) -> None:
+    today = localtime.today(target)
     seen = set()
     for e in body.entries:
         if e.start and e.start > today:
@@ -111,10 +117,62 @@ def set_threshold_history(body: ThresholdHistory, user: User = Depends(current_u
     hist = [
         {"field": e.field, "from": e.start.isoformat() if e.start else None, "value": e.value} for e in body.entries
     ]
-    profile_sync.set_history(db, user, hist)
+    profile_sync.set_history(db, target, hist)
+
+
+@router.put("/me/threshold-history")
+def set_threshold_history(body: ThresholdHistory, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """FTP, run threshold power and LTHR over time: each workout is scored with the value of its date."""
+    _apply_history(db, user, body)
     profile_sync.mark_manual(user, {e.field for e in body.entries})
     db.commit()
     return user_out(user)
+
+
+class ThresholdsUpdate(BaseModel):
+    ftp_watts: int | None = Field(default=None, ge=50, le=600)
+    run_ftp_watts: int | None = Field(default=None, ge=50, le=800)
+    lthr_bpm: int | None = Field(default=None, ge=80, le=220)
+    max_hr_bpm: int | None = Field(default=None, ge=100, le=240)
+    correct_history: bool = False  # the values sent count for every earlier workout too
+
+
+def _coached(db: DbSession, user: User, athlete: str) -> User:
+    """The athlete a coach changes thresholds for: needs the profile share (friends and admins only look)."""
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "profile")
+    return db.get(User, athlete_id)
+
+
+@router.patch("/athletes/{athlete}/thresholds")
+def set_athlete_thresholds(
+    athlete: str, body: ThresholdsUpdate, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """A coach with the profile share sets the athlete's FTP, run threshold power, LTHR and max HR. A change
+    counts from today (earlier workouts keep theirs); the athlete's Profile says the coach set it."""
+    target = _coached(db, user, athlete)
+    changes = body.model_dump(exclude_unset=True)
+    correct = changes.pop("correct_history", False)
+    for key, value in changes.items():
+        profile_sync.record_change(target, key, getattr(target, key), value, correct=correct)
+        setattr(target, key, value)
+    profile_sync.mark_set_by(target, changes, user)
+    if {"ftp_watts", "lthr_bpm", "run_ftp_watts"} & changes.keys():
+        profile_sync.recalculate_tss(db, target)
+    db.commit()
+    return profile_out(target, allowed_scopes(db, user, target.id))
+
+
+@router.put("/athletes/{athlete}/threshold-history")
+def set_athlete_threshold_history(
+    athlete: str, body: ThresholdHistory, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """A coach with the profile share edits the athlete's threshold history; everything is scored again."""
+    target = _coached(db, user, athlete)
+    _apply_history(db, target, body)
+    profile_sync.mark_set_by(target, {e.field for e in body.entries}, user)
+    db.commit()
+    return profile_out(target, allowed_scopes(db, user, target.id))
 
 
 @router.post("/me/profile/pull-garmin")

@@ -21,6 +21,8 @@ const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satur
 // Where a profile number came from, shown under the field.
 function sourceLine(user, k) {
   if (k === "weight_kg" && user.weight_source === "garmin") return `From Garmin, weighed ${dateTime(user.weight_updated_at)}`;
+  const src = user.profile_sources?.[k];
+  if (src?.source === "coach") return `Set by your coach ${src.by || ""}, ${dateTime(src.at)}`;
   if (user.profile_sources?.[k]?.source === "garmin") return `From Garmin, ${dateTime(user.profile_sources[k].at)}`;
   if (user[k] != null) return "Entered by you";
   return null;
@@ -44,6 +46,7 @@ export default function Profile() {
     ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, user[k] ?? ""])),
   }));
   const [msg, setMsg] = useState(null);
+  const [correct, setCorrect] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   const save = async (e) => {
@@ -65,9 +68,11 @@ export default function Profile() {
       ...((form.birth_date || null) !== (user.birth_date || null) ? { birth_date: form.birth_date || null } : {}),
     };
     for (const [k] of NUMBER_FIELDS) body[k] = form[k] === "" ? null : Number(form[k]);
+    if (correct) body.correct_history = true;
     try {
       setUser(await api("/api/me", { method: "PATCH", body }));
       setMsg({ ok: "Saved. Training load was recalculated." });
+      setCorrect(false);
     } catch (err) {
       setMsg({ error: err.message });
     }
@@ -95,6 +100,11 @@ export default function Profile() {
             {sourceLine(user, k) && <span className="hint source">{sourceLine(user, k)}</span>}
           </label>
         ))}
+        <label className="check wide">
+          <input type="checkbox" checked={correct} onChange={(e) => setCorrect(e.target.checked)} />
+          My FTP, run threshold power or threshold HR above were wrong: correct earlier workouts too (otherwise a
+          change counts from today, as on TrainingPeaks)
+        </label>
         <label>
           My week starts on
           <select value={form.week_start} onChange={set("week_start")}>
@@ -194,6 +204,7 @@ export default function Profile() {
         <button className="btn primary">Save</button>
       </form>
       <ThresholdHistory
+        key={JSON.stringify(user.threshold_history || [])}
         user={user}
         onSaved={(u) => {
           setUser(u);
