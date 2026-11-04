@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../lib/api.js";
 import { dateTime } from "../lib/format.js";
 import ThresholdHistory from "./ThresholdHistory.jsx";
+import TpThresholdImport from "./TpThresholdImport.jsx";
 
 const FIELDS = [
   ["ftp_watts", "FTP (watts)", "Rides with power are scored by it"],
@@ -82,6 +83,16 @@ export default function AthleteThresholds({ id, athlete, readOnly }) {
         {msg?.error && <div className="error wide">{msg.error}</div>}
         {!readOnly && <button className="btn primary">Save</button>}
       </form>
+      {!readOnly && (
+        <TpThresholdImport
+          id={id}
+          onSaved={(out) => {
+            const next = { ...a, ...out };
+            setA(next);
+            setForm(Object.fromEntries(FIELDS.map(([k]) => [k, next[k] ?? ""])));
+          }}
+        />
+      )}
       <ThresholdHistory
         key={JSON.stringify(a.threshold_history || [])}
         user={a}

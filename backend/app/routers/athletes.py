@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import activity_delete, dashboard, localtime, profile_sync, runtime, strava_notes, sync_options
+from .. import activity_delete, dashboard, localtime, profile_sync, runtime, strava_notes, sync_options, tp_thresholds
 from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
 from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
@@ -28,6 +28,7 @@ from ..queries import (
     wellness_since,
 )
 from .auth import user_out
+from .load_audit import _csv_from_zip
 from .preferences import preferences_out
 
 router = APIRouter(prefix="/api", tags=["athletes"])
@@ -161,6 +162,29 @@ def set_athlete_thresholds(
         profile_sync.recalculate_tss(db, target)
     db.commit()
     return profile_out(target, allowed_scopes(db, user, target.id))
+
+
+class TpExport(BaseModel):
+    csv: str = Field(default="", max_length=5_000_000)
+    zip_b64: str = Field(default="", max_length=8_000_000)  # TrainingPeaks' export can be a ZIP
+
+
+@router.post("/athletes/{athlete}/thresholds/from-trainingpeaks")
+def thresholds_from_trainingpeaks(
+    athlete: str, body: TpExport, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """The thresholds TrainingPeaks used, from its Workout Summary export; nothing is saved (the athlete
+    or coach ticks which to take, then saves them with PATCH .../thresholds)."""
+    target = _coached(db, user, athlete)
+    text = _csv_from_zip(body.zip_b64) if body.zip_b64 else body.csv
+    if len(text.strip()) < 10:
+        raise HTTPException(status_code=422, detail="That file is empty")
+    try:
+        out = tp_thresholds.estimate(text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    out["current"] = {k: getattr(target, k) for k in ("ftp_watts", "run_ftp_watts", "lthr_bpm", "max_hr_bpm")}
+    return out
 
 
 @router.put("/athletes/{athlete}/threshold-history")

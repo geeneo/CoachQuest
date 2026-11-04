@@ -8,6 +8,7 @@ import { DATE_FORMATS, dateTime, formatDate } from "../lib/format.js";
 import { EVENT as THEME_EVENT, getTheme, setTheme } from "../lib/theme.js";
 import { MySignIns } from "../components/SignInLog.jsx";
 import ThresholdHistory from "../components/ThresholdHistory.jsx";
+import TpThresholdImport from "../components/TpThresholdImport.jsx";
 
 const NUMBER_FIELDS = [
   ["ftp_watts", "FTP (watts)", "Cycling: used for power-based TSS on rides. A change counts from today; earlier rides keep theirs"],
@@ -203,6 +204,14 @@ export default function Profile() {
         {msg?.error && <div className="error wide">{msg.error}</div>}
         <button className="btn primary">Save</button>
       </form>
+      <TpThresholdImport
+        id="me"
+        onSaved={async () => {
+          const u = await api("/api/auth/me");
+          setUser(u);
+          setForm((f) => ({ ...f, ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, u[k] ?? ""])) }));
+        }}
+      />
       <ThresholdHistory
         key={JSON.stringify(user.threshold_history || [])}
         user={user}
