@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, comments, compliance, instructions, mailer, plan_tracker
+from . import athlete_notes, comments, compliance, instructions, mailer, plan_approval, plan_tracker
 from .activity_types import category, is_ride
 from .coach import CoachError, ask_claude, facts_json, require_data
 from .config import settings
@@ -69,6 +69,12 @@ Dates: `written_on` is today. `load` and `progress` are at the end of the review
 57 today after Saturday's long ride"). When `current_week` is there, the new week has already started:
 open "Next week" with one sentence on how it's going (`current_week.so_far`), then advise only the days in
 `current_week.still_to_come`. Never advise a date before `written_on`.
+
+The review can't change the plan. Under "Next week" suggest adjustments to the planned sessions (the days
+in `current_week.still_to_come`, or the coming week's plan): keep them to what's planned, just easier,
+shorter, moved or swapped. Don't write a new schedule of your own. When a comment asks you to change or
+update the plan, say in one line that "Re-plan from this week" on the Plans tab (or a day's re-plan
+button) does that, and give the reasons it should use.
 Answer as JSON: `review_md` holds the review; `note_suggestions` holds 0-3 suggested athlete notes
 (usually none).
 
@@ -380,13 +386,29 @@ def assessment_out(a: Assessment) -> dict:
     }
 
 
+def this_week_start(db: DbSession, athlete: User, today: date) -> date:
+    """The first day of the athlete's week holding today: their current plan's week when they have
+    one (plans keep the weeks they were made with), else their Profile's "My week starts on"."""
+    plans = db.scalars(
+        select(Plan)
+        .where(Plan.athlete_id == athlete.id, Plan.start_date.is_not(None), Plan.approval == plan_approval.APPROVED)
+        .order_by(Plan.created_at.desc())
+    ).all()
+    for p in plans:
+        for w in p.weeks or []:
+            start = date.fromisoformat(w["start"])
+            if start <= today < start + timedelta(days=7):
+                return start
+    return week_start_of(today, athlete.week_start or 0)
+
+
 async def create(db: DbSession, viewer: User, athlete: User, kind: str, scheduled: bool = False) -> Assessment:
     scopes = allowed_scopes(db, viewer, athlete.id)
     today = date.today()
     if kind == "daily":
         facts, prompt, period = readiness_facts(db, athlete, scopes, today), READINESS_PROMPT, today
     else:
-        last_week = week_start_of(today, athlete.week_start or 0) - timedelta(weeks=1)
+        last_week = this_week_start(db, athlete, today) - timedelta(weeks=1)
         facts, prompt, period = weekly_facts(db, athlete, scopes, last_week, today), WEEKLY_PROMPT, last_week
     require_data(db, athlete)
     stored = json.loads(json.dumps(facts, default=str))
@@ -451,7 +473,7 @@ async def run_scheduled(kind: str) -> None:
     try:
         users = [u for u in db.scalars(select(User).where(User.is_active)).all() if (u.ai_settings or {}).get(kind)]
         if kind == "weekly":
-            users = [u for u in users if date.today().weekday() == (u.week_start or 0)]
+            users = [u for u in users if this_week_start(db, u, date.today()) == date.today()]
         users = [u for u in users if not u.ai_disabled and has_recent_data(db, u)]
         for user in users:
             try:

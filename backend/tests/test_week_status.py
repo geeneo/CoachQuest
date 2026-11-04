@@ -96,3 +96,22 @@ def test_on_track_then_concerns(make_user):
 def test_no_current_plan(make_user):
     p = make_user("a@example.com")
     assert p.get("/api/athletes/me/coach/week").json() is None
+
+
+def test_reviews_follow_the_plan_weeks(make_user):
+    """A plan made with Saturday weeks keeps them, whatever Profile's "My week starts on" says now."""
+    from app.assessments import this_week_start
+    from app.db import User
+
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    today = date.today()
+    saturday = today - timedelta(days=(today.weekday() - 5) % 7)
+    _plan(aid, saturday, {0: ("Road", 120)})
+    with SessionLocal() as db:
+        u = db.get(User, aid)
+        u.week_start = 0  # Monday in Profile
+        db.commit()
+        assert this_week_start(db, u, today) == saturday
+        # Without a plan for this week: the Profile's day.
+        assert this_week_start(db, u, today + timedelta(days=30)).weekday() == 0
