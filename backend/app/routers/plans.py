@@ -31,7 +31,7 @@ from .. import (
     zwo,
 )
 from ..coach import PHASES, CoachError, add_weather, build_facts, generate_day, generate_plan, has_data
-from ..db import Comment, Plan, PlatformWorkout, User, get_db
+from ..db import Comment, Plan, PlatformWorkout, Race, User, get_db
 from ..deps import active_grant, allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
 from ..queries import activities_since, load_by_day
 from .preferences import SESSION_TYPES, preferences_out
@@ -113,6 +113,7 @@ def plan_out(p: Plan, db: DbSession, full: bool = False, today: date | None = No
                 out["load"] = load_by_day(db, p.athlete_id, first, last, today)
             out["platform_matching"] = _add_matches(db, athlete, out["weeks"], today)
             _add_segments(db, p.athlete_id, out["weeks"])
+            _add_races(db, p.athlete_id, out["weeks"])
             speed = ride_info.recent_speed(db, p.athlete_id)
             for w in out["weeks"]:
                 for d in w["days"]:
@@ -133,6 +134,24 @@ def _scrub_indoor(db: DbSession, p: Plan, today: date) -> None:
         flag_modified(p, "weeks")
         db.commit()
         plan_workouts.reconcile(db, p, today)
+
+
+def _add_races(db: DbSession, athlete_id: int, weeks: list[dict]) -> None:
+    """Put the race (name, distance, climbing, date) on each day linked to one."""
+    races = {r.id: r for r in db.scalars(select(Race).where(Race.user_id == athlete_id))}
+    for w in weeks:
+        for d in w["days"]:
+            r = races.get(d.get("race_id"))
+            if r is not None:
+                d["race"] = {
+                    "id": r.id,
+                    "name": r.name,
+                    "short_name": r.short_name,
+                    "distance_km": r.distance_km,
+                    "elevation_m": r.elevation_m,
+                    "target_date": r.target_date,
+                    "start_time": r.start_time,
+                }
 
 
 def _add_segments(db: DbSession, athlete_id: int, weeks: list[dict]) -> None:
@@ -415,6 +434,8 @@ class DayEdit(BaseModel):
     extra_sessions: list[dict] | None = Field(default=None, max_length=3)
     # One of the athlete's saved Strava segments (segments.py), or null to clear it.
     segment_id: int | None = None
+    # One of the athlete's races (Races page), or null: the day becomes that race's day.
+    race_id: int | None = None
 
 
 @router.patch("/{plan_id}/days/{day}")
@@ -455,6 +476,16 @@ def edit_day(
     picked = [changes.get("segment_id")] + [s.get("segment_id") for s in changes.get("extra_sessions") or []]
     if any(sid is not None and sid not in mine for sid in picked):
         raise HTTPException(status_code=422, detail="That segment isn't one of the athlete's saved segments")
+    if changes.get("race_id") is not None:
+        race = db.get(Race, changes["race_id"])
+        if race is None or race.user_id != p.athlete_id:
+            raise HTTPException(status_code=422, detail="That race isn't one of the athlete's races")
+        changes["type"] = "Race"
+        changes["locked"] = True  # a race day stays put when the plan is re-planned
+        if "segment_id" not in changes and race.segment_id in mine:
+            changes["segment_id"] = race.segment_id
+    elif changes.get("type") not in (None, "Race"):
+        changes["race_id"] = None  # no longer a race day
     weeks[wi]["days"][di].update(changes)
     if not plan_tracker.takes_route(weeks[wi]["days"][di].get("type")):
         weeks[wi]["days"][di]["segment_id"] = None  # indoor days get a workout, not a route or segment
@@ -523,6 +554,7 @@ def swap_days(
         "route",
         "workout",
         "segment_id",
+        "race_id",
         "strength",
         "extra_sessions",
     )

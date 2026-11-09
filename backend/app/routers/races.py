@@ -9,9 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
-from .. import localtime, race_stages
+from .. import localtime, race_stages, segments
 from ..activity_types import category
-from ..db import Race, User, get_db
+from ..db import Plan, Race, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
 from ..queries import activities_since
 from ..race_estimate import estimate, format_time, parse_time
@@ -47,6 +47,8 @@ class RaceFields(BaseModel):
     target_time: str | None = Field(default=None, max_length=10)  # finish time, h:mm or h:mm:ss
     days: int | None = Field(default=None, ge=1, le=60)
     active: bool | None = None
+    # One of the athlete's saved routes (Routes page), or null for none.
+    segment_id: int | None = None
 
     @field_validator("code")
     @classmethod
@@ -95,6 +97,7 @@ def race_out(r: Race, today: date | None = None) -> dict:
         # A multi-day event: each day, and the totals with its longest and hardest day.
         "stages": race_stages.with_dates(r.stages, r.target_date),
         "stage_totals": race_stages.totals(r.stages or []),
+        "segment_id": r.segment_id,
     }
 
 
@@ -140,6 +143,25 @@ def _own(db: DbSession, race_id: int, user: User) -> Race:
     return race
 
 
+def _check_route(db: DbSession, user: User, fields: dict) -> None:
+    sid = fields.get("segment_id")
+    if sid is not None and sid not in {s.id for s in segments.for_athlete(db, user.id)}:
+        raise HTTPException(status_code=422, detail="That route isn't one of your saved routes")
+
+
+def _route_to_plan(db: DbSession, race: Race) -> None:
+    """The race's route changed: plan days linked to the race (today and later) ride the new one."""
+    today = date.today().isoformat()
+    for p in db.scalars(select(Plan).where(Plan.athlete_id == race.user_id, Plan.weeks.is_not(None))):
+        weeks, changed = [dict(w, days=[dict(d) for d in w["days"]]) for w in p.weeks or []], False
+        for w in weeks:
+            for d in w["days"]:
+                if d.get("race_id") == race.id and d["date"] >= today and d.get("segment_id") != race.segment_id:
+                    d["segment_id"], changed = race.segment_id, True
+        if changed:
+            p.weeks = weeks
+
+
 def _apply(race: Race, fields: dict) -> None:
     for key, value in fields.items():
         if key == "start_time":
@@ -174,7 +196,9 @@ def list_races(athlete: str, user: User = Depends(current_user), db: DbSession =
 @router.post("/races")
 def create_race(body: RaceCreate, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     race = Race(user_id=user.id, code=body.code, name=body.name)
-    _apply(race, body.model_dump(exclude_unset=True))
+    fields = body.model_dump(exclude_unset=True)
+    _check_route(db, user, fields)
+    _apply(race, fields)
     db.add(race)
     try:
         db.commit()
@@ -187,7 +211,11 @@ def create_race(body: RaceCreate, user: User = Depends(current_user), db: DbSess
 @router.patch("/races/{race_id}")
 def update_race(race_id: int, body: RaceFields, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     race = _own(db, race_id, user)
-    _apply(race, body.model_dump(exclude_unset=True))
+    fields = body.model_dump(exclude_unset=True)
+    _check_route(db, user, fields)
+    _apply(race, fields)
+    if "segment_id" in fields:
+        _route_to_plan(db, race)
     try:
         db.commit()
     except IntegrityError:

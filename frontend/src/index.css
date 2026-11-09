@@ -1989,8 +1989,22 @@ ul.segments li {
   white-space: nowrap;
   text-decoration: none;
 }
-.route-pick {
+.route-pick,
+.race-pick {
   margin-bottom: 4px;
+}
+.route-pick select,
+.race-pick select,
+.race-route select {
+  max-width: 100%;
+}
+.race-route select {
+  width: 14rem;
+}
+.badge.race {
+  border-color: var(--c1);
+  color: var(--c1);
+  font-weight: 600;
 }
 
 /* Strength training. */

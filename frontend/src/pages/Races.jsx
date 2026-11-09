@@ -2,6 +2,7 @@ import { CalendarDays, Sparkles, Trash2, X } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
+import RoutePicker from "../components/RoutePicker.jsx";
 import { duration, shortDate } from "../lib/format.js";
 
 // Click a field, change it, click away: it saves. Empty number fields clear the value.
@@ -82,6 +83,7 @@ export default function Races() {
                 {FIELDS.map(([f, label]) => (
                   <th key={f}>{label}</th>
                 ))}
+                <th>Route</th>
                 <th>Active</th>
                 <th />
               </tr>
@@ -113,6 +115,17 @@ export default function Races() {
                       </span>
                     </td>
                   ))}
+                  <td className="race-route">
+                    <RoutePicker
+                      label={`Route of ${r.name}`}
+                      saved={favourites.data?.favourites || []}
+                      stravaLinked={!!favourites.data?.strava_linked}
+                      routesOnly
+                      value={r.segment_id}
+                      onSaved={favourites.reload}
+                      onPick={(id) => save(r, "segment_id", id)}
+                    />
+                  </td>
                   <td>
                     <input
                       type="checkbox"
@@ -137,7 +150,7 @@ export default function Races() {
                 </tr>
                 {(r.estimate || r.ctl_advice) && r.days_to_go >= 0 && (
                   <tr className="race-extra">
-                    <td colSpan={FIELDS.length + 2}>
+                    <td colSpan={FIELDS.length + 3}>
                       <Estimate e={r.estimate} time={r.target_time} />
                       {r.ctl_advice && (
                         <Advice

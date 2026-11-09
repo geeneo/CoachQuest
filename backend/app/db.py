@@ -306,6 +306,9 @@ class Race(Base):
     days: Mapped[int] = mapped_column(Integer, default=1)
     # A multi-day event's stages (race_stages.py); None for a one-day race.
     stages: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # The route it's ridden on: one of the athlete's saved routes (segments.py); plan days linked to the
+    # race ride it.
+    segment_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -815,7 +818,7 @@ _ADDED_COLUMNS = {
         "ai_monthly_limit": "INTEGER",
         "time_format": "VARCHAR(4)",
     },
-    "races": {"target_seconds": "INTEGER", "ctl_advice": "JSON", "stages": "JSON"},
+    "races": {"target_seconds": "INTEGER", "ctl_advice": "JSON", "stages": "JSON", "segment_id": "INTEGER"},
     "platform_workouts": {"collection": "VARCHAR(160) NOT NULL DEFAULT ''"},
     "grants": {"role": "VARCHAR(10) NOT NULL DEFAULT 'coach'"},
     "segments": {

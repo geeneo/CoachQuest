@@ -9,6 +9,7 @@ import { blocks } from "../lib/workout.js";
 import Markdown from "./Markdown.jsx";
 import MuscleMap from "./MuscleMap.jsx";
 import PlanComments from "./PlanComments.jsx";
+import RoutePicker from "./RoutePicker.jsx";
 import WorkoutChart from "./WorkoutChart.jsx";
 import { useReadOnly } from "../lib/readOnly.js";
 
@@ -21,6 +22,7 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
   const { user } = useAuth();
   const prefs = useApi(`/api/athletes/${athleteId}/preferences`);
   const segments = useApi(`/api/athletes/${athleteId}/segments`);
+  const races = useApi(`/api/athletes/${athleteId}/races`);
   const [swapFrom, setSwapFrom] = useState(null);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -134,6 +136,10 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
     restorePlan: (date) => call(`/days/${date}/platform-workout`, "DELETE"),
     maxSessions: plan.max_sessions_per_day || 1,
     segments: segments.data?.favourites || [],
+    reloadSegments: segments.reload,
+    stravaLinked: !!segments.data?.strava_linked,
+    athleteId,
+    races: races.data || [],
   };
   const matching = plan.platform_matching || {};
   return (
@@ -296,7 +302,10 @@ function Day({ day, ctx }) {
   const [pickRoute, setPickRoute] = useState(false);
   // A route picked whose name isn't in the day's text: the text still describes the old ride.
   const [routeHint, setRouteHint] = useState(null);
-  const canRoute = !ctx.ro && takesRoute(day.type) && ctx.segments.length > 0;
+  const canRoute = !ctx.ro && takesRoute(day.type) && (ctx.segments.length > 0 || ctx.stravaLinked);
+  // Races to link a race day to: the ones to come, and the one already linked.
+  const today = new Date().toISOString().slice(0, 10);
+  const raceChoices = ctx.races.filter((r) => r.id === day.race_id || !r.target_date || r.target_date >= today);
   const save = (body) => ctx.editDay(day.date, body);
   const canReplan = !ctx.ro && !day.locked && day.date >= new Date().toISOString().slice(0, 10);
   // A day done as something else than its indoor workout (plan_follow.py) no longer shows the workout.
@@ -401,28 +410,54 @@ function Day({ day, ctx }) {
         {pickRoute && canRoute && (
           <label className="inline small route-pick">
             Ride
-            <select
+            <RoutePicker
               autoFocus
-              value={day.segment ? String(day.segment.id) : ""}
-              onChange={(e) => {
-                const picked = ctx.segments.find((s) => String(s.id) === e.target.value);
-                save({ segment_id: picked ? picked.id : null });
+              athleteId={ctx.athleteId}
+              saved={ctx.segments}
+              stravaLinked={ctx.stravaLinked}
+              value={day.segment?.id}
+              onSaved={ctx.reloadSegments}
+              onPick={async (id) => {
+                const updated = await save({ segment_id: id });
                 setPickRoute(false);
+                const picked = updated?.weeks.flatMap((w) => w.days).find((d) => d.date === day.date)?.segment;
                 const text = (day.description || "").toLowerCase();
                 setRouteHint(picked && !text.includes(picked.name.toLowerCase()) ? picked : null);
               }}
-            >
-              <option value="">– no route –</option>
-              {ctx.segments.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.kind === "segment" ? "⛰" : "🗺"} {s.name}
-                </option>
-              ))}
-            </select>
+            />
             <button type="button" className="link-btn small" onClick={() => setPickRoute(false)}>
               Cancel
             </button>
           </label>
+        )}
+        {day.type === "Race" && !ctx.ro && !editing && (
+          <label className="inline small race-pick">
+            Race
+            <select
+              aria-label="Which race"
+              value={day.race_id ? String(day.race_id) : ""}
+              onChange={(e) => save({ race_id: e.target.value ? Number(e.target.value) : null })}
+            >
+              <option value="">– pick your race –</option>
+              {raceChoices.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                  {r.target_date ? ` (${fmtDate(r.target_date)})` : ""}
+                </option>
+              ))}
+            </select>
+            {raceChoices.length === 0 && (
+              <Link className="small" to="/races">
+                Add your race
+              </Link>
+            )}
+          </label>
+        )}
+        {day.race && day.race.target_date && day.race.target_date !== day.date && (
+          <div className="hint small">
+            {day.race.name} is on {fmtDate(day.race.target_date)}, not this day: swap it to that day, or change the
+            race's date on the Races page.
+          </div>
         )}
         {editing ? (
           <DayEditor
@@ -443,7 +478,7 @@ function Day({ day, ctx }) {
           </button>
         )}
         {!editing && <Followed day={day} />}
-        {!editing && (day.intensity.length > 0 || day.gear || day.route || workout || day.segment) && (
+        {!editing && (day.intensity.length > 0 || day.gear || day.route || workout || day.segment || day.race) && (
           <div className="chips tight">
             {day.intensity.map((c) => (
               <span key={c} className="badge intensity">
@@ -459,6 +494,14 @@ function Day({ day, ctx }) {
               >
                 ⬇ {workout.name}
               </button>
+            )}
+            {day.race && (
+              <span className="badge race">
+                🏁 {day.race.name}
+                {day.race.distance_km ? ` · ${Math.round(day.race.distance_km)} km` : ""}
+                {day.race.elevation_m ? ` · ${Math.round(day.race.elevation_m)} m` : ""}
+                {day.race.start_time ? ` · start ${day.race.start_time}` : ""}
+              </span>
             )}
             {day.segment && <SegmentLink segment={day.segment} />}
             {day.gear && <span className="badge">🚲 {day.gear}</span>}
