@@ -7,6 +7,7 @@ _tmp = tempfile.mkdtemp()
 os.environ.update(
     # TEST_DATABASE_URL=postgresql+psycopg://... runs the suite on Postgres (an empty database).
     DATABASE_URL=os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{_tmp}/test.db",
+    DATA_DIR=f"{_tmp}/data",  # not /data: CI runners can't write there
     PROXY_SHARED_SECRET="test-secret-" + "x" * 40,
     TOKEN_ENCRYPTION_KEY=Fernet.generate_key().decode(),
     PUBLIC_BASE_URL="http://testserver",
