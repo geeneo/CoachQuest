@@ -235,6 +235,27 @@ async def pull_profile_from_garmin(user: User = Depends(current_user), db: DbSes
     return {**result, "user": user_out(user)}
 
 
+@router.get("/me/profile/synced")
+def synced_profile_values(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """What the synced data says for each Profile field (latest weigh-in, Garmin's thresholds)."""
+    return profile_sync.synced_values(db, user)
+
+
+class UseSynced(BaseModel):
+    field: Literal["ftp_watts", "lthr_bpm", "max_hr_bpm", "weight_kg", "birth_date"]
+
+
+@router.post("/me/profile/use-synced")
+def use_synced_value(body: UseSynced, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Take the synced value for one field instead of the one typed in."""
+    try:
+        profile_sync.use_synced(db, user, body.field)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No synced value for that field yet") from None
+    db.commit()
+    return user_out(user)
+
+
 @router.get("/athletes")
 def my_athletes(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     """Athletes who share data with the current user: as their coach, or as a friend (view only)."""

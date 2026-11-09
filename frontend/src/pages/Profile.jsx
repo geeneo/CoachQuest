@@ -17,6 +17,7 @@ const NUMBER_FIELDS = [
   ["max_hr_bpm", "Max HR (bpm)", ""],
   ["weight_kg", "Weight (kg)", ""],
 ];
+const UNITS = { ftp_watts: "W", run_ftp_watts: "W", lthr_bpm: "bpm", max_hr_bpm: "bpm", weight_kg: "kg" };
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 // Where a profile number came from, shown under the field.
@@ -48,6 +49,37 @@ export default function Profile() {
   }));
   const [msg, setMsg] = useState(null);
   const [correct, setCorrect] = useState(false);
+  // What the synced data says per field (latest weigh-in, Garmin's thresholds), for "Use this".
+  const [synced, setSynced] = useState({});
+  useEffect(() => {
+    api("/api/me/profile/synced").then(setSynced, () => {});
+  }, []);
+  const takeSynced = async (k) => {
+    setMsg(null);
+    try {
+      const updated = await api("/api/me/profile/use-synced", { method: "POST", body: { field: k } });
+      setUser(updated);
+      setForm((f) => ({ ...f, [k]: updated[k] ?? "" }));
+      setMsg({ ok: k === "weight_kg" ? "Weight taken from your weigh-in." : "Taken from Garmin. Training load was recalculated." });
+    } catch (err) {
+      setMsg({ error: err.message });
+    }
+  };
+  const syncedLine = (k, unit = "") => {
+    const x = synced[k];
+    if (!x || String(x.value) === String(user[k] ?? "")) return null;
+    const when = x.day ? (k === "weight_kg" ? `, weighed ${formatDate(x.day)}` : `, ${formatDate(x.day)}`) : "";
+    const value = k === "birth_date" ? formatDate(x.value) : `${x.value}${unit ? ` ${unit}` : ""}`;
+    return (
+      <span className="hint source">
+        {x.source}: {value}
+        {when} ·{" "}
+        <button type="button" className="link-btn small" onClick={() => takeSynced(k)}>
+          Use this
+        </button>
+      </span>
+    );
+  };
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   const save = async (e) => {
@@ -99,6 +131,7 @@ export default function Profile() {
             <input type="number" value={form[k]} onChange={set(k)} step="any" />
             {hint && <span className="hint">{hint}</span>}
             {sourceLine(user, k) && <span className="hint source">{sourceLine(user, k)}</span>}
+            {syncedLine(k, UNITS[k])}
           </label>
         ))}
         <label className="check wide">
@@ -125,6 +158,7 @@ export default function Profile() {
             {user.age != null ? `Age ${user.age}. ` : ""}Coaches who see your profile, and the AI coach, get your age only.
           </span>
           {sourceLine(user, "birth_date") && <span className="hint source">{sourceLine(user, "birth_date")}</span>}
+          {syncedLine("birth_date")}
         </label>
         <TimezoneField value={form.timezone} onChange={(timezone) => setForm({ ...form, timezone })} />
         <label>

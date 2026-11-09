@@ -7,13 +7,13 @@ a manual edit.
 """
 
 import logging
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from . import localtime
-from .db import Activity, AppSetting, User, utcnow
+from .db import Activity, AppSetting, User, WellnessDay, utcnow
 from .fitness import THRESHOLD_FIELDS, TSS_VERSION, rescore, threshold_at
 from .security import decrypt_json, encrypt_json
 
@@ -133,3 +133,45 @@ def apply_from_provider(db: DbSession, user: User, provider: str, values: dict, 
     if {"ftp_watts", "lthr_bpm", "run_ftp_watts"} & set(changed):
         recalculate_tss(db, user)
     return changed
+
+
+SYNCED_LABEL = {"garmin": "Garmin", "intervals_icu": "Intervals.icu"}
+
+
+def synced_values(db: DbSession, user: User) -> dict[str, dict]:
+    """What the synced data says for each Profile field, for "Use this" under the field: the latest
+    weigh-in from the wellness data, and the thresholds and birth date Garmin last reported."""
+    out: dict[str, dict] = {}
+    row = db.scalar(
+        select(WellnessDay)
+        .where(
+            WellnessDay.user_id == user.id,
+            WellnessDay.weight_kg.is_not(None),
+            WellnessDay.source.in_(tuple(SYNCED_LABEL)),
+        )
+        .order_by(WellnessDay.day.desc())
+        .limit(1)
+    )
+    if row is not None:
+        out["weight_kg"] = {
+            "value": row.weight_kg,
+            "source": SYNCED_LABEL[row.source],
+            "provider": row.source,
+            "day": row.day.isoformat(),
+        }
+    for field, info in (user.profile_sources or {}).items():
+        seen = info.get("garmin_seen")
+        if field in FIELDS and seen is not None:
+            out[field] = {"value": seen, "source": "Garmin", "day": (info.get("at") or "")[:10] or None}
+    return out
+
+
+def use_synced(db: DbSession, user: User, field: str) -> None:
+    """The athlete chose the synced value for a field (raises KeyError when there is none)."""
+    found = synced_values(db, user)[field]
+    if field == "weight_kg":
+        user.weight_kg, user.weight_source = found["value"], found["provider"]
+        user.weight_updated_at = datetime.combine(date.fromisoformat(found["day"]), datetime.min.time())
+        return
+    value = date.fromisoformat(found["value"]) if field == "birth_date" else found["value"]
+    apply_from_provider(db, user, "garmin", {field: value}, force=True)
