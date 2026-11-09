@@ -2,6 +2,13 @@
 
 ## Next up
 
+- [x] **Taper mode for the morning note (9 Nov): done.** In the last 14 days before a race the readiness note
+  (backend/app/taper.py) lists every day to the race from the plan as written, flags what breaks a taper
+  (strength in the last 10 days, sessions over 90 min in race week, too much time against a usual week),
+  projects race-morning fitness / fatigue / form if the plan is followed (target form +5 to +15), gives
+  go/no-go thresholds from the athlete's baselines, and makes the day EASY when form is under -15. Outside
+  a taper the note covers today only. Later: a "Make these changes" button that applies the flags to the plan.
+
 - [ ] **Overview: look back at a chosen year or dates (asked 4 Nov).** The period buttons go back from
   today (7 days to 5 years). Add a way to pick a year (2024, 2025, ...) or a from-to date range, e.g. a
   "Pick dates…" chip after "5 years" with two date fields, and the year in the chips' row. Volume,
