@@ -185,6 +185,12 @@ def test_chat_is_private_to_the_viewer(athlete, make_user, monkeypatch):
 
 def test_ai_settings(make_user):
     p = make_user("a@example.com")
-    assert p.get("/api/athletes/me/coach").json()["ai_settings"] == {"daily": False, "weekly": False, "email": False}
+    assert p.get("/api/athletes/me/coach").json()["ai_settings"] == {
+        "daily": False,
+        "weekly": False,
+        "email": False,
+        "daily_time": "06:30",
+        "sleep_wait_min": 90,
+    }
     p.request("PUT", "/api/me/ai-settings", json={"daily": True, "weekly": True, "email": False})
     assert p.get("/api/athletes/me/coach").json()["ai_settings"]["daily"] is True

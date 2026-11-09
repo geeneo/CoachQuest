@@ -18,7 +18,7 @@ import garminconnect
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import activity_delete, profile_sync, sync_options
+from .. import activity_delete, localtime, profile_sync, sync_options
 from ..db import Activity, Connection, PendingMfa, User, WellnessDay, utcnow
 from ..fitness import score
 from ..security import decrypt_json, encrypt_json
@@ -291,7 +291,7 @@ def _upsert_activity(db: DbSession, user: User, item: dict) -> None:
 
 async def sync(db: DbSession, conn: Connection) -> int:
     user = db.get(User, conn.user_id)
-    today = date.today()
+    today = localtime.today(user)  # the athlete's date: last night's sleep is filed under their today
     start = conn.last_sync_at.date() - timedelta(days=1) if conn.last_sync_at else today - timedelta(days=INITIAL_DAYS)
     days = [start + timedelta(days=i) for i in range((today - start).days + 1)]
     try:

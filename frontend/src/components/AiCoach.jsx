@@ -269,23 +269,58 @@ function AskCoach({ id }) {
 
 function Schedule({ settings }) {
   const [s, setS] = useState(settings);
-  const toggle = async (k) => {
-    const next = { ...s, [k]: !s[k] };
+  const put = async (next) => {
+    const before = s;
     setS(next);
     try {
       setS(await api("/api/me/ai-settings", { method: "PUT", body: next }));
     } catch {
-      setS(s);
+      setS(before);
     }
   };
+  const toggle = (k) => put({ ...s, [k]: !s[k] });
   return (
     <section className="card">
       <h2>Automatic notes</h2>
       <div className="stack tight">
         <label className="check">
-          <input type="checkbox" checked={s.daily} onChange={() => toggle("daily")} /> Readiness every morning (after the
-          Garmin sync)
+          <input type="checkbox" checked={s.daily} onChange={() => toggle("daily")} /> Readiness every morning
         </label>
+        {s.daily && (
+          <div className="row tight indent">
+            <label className="inline">
+              Send it at{" "}
+              <input
+                type="time"
+                aria-label="Morning note time"
+                value={s.daily_time}
+                onChange={(e) => e.target.value && put({ ...s, daily_time: e.target.value })}
+              />
+            </label>
+            <label className="inline">
+              wait for last night's sleep up to{" "}
+              <select
+                aria-label="Wait for the sleep data"
+                value={s.sleep_wait_min}
+                onChange={(e) => put({ ...s, sleep_wait_min: Number(e.target.value) })}
+              >
+                {[0, 30, 60, 90, 120, 180, 240].map((m) => (
+                  <option key={m} value={m}>
+                    {m === 0 ? "don't wait" : m < 60 ? `${m} min` : `${m / 60} h`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+        {s.daily && (
+          <p className="hint">
+            At that time (your time zone, from Profile) CoachQuest syncs your Garmin and sends the note as soon as last
+            night's sleep and HRV are in. They only arrive once your watch has synced, so open Garmin Connect when you
+            wake up. Still nothing after the wait: the note goes out on training load alone, and if the sleep data comes
+            in later and changes the verdict, you get a short update.
+          </p>
+        )}
         <label className="check">
           <input type="checkbox" checked={s.weekly} onChange={() => toggle("weekly")} /> Weekly review every Monday
         </label>

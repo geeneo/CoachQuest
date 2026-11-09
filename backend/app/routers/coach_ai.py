@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import assessments, coach_chat, comments, race_target, week_status
+from .. import assessments, coach_chat, comments, morning, race_target, week_status
 from ..coach import CoachError
 from ..db import Assessment, CoachChat, Comment, Race, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -35,7 +35,7 @@ def overview(athlete: str, user: User = Depends(current_user), db: DbSession = D
         "progress": assessments.progress(db, athlete_id) if "fitness" in scopes else None,
     }
     if athlete_id == user.id:
-        out["ai_settings"] = {"daily": False, "weekly": False, "email": False, **(user.ai_settings or {})}
+        out["ai_settings"] = {**AiSettings().model_dump(), **(user.ai_settings or {})}
     return out
 
 
@@ -80,6 +80,9 @@ class AiSettings(BaseModel):
     daily: bool = False
     weekly: bool = False
     email: bool = False
+    # The morning note: when (local time, HH:MM) and how long to wait for last night's sleep (morning.py).
+    daily_time: str = Field(default=morning.DEFAULT_TIME, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    sleep_wait_min: int = Field(default=morning.DEFAULT_WAIT_MIN, ge=0, le=morning.MAX_WAIT_MIN)
 
 
 @router.put("/me/ai-settings")

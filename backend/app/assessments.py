@@ -13,7 +13,18 @@ from html import escape
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, comments, compliance, email_md, instructions, mailer, plan_approval, plan_tracker, taper
+from . import (
+    athlete_notes,
+    comments,
+    compliance,
+    email_md,
+    instructions,
+    localtime,
+    mailer,
+    plan_approval,
+    plan_tracker,
+    taper,
+)
 from .activity_types import category, is_ride
 from .coach import CoachError, ask_claude, facts_json, require_data
 from .config import settings
@@ -161,7 +172,7 @@ def _weekly_answer(text: str) -> tuple[str, list[dict]]:
 
 
 def readiness_verdict(
-    wellness: list, tsb: float | None, race_in_days: int | None = None
+    wellness: list, tsb: float | None, race_in_days: int | None = None, today: date | None = None
 ) -> tuple[str, list[str], dict]:
     """go / easy / rest from last night vs the athlete's own 30-day baseline, and form (TSB). In a taper
     (`race_in_days` set) form counts sooner: the fatigue has to come off before the race."""
@@ -169,7 +180,8 @@ def readiness_verdict(
     last = wellness[-1] if wellness else None
     base = wellness[-31:-1] if len(wellness) > 1 else []
     numbers = {"tsb": tsb}
-    if last is not None and last.day >= date.today() - timedelta(days=1):
+    today = today or date.today()
+    if last is not None and last.day >= today - timedelta(days=1):
         hrv_base, rhr_base = avg([w.hrv_ms for w in base]), avg([w.resting_hr for w in base])
         numbers.update(
             hrv_ms=last.hrv_ms,
@@ -179,6 +191,7 @@ def readiness_verdict(
             sleep_h=round(last.sleep_s / 3600, 1) if last.sleep_s else None,
             sleep_score=last.sleep_score,
             body_battery_max=last.body_battery_max,
+            last_night=last.day.isoformat(),
         )
         if last.hrv_ms and hrv_base:
             if last.hrv_ms < 0.85 * hrv_base:
@@ -267,7 +280,7 @@ def readiness_facts(db: DbSession, athlete: User, scopes: set[str], today: date)
     tsb = curve[-1].tsb if curve else None
     race = taper.race_ahead(db, athlete.id, today) if "plans" in scopes else None
     days_to_go = (race.target_date - today).days if race else None
-    verdict, reasons, numbers = readiness_verdict(wellness, tsb, days_to_go)
+    verdict, reasons, numbers = readiness_verdict(wellness, tsb, days_to_go, today)
     facts = {"today": today.isoformat(), "verdict": verdict, "reasons": reasons, "numbers": numbers}
     if race:
         facts["taper"] = taper.facts(
@@ -489,9 +502,11 @@ def this_week_start(db: DbSession, athlete: User, today: date) -> date:
     return week_start_of(today, athlete.week_start or 0)
 
 
-async def create(db: DbSession, viewer: User, athlete: User, kind: str, scheduled: bool = False) -> Assessment:
+async def create(
+    db: DbSession, viewer: User, athlete: User, kind: str, scheduled: bool = False, today: date | None = None
+) -> Assessment:
     scopes = allowed_scopes(db, viewer, athlete.id)
-    today = date.today()
+    today = today or localtime.today(athlete)
     if kind == "daily":
         facts, period = readiness_facts(db, athlete, scopes, today), today
         prompt = TAPER_PROMPT if "taper" in facts else READINESS_PROMPT
