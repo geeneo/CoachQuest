@@ -169,3 +169,103 @@ def test_no_taper_far_from_the_race(make_user, monkeypatch):
     monkeypatch.setattr(assessments, "ask_claude", fake_ask)
     assert p.post("/api/athletes/me/coach/assessments", json={"kind": "daily"}).status_code == 200
     assert seen["system"] == assessments.READINESS_PROMPT and "taper" not in seen["facts"]
+
+
+def _setup(make_user, ride_min=90):
+    p = make_user("c@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    today = date.today()
+    with SessionLocal() as db:
+        for i in range(1, 40):
+            db.add(
+                Activity(
+                    user_id=aid,
+                    source="strava",
+                    external_id=f"r{i}",
+                    name="Ride",
+                    sport="Ride",
+                    start_time=datetime.combine(today - timedelta(days=i), datetime.min.time()) + timedelta(hours=7),
+                    duration_s=ride_min * 60,
+                    distance_m=30000,
+                    elevation_m=300,
+                    tss=60,
+                )
+            )
+        db.add(Race(user_id=aid, code="dc", name="Double Century", target_date=today + timedelta(days=12)))
+        db.commit()
+    return p, aid, today
+
+
+def test_make_these_changes(make_user):
+    p, aid, today = _setup(make_user, ride_min=60)  # a usual week of 420 min
+    _plan(
+        aid,
+        today,
+        {
+            1: ("Road", 90),
+            4: ("Strength", 30),  # 8 days out: dropped
+            5: ("Road", 180),  # the week before race week: 300 min against 85% of 420 (357) is fine
+            9: ("Road", 150),  # race week: over 90 min
+            10: ("Road", 120),  # race week: over 90 min
+            11: ("Road", 60),
+            12: ("Race", 480),
+        },
+    )
+    with SessionLocal() as db:  # a locked day stays as it is
+        plan = db.query(Plan).one()
+        weeks = [dict(w, days=[dict(d) for d in w["days"]]) for w in plan.weeks]
+        weeks[1]["days"][3]["locked"] = True  # day 10
+        plan.weeks = weeks
+        db.commit()
+    t = p.get("/api/athletes/me/coach/taper").json()
+    by_day = {c["date"]: c for c in t["changes"]}
+    d = lambda i: (today + timedelta(days=i)).isoformat()  # noqa: E731
+    # Race week is 330 min against 60% of 420 (252): after the 90 min cap, day 11 is trimmed too.
+    assert set(by_day) == {d(4), d(9), d(11)}
+    assert by_day[d(4)]["after"]["planned"] == "Rest" and "no strength 8 days" in by_day[d(4)]["why"]
+    assert by_day[d(4)]["before"]["planned"] == "Strength"
+    assert by_day[d(9)]["after"]["minutes"] <= 90 and by_day[d(9)]["before"]["minutes"] == 150
+    assert t["form_with_changes"] >= t["form_now"]
+
+    assert p.post("/api/athletes/me/coach/taper/apply").json()["changed"] == len(by_day)
+    with SessionLocal() as db:
+        days = {x["date"]: x for w in db.query(Plan).one().weeks for x in w["days"]}
+    assert days[d(4)]["type"] == "Rest" and days[d(9)]["duration_min"] <= 90
+    assert "Shortened for the taper" in days[d(9)]["description"]
+    assert days[d(10)]["duration_min"] == 120  # locked
+    assert days[d(12)]["type"] == "Race" and days[d(1)]["duration_min"] == 90
+    # Done: nothing more to change, and race week fits a usual week.
+    assert p.get("/api/athletes/me/coach/taper").json()["changes"] == []
+
+
+def test_week_volume_cut(make_user):
+    p, aid, today = _setup(make_user, ride_min=30)  # a usual week of 210 min
+    _plan(aid, today, {4: ("Road", 120), 5: ("Road", 120), 1: ("Road", 60)})  # the week before race week
+    t = p.get("/api/athletes/me/coach/taper").json()
+    # Days -13..-7 from the race (today-1 .. today+5) aren't all ahead, so only race week is judged: nothing.
+    assert t["changes"] == []
+    p2 = make_user("d@example.com")
+    aid2 = p2.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        for i in range(1, 30):
+            db.add(
+                Activity(
+                    user_id=aid2,
+                    source="strava",
+                    external_id=f"s{i}",
+                    name="Ride",
+                    sport="Ride",
+                    start_time=datetime.combine(today - timedelta(days=i), datetime.min.time()) + timedelta(hours=7),
+                    duration_s=1800,
+                    distance_m=10000,
+                    elevation_m=0,
+                    tss=30,
+                )
+            )
+        db.add(Race(user_id=aid2, code="dc", name="DC", target_date=today + timedelta(days=7)))
+        db.commit()
+    # Race week (days 1-6): 160 min against 60% of a usual 210 (126); today is the week before.
+    _plan(aid2, today, {0: ("Road", 80), 2: ("Road", 80), 4: ("Road", 80)})
+    t = p2.get("/api/athletes/me/coach/taper").json()
+    total = sum(c["after"]["minutes"] for c in t["changes"])
+    assert len(t["changes"]) == 2 and total <= 130 and all(c["after"]["minutes"] >= 30 for c in t["changes"])

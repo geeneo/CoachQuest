@@ -80,8 +80,9 @@ Write at most 300 words of Markdown, in this order:
    make that session easy and don't make it up later.
 
 `comments` are recent notes from the athlete ("athlete") and their human coach ("coach"). Follow the
-coach's instructions within the verdict and the flags, and answer them briefly. When the plan needs the
-flagged changes, end with one line: "Re-plan from this week" on the Plans tab puts them in the calendar.
+coach's instructions within the verdict and the flags, and answer them briefly. When `taper.plan_changes`
+is there, say in "What to expect" what `taper.projection_with_changes` gives, and end with one line: the
+"Make these changes" button under this note puts them in the plan and the calendar.
 
 """
     + PROMPT_RULE

@@ -42,6 +42,7 @@ export default function AiCoach({ id, isMe }) {
       {error && <div className="error">{error}</div>}
       {/* Read-only viewers see the notes and reviews, but don't ask the AI for new ones. */}
       <Readiness id={id} daily={d.latest_daily} busy={busy === "daily"} onRun={ro ? null : () => generate("daily")} />
+      <TaperChanges id={id} readOnly={ro} />
       {d.progress && <Progress p={d.progress} />}
       {!ro && <AskCoach id={id} />}
       <WeeklyReviews
@@ -62,6 +63,77 @@ export default function AiCoach({ id, isMe }) {
       {isMe && d.ai_settings && <Schedule settings={d.ai_settings} />}
       <MedicalDisclaimer />
     </>
+  );
+}
+
+function sessionText(x) {
+  return x.planned === "Rest" ? "Rest" : `${x.planned}, ${x.minutes} min`;
+}
+
+// In the last two weeks before a race: the plan changes the taper rules ask for (backend taper.py), and
+// one button to make them.
+function TaperChanges({ id, readOnly }) {
+  const t = useApi(`/api/athletes/${id}/coach/taper`);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(null);
+  const [error, setError] = useState(null);
+  if (!t.data || (!t.data.changes.length && done == null)) return null;
+  const { changes, race, form_now: now, form_with_changes: after, target_form: target } = t.data;
+  const apply = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api(`/api/athletes/${id}/coach/taper/apply`, { method: "POST" });
+      setDone(r.changed);
+      t.reload();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const sign = (x) => (x >= 0 ? `+${Math.round(x)}` : Math.round(x));
+  return (
+    <section className="card">
+      <h2>Taper for {race}</h2>
+      {error && <div className="error">{error}</div>}
+      {done != null && !changes.length ? (
+        <p>
+          {done} day{done === 1 ? "" : "s"} changed in your plan; the calendar and your workouts follow. Race-morning
+          form if you follow it: {sign(now)}.
+        </p>
+      ) : (
+        <>
+          <p className="muted small">
+            The taper rules (no strength in the last 10 days, at most 90 min a session in race week, less time than a
+            usual week) ask for these changes to your plan. Locked days stay as they are.
+          </p>
+          <ul className="taper-changes">
+            {changes.map((c) => (
+              <li key={c.date}>
+                <strong>{c.label}:</strong> {sessionText(c.before)} → <strong>{sessionText(c.after)}</strong>{" "}
+                <span className="muted small">({c.why})</span>
+              </li>
+            ))}
+          </ul>
+          <p className="small">
+            Race-morning form: {sign(now)} with the plan as it is, <strong>{sign(after)}</strong> with these changes
+            (a race wants {sign(target[0])} to {sign(target[1])}).
+          </p>
+          {!readOnly && (
+            <button
+              className="btn primary"
+              disabled={busy}
+              onClick={() =>
+                confirm(`Change ${changes.length} day${changes.length === 1 ? "" : "s"} in the plan?`) && apply()
+              }
+            >
+              {busy ? "Changing the plan…" : "Make these changes"}
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

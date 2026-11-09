@@ -18,7 +18,11 @@
   (strength in the last 10 days, sessions over 90 min in race week, too much time against a usual week),
   projects race-morning fitness / fatigue / form if the plan is followed (target form +5 to +15), gives
   go/no-go thresholds from the athlete's baselines, and makes the day EASY when form is under -15. Outside
-  a taper the note covers today only. Later: a "Make these changes" button that applies the flags to the plan.
+  a taper the note covers today only.
+  - [x] "Make these changes" (9 Nov): a "Taper for <race>" card on the AI coach tab lists the plan changes the
+    rules ask for (strength dropped, race-week sessions capped at 90 min, a week's time cut to its share of a
+    usual week; locked days, race days and structured workouts kept), race-morning form with and without them,
+    and one button that makes them (`taper.proposed` / `taper.apply`; the calendar workouts follow).
 
 - [ ] **Overview: look back at a chosen year or dates (asked 4 Nov).** The period buttons go back from
   today (7 days to 5 years). Add a way to pick a year (2024, 2025, ...) or a from-to date range, e.g. a

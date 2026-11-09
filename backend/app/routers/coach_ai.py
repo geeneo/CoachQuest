@@ -4,12 +4,23 @@ Generating anything costs AI calls, so a coach needs the plans scope; the
 athlete can always use it for themself. Reading progress needs fitness.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import assessments, coach_chat, comments, evening, morning, race_target, week_status
+from .. import (
+    assessments,
+    coach_chat,
+    comments,
+    evening,
+    localtime,
+    morning,
+    race_target,
+    sync_engine,
+    taper,
+    week_status,
+)
 from ..coach import CoachError
 from ..db import Assessment, CoachChat, Comment, Race, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -87,6 +98,40 @@ class AiSettings(BaseModel):
     # The evening preview by email (evening.py), and when (local time).
     preview: bool = False
     preview_time: str = Field(default=evening.DEFAULT_TIME, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _taper(db: DbSession, user: User, athlete: str):
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "plans")
+    today = localtime.today(db.get(User, athlete_id))
+    return athlete_id, taper.race_ahead(db, athlete_id, today), today
+
+
+@router.get("/athletes/{athlete}/coach/taper")
+def taper_changes(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """In the last two weeks before a race: the plan changes the taper rules ask for (taper.py), and
+    race-morning form with and without them."""
+    athlete_id, race, today = _taper(db, user, athlete)
+    if race is None:
+        return None
+    changes = taper.proposed(db, athlete_id, race, today)
+    out = {"race": race.name, "race_date": race.target_date, "changes": taper.public(changes)}
+    out["form_now"], out["form_with_changes"] = taper.race_morning_form(db, athlete_id, race, today, changes)
+    out["target_form"] = list(taper.TARGET_FORM)
+    return out
+
+
+@router.post("/athletes/{athlete}/coach/taper/apply")
+def taper_apply(
+    athlete: str, background: BackgroundTasks, user: User = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    """Make the taper changes in the plan; the calendar workouts (and Zwift etc.) follow."""
+    athlete_id, race, today = _taper(db, user, athlete)
+    if race is None:
+        raise HTTPException(status_code=409, detail="No race in the next two weeks")
+    changed = taper.apply(db, athlete_id, race, today)
+    background.add_task(sync_engine.run_due)
+    return {"changed": changed}
 
 
 @router.put("/me/ai-settings")
