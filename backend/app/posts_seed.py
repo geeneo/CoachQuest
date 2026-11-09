@@ -608,6 +608,53 @@ WHATS_NEW_2D = _revised(
     ],
 )
 
+WEEKDAY_GUIDE = (
+    "Weekday preferences: tell the coach what you do on each day",
+    "Pick the sessions you do on each day of the week; the AI coach plans every one of them.",
+    """Most weeks have a rhythm: Zwift on Tuesday, strength on Wednesday, the long ride on Saturday, rest on
+Friday. **Weekday preferences** tell the AI coach that rhythm, so its plans fit your week instead of the
+other way round.
+
+## Where
+
+**Profile** → **Weekday preferences**. A coach with your *plans* share can set them too, on your **Plans**
+tab; you see their change in your Profile.
+
+## How it works
+
+- **Each day has a row of session types** (Road, Gravel, Zwift / indoor, Outdoor run, Walk, Strength, Yoga /
+  mobility, Rest and more). Click a type to pick it for that day.
+- **Pick up to 3 types a day**, for example **Zwift / indoor** + **Strength** on a Tuesday. The AI coach
+  plans every one of them that day, as **separate sessions**: a ride and a strength session, each with its own
+  time and targets. (The most a day can have is set by the admin: **Sessions per day**.)
+- **Click a type again to remove it.**
+- **Rest** stands alone: picking it clears the day's other types, and the coach keeps that day free.
+- **A day with nothing picked** is the coach's choice: it may plan a session there, or rest.
+- **Saved as you click.** There's no Save button.
+
+## When the AI coach uses them
+
+- **A new plan** (Plans → **New plan**): every week follows your preferences. Where the days you said you're
+  free and your weekday preferences disagree, the weekday preferences win.
+- **Re-plan from this week**, and a day's re-plan, use them too. On a single day, what you or your coach
+  write for that day comes first.
+- **A plan you already have doesn't change by itself.** To bring it in line, open the plan and click **Apply
+  weekday preferences to future days**: each future day that isn't locked 🔒 gets your types. A day that
+  already had the right session keeps it; a new session says it isn't planned yet, and **Re-plan from this
+  week** fills it in.
+
+## Tips
+
+- **Zwift / indoor** plus another type: the indoor ride is the day's main session, so it carries the
+  structured workout that goes to Zwift or MyWhoosh.
+- Put **Strength** on an easy day (or after a short indoor ride) rather than before a hard one. The coach
+  makes the sessions on one day work together, but it can't move your strength day for you.
+- Busy day? Pick only what you'll really do. One honest session beats two you skip.
+- Going away for a week? Leave the preferences alone and use a day's notes or a re-plan instead; change the
+  preferences when your normal week changes.
+""",
+)
+
 # Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
 POSTS = [
     *(
@@ -622,6 +669,7 @@ POSTS = [
     {"key": "zwift-intervals", "kind": "guide", "position": 15, "published": True, "post": ZWIFT_GUIDE},
     {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE_V3},
     {"key": "whats-new-2", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_2D},
+    {"key": "weekday-preferences", "kind": "guide", "position": 12, "published": True, "post": WEEKDAY_GUIDE},
 ]
 FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
 SEEDED = "posts_seeded"

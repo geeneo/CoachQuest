@@ -8,13 +8,14 @@ def test_shipped_posts_are_added_once(make_user):
     admin = make_user("admin@example.com")
     rider = make_user("rider@example.com")
     listing = admin.get("/api/posts").json()
-    assert len(listing["guides"]) == 8 and len(listing["news"]) == 4  # a fresh install gets them all
+    assert len(listing["guides"]) == 9 and len(listing["news"]) == 4  # a fresh install gets them all
     drafts = [p["title"] for p in listing["guides"] + listing["news"] if not p["published"]]
     assert len(drafts) == len(posts_seed.FIRST_BATCH)  # the first batch waits for the admin
     assert listing["can_edit"] is True
     # Riders see only what's published (the later guides and news), not the drafts (even by id).
     seen = rider.get("/api/posts").json()
     assert [g["title"] for g in seen["guides"]] == [
+        posts_seed.WEEKDAY_GUIDE[0],
         posts_seed.ZWIFT_GUIDE[0],
         posts_seed.ROUTES_GUIDE[0],
         posts_seed.STRENGTH_GUIDE[0],
@@ -44,7 +45,7 @@ def test_an_existing_install_gets_only_the_new_posts(make_user):
         titles = {p.title for p in db.query(Post)}
         shipped_later = {posts_seed.ROUTES_GUIDE[0], posts_seed.ROUTES_NEWS[0]}
         shipped_later |= {posts_seed.STRENGTH_GUIDE[0], posts_seed.STRENGTH_NEWS[0], posts_seed.ZWIFT_GUIDE[0]}
-        shipped_later |= {posts_seed.LOAD_GUIDE[0], posts_seed.WHATS_NEW_2[0]}
+        shipped_later |= {posts_seed.LOAD_GUIDE[0], posts_seed.WHATS_NEW_2[0], posts_seed.WEEKDAY_GUIDE[0]}
         assert titles == {"Getting started (edited)"} | shipped_later
         # Deleting a shipped post doesn't bring it back.
         db.query(Post).filter_by(title=posts_seed.ROUTES_NEWS[0]).delete()
