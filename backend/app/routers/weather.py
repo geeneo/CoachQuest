@@ -263,7 +263,7 @@ async def ride_details(
         raise HTTPException(status_code=422, detail="Pick a range of up to 45 days")
     today = localtime.today(a)
     ride_start = ride_routes.usual_start(db, a)
-    speed = ride_info.recent_speed(db, a.id)
+    speeds: dict[str, float | None] = {}  # ride / run / walk: the athlete's own speed, looked up once
     home_at = ride_routes.home_point(db, a)
     groups: list = []  # the ridden routes, grouped once when a day needs them
     forecast_ok = True
@@ -273,6 +273,10 @@ async def ride_details(
             continue
         if day < today.isoformat():
             continue  # past days show what was ridden, not what it would take
+        kind = ride_info.mode(d["type"])
+        if kind and kind not in speeds:
+            speeds[kind] = ride_info.recent_speed(db, a.id, kind)
+        speed = speeds.get(kind) if kind else None
         try:
             item, forecast_ok = await _ride_day(db, a, day, d, ride_start, speed, home_at, today, forecast_ok, groups)
         except Exception:  # one odd day mustn't hide the others
@@ -302,7 +306,8 @@ async def _ride_day(
         if not groups:
             groups.append([g for g in _routes(db, a.id) if g["source"] == "rides"])
         history = ride_info.route_history(groups[0], seg)
-    nums = ride_info.numbers(d, seg, history, speed, ride_start)
+    kind = ride_info.mode(d["type"])
+    nums = ride_info.numbers(d, seg, history if kind == "ride" else None, speed, ride_start, kind or "ride")
     minutes = nums["ride_minutes"] or d["duration_min"] or 0
     w = None
     if forecast_ok and today <= date.fromisoformat(day) <= today + timedelta(days=weather.DAYS - 1):
@@ -313,8 +318,10 @@ async def _ride_day(
             forecast_ok = False  # don't wait on it again for every day
     return {
         "numbers": nums,
-        "fuel": ride_info.fuel(minutes, w.get("temp_max") if w else None) if minutes else None,
-        "pacing": ride_info.pacing(d.get("intensity"), a.ftp_watts),
-        "kit": ride_info.kit(w),
+        # Food and drink for rides and runs; power zones and bike kit for rides. Walks get the weather and
+        # the numbers.
+        "fuel": ride_info.fuel(minutes, w.get("temp_max") if w else None) if minutes and kind != "walk" else None,
+        "pacing": ride_info.pacing(d.get("intensity"), a.ftp_watts) if kind == "ride" else [],
+        "kit": ride_info.kit(w) if kind == "ride" else [],
         "weather": w,
     }, forecast_ok

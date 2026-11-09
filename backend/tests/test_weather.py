@@ -371,3 +371,49 @@ def test_calendar_plan_day_status(make_user):
     assert status[(today - timedelta(days=3)).isoformat()] == "missed"
     assert status[(today - timedelta(days=2)).isoformat()] == "goal_met"
     assert status[(today + timedelta(days=1)).isoformat()] == "planned"
+
+
+def test_walks_and_runs_get_their_own_speed(make_user, fake_weather):
+    from app.db import Activity
+
+    p = make_user("a@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    today = date.today()
+    with SessionLocal() as db:
+        for i, (sport, km, minutes) in enumerate([("Ride", 60, 150), ("Ride", 50, 125), ("Walk", 3, 36)]):
+            db.add(
+                Activity(
+                    user_id=aid,
+                    source="strava",
+                    external_id=str(i),
+                    name=sport,
+                    sport=sport,
+                    start_time=datetime.now() - timedelta(days=i + 1),
+                    duration_s=minutes * 60,
+                    distance_m=km * 1000,
+                    elevation_m=100,
+                )
+            )
+        days = [
+            _day(today, "Walk", None, 30),  # their walks: 5 km/h
+            _day(today + timedelta(days=1), "Outdoor run", None, 30),  # no runs logged: a typical 10 km/h
+            _day(today + timedelta(days=2), "Road", None, 60),  # their rides: 24 km/h
+        ]
+        db.add(
+            Plan(
+                athlete_id=aid,
+                author_id=aid,
+                title="P",
+                content_md="",
+                model="m",
+                start_date=today,
+                weeks=[{"phase": "Base", "days": days}],
+            )
+        )
+        db.commit()
+    r = p.get(f"/api/athletes/me/weather/rides?start={today}&end={today + timedelta(days=6)}").json()["days"]
+    walk, run, ride = (r[(today + timedelta(days=i)).isoformat()] for i in range(3))
+    assert walk["numbers"]["speed_kmh"] == 5.0 and walk["numbers"]["distance_km"] == 2.5
+    assert walk["numbers"]["speed_from"] == "your recent walks" and walk["fuel"] is None and walk["kit"] == []
+    assert run["numbers"]["speed_kmh"] == 10.0 and run["numbers"]["distance_km"] == 5.0 and run["pacing"] == []
+    assert ride["numbers"]["speed_kmh"] == 24.0 and ride["numbers"]["distance_km"] == 24

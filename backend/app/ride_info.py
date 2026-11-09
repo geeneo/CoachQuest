@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from . import ride_routes
-from .activity_types import is_outdoor, is_ride
+from .activity_types import category, is_outdoor, is_ride
 from .db import Activity, Segment
 
 RECENT_RIDES = 20
@@ -26,20 +26,51 @@ GEL_G = 25  # carbs in a gel (or a bar, roughly)
 ZONES = {"Z1": (0.0, 0.55), "Z2": (0.56, 0.75), "Z3": (0.76, 0.90), "Z4": (0.91, 1.05), "Z5": (1.06, 1.20)}
 
 
-def recent_speed(db: DbSession, athlete_id: int) -> float | None:
-    """The athlete's average outdoor riding speed (km/h) over their last rides."""
+# Plan session types by how they move: each gets the athlete's own speed for that (recent_speed).
+OUTDOOR_RIDES = {"Road", "Gravel", "MTB", "E-MTB", "Hill repeats"}
+ON_FOOT = {"Outdoor run": "run", "Trail run": "run", "Walk": "walk", "Hike": "walk"}
+# Without enough of the athlete's own walks or runs: a typical pace (km/h). Rides have no default.
+DEFAULT_SPEED = {"walk": 5.0, "run": 10.0}
+MIN_KM = {"ride": 5, "run": 2, "walk": 1}
+SPEED_FROM = {"ride": "your recent outdoor rides", "run": "your recent runs", "walk": "your recent walks"}
+
+
+def mode(session_type: str | None) -> str | None:
+    """ "ride", "run" or "walk" for a plan session type; None when it doesn't move along a route."""
+    if session_type in OUTDOOR_RIDES or session_type == "Race":
+        return "ride"
+    return ON_FOOT.get(session_type or "")
+
+
+def _mode_of(a: Activity) -> str | None:
+    if is_ride(a):
+        return "ride" if is_outdoor(a) else None
+    c = category(a)
+    if c in ("Run", "Trail run"):
+        return "run"
+    if c in ("Walk", "Hike"):
+        return "walk"
+    return None
+
+
+def recent_speed(db: DbSession, athlete_id: int, kind: str = "ride") -> float | None:
+    """The athlete's average speed (km/h) over their last outdoor rides, runs or walks ("ride" / "run" /
+    "walk"); for walks and runs a typical pace when they have none logged."""
     rows = db.scalars(
         select(Activity)
-        .where(Activity.user_id == athlete_id, Activity.distance_m >= 5000, Activity.duration_s > 0)
+        .where(
+            Activity.user_id == athlete_id,
+            Activity.distance_m >= MIN_KM.get(kind, 5) * 1000,
+            Activity.duration_s > 0,
+        )
         .order_by(Activity.start_time.desc())
-        .limit(RECENT_RIDES * 3)
+        .limit(RECENT_RIDES * 5)
     ).all()
-    rides = [a for a in rows if is_ride(a) and is_outdoor(a)][:RECENT_RIDES]
-    seconds = sum(a.duration_s for a in rides)
-    return round(sum(a.distance_m for a in rides) / seconds * 3.6, 1) if seconds else None
-
-
-OUTDOOR_RIDES = {"Road", "Gravel", "MTB", "E-MTB", "Hill repeats"}
+    done = [a for a in rows if _mode_of(a) == kind][:RECENT_RIDES]
+    seconds = sum(a.duration_s for a in done)
+    if seconds:
+        return round(sum(a.distance_m for a in done) / seconds * 3.6, 1)
+    return DEFAULT_SPEED.get(kind)
 
 
 def planned_distance(day: dict, speed: float | None) -> dict:
@@ -52,7 +83,7 @@ def planned_distance(day: dict, speed: float | None) -> dict:
             "planned_elevation_m": seg.get("elevation_m"),
             "planned_from": "route",
         }
-    if day.get("type") in OUTDOOR_RIDES and day.get("duration_min") and speed:
+    if day.get("type") in OUTDOOR_RIDES and day.get("duration_min") and speed:  # `speed`: the ride speed
         return {"planned_km": round(speed * day["duration_min"] / 60), "planned_from": "estimate"}
     return {}
 
@@ -125,7 +156,9 @@ def kit(weather: dict | None) -> list[str]:
     return out
 
 
-def numbers(day: dict, seg: Segment | None, history: dict | None, speed: float | None, start: str) -> dict:
+def numbers(
+    day: dict, seg: Segment | None, history: dict | None, speed: float | None, start: str, kind: str = "ride"
+) -> dict:
     """Distance, climbing, speed and finish for the planned ride."""
     minutes = day.get("duration_min") or 0
     out: dict = {"minutes": minutes, "start": start}
@@ -133,14 +166,15 @@ def numbers(day: dict, seg: Segment | None, history: dict | None, speed: float |
     if history and history.get("avg_speed_kmh"):
         speed, out["speed_from"] = history["avg_speed_kmh"], f"your {history['count']} rides on it"
     elif speed:
-        out["speed_from"] = "your recent outdoor rides"
+        out["speed_from"] = SPEED_FROM[kind]
     if route_km:
         out["distance_km"] = round(route_km, 1)
         out["climb_m"] = seg.elevation_m
         if speed:
             minutes = round(route_km / speed * 60)
     elif speed and minutes:
-        out["distance_km"] = round(speed * minutes / 60)
+        km = speed * minutes / 60
+        out["distance_km"] = round(km) if km >= 10 else round(km, 1)  # a 30 min walk is 2.5 km, not 2
         out["distance_rough"] = True
     if speed:
         out["speed_kmh"] = speed
