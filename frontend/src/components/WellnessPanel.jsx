@@ -11,6 +11,8 @@ export default function WellnessPanel({ rows }) {
     return r ? { value: r[key], sub: r.day === today ? null : shortDate(r.day) } : { value: null, sub: "no data yet" };
   };
   const tile = (label, key, unit) => <Stat label={label} unit={unit} {...latest(key)} />;
+  // Weight on its own axis (right): kg and bpm/ms don't share a scale.
+  const hasWeight = rows.some((r) => r.weight_kg != null);
   return (
     <>
       <div className="stats">
@@ -19,20 +21,41 @@ export default function WellnessPanel({ rows }) {
         {tile("Sleep", "sleep_h", "h")}
         {tile("Sleep score", "sleep_score")}
         {tile("Body Battery max", "body_battery_max")}
+        {hasWeight && tile("Weight", "weight_kg", "kg")}
       </div>
       <div className="chart">
         <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={rows} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+          <LineChart data={rows} margin={{ top: 8, right: hasWeight ? -8 : 8, left: -16, bottom: 0 }}>
             <CartesianGrid stroke="var(--grid)" vertical={false} />
             <XAxis dataKey="day" tickFormatter={rows.length > 370 ? monthYear : shortDate} minTickGap={32} stroke="var(--muted)" fontSize={12} />
-            <YAxis stroke="var(--muted)" fontSize={12} />
+            <YAxis yAxisId="left" stroke="var(--muted)" fontSize={12} />
+            {hasWeight && (
+              <YAxis
+                yAxisId="kg"
+                orientation="right"
+                stroke="var(--muted)"
+                fontSize={12}
+                domain={[(min) => Math.floor(min - 1), (max) => Math.ceil(max + 1)]}
+                allowDecimals={false}
+              />
+            )}
             <Tooltip
               contentStyle={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8 }}
               labelFormatter={(v) => formatDate(v)}
             />
             <Legend />
-            <Line dataKey="hrv_ms" name="HRV (ms)" stroke="var(--c1)" dot={false} connectNulls />
-            <Line dataKey="resting_hr" name="Resting HR" stroke="var(--c2)" dot={false} connectNulls />
+            <Line yAxisId="left" dataKey="hrv_ms" name="HRV (ms)" stroke="var(--c1)" dot={false} connectNulls />
+            <Line yAxisId="left" dataKey="resting_hr" name="Resting HR" stroke="var(--c2)" dot={false} connectNulls />
+            {hasWeight && (
+              <Line
+                yAxisId="kg"
+                dataKey="weight_kg"
+                name="Weight (kg)"
+                stroke="var(--c3)"
+                dot={{ r: 2 }}
+                connectNulls
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>

@@ -259,6 +259,7 @@ class WellnessDay(Base):
     body_battery_max: Mapped[float | None] = mapped_column(Float, nullable=True)
     stress_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
     steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)  # the day's last weigh-in
     # Who filled the day: garmin, or intervals_icu (which only fills what Garmin left empty).
     source: Mapped[str] = mapped_column(String(20), default="garmin")
 
@@ -754,7 +755,7 @@ _ADDED_COLUMNS = {
         "pending": "JSON",
         "history": "JSON",
     },
-    "wellness_days": {"source": "VARCHAR(20) NOT NULL DEFAULT 'garmin'"},
+    "wellness_days": {"source": "VARCHAR(20) NOT NULL DEFAULT 'garmin'", "weight_kg": "FLOAT"},
     "scheduled_workouts": {
         "plan_id": "INTEGER",
         "plan_managed": "BOOLEAN NOT NULL DEFAULT 0",

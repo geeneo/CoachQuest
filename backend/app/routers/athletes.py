@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session as DbSession
 from .. import activity_delete, dashboard, localtime, profile_sync, runtime, strava_notes, sync_options, tp_thresholds
 from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
-from ..db import Activity, Connection, Grant, Race, User, get_db, utcnow
+from ..db import Activity, Connection, Grant, Race, User, WellnessDay, get_db, utcnow
 from ..deps import active_grant, allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
 from ..fitness import THRESHOLD_FIELDS
 from ..providers import garmin, strava
@@ -72,6 +72,16 @@ class ProfileUpdate(BaseModel):
         return v
 
 
+def wellness_weight(db: DbSession, user: User, kg: float) -> None:
+    """A weight typed in on the Profile: on today's wellness day too, for the Wellness chart's weight line."""
+    today = localtime.today(user)
+    day = db.scalar(select(WellnessDay).where(WellnessDay.user_id == user.id, WellnessDay.day == today))
+    if day is None:
+        db.add(WellnessDay(user_id=user.id, day=today, source="manual", weight_kg=kg))
+    else:
+        day.weight_kg = kg
+
+
 @router.patch("/me")
 def update_profile(body: ProfileUpdate, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     changes = body.model_dump(exclude_unset=True)
@@ -88,6 +98,8 @@ def update_profile(body: ProfileUpdate, user: User = Depends(current_user), db: 
         # the form sends every field, and saving it for another field mustn't hide Garmin's weigh-ins.
         user.weight_source = "manual" if changes["weight_kg"] is not None else None
         user.weight_updated_at = utcnow()
+        if changes["weight_kg"] is not None:
+            wellness_weight(db, user, changes["weight_kg"])
     profile_sync.mark_manual(user, changed)  # a value a coach or Garmin set stays theirs until changed
     if {"ftp_watts", "lthr_bpm", "run_ftp_watts"} & changed:
         profile_sync.recalculate_tss(db, user)

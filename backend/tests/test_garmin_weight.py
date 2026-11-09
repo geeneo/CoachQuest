@@ -62,3 +62,58 @@ def test_saving_the_profile_for_another_field_keeps_garmins_weight(monkeypatch, 
     # A weigh-in older than the save but newer than the last one still comes through.
     user = _sync_with_weight(monkeypatch, uid, 54.2, datetime.now() - timedelta(hours=1))
     assert user.weight_kg == 54.2 and user.weight_source == "garmin"
+
+
+def test_weigh_ins_by_day():
+    from datetime import date
+
+    body = {
+        "dateWeightList": [
+            {"calendarDate": "2026-11-07", "weight": 55100.0, "date": 1},
+            {"calendarDate": "2026-11-08", "weight": 54900.0, "date": 2},
+            {"calendarDate": "2026-11-08", "weight": 54700.0, "date": 3},  # later that day: kept
+            {"calendarDate": "2026-11-09", "weight": 5.0},  # nonsense
+        ]
+    }
+    assert garmin.weigh_ins(body) == {date(2026, 11, 7): 55.1, date(2026, 11, 8): 54.7}
+    summaries = {
+        "dailyWeightSummaries": [
+            {"summaryDate": "2026-11-08", "latestWeight": {"calendarDate": "2026-11-08", "weight": 54700}}
+        ]
+    }
+    assert garmin.weigh_ins(summaries) == {date(2026, 11, 8): 54.7}
+    assert garmin.weigh_ins(None) == {}
+
+
+def test_weight_line_on_the_wellness_chart(monkeypatch, make_user):
+    from datetime import date
+
+    p = make_user("a@example.com")
+    uid = p.get("/api/auth/me").json()["id"]
+    today = date.today()
+    asked = []
+
+    def fake_fetch(*a):
+        asked.append(a[6])
+        rows = [
+            {"day": today - timedelta(days=3), "weight_kg": 55.0},
+            {"day": today, "resting_hr": 44, "weight_kg": 54.7},
+        ]
+        return "{}", rows, [], (54.7, datetime.now()) if a[3] else None, None
+
+    monkeypatch.setattr(garmin, "_fetch", fake_fetch)
+    with SessionLocal() as db:
+        conn = Connection(user_id=uid, provider="garmin", token_enc=encrypt_json({"tokens": "{}"}))
+        db.add(conn)
+        db.commit()
+        asyncio.run(garmin.sync(db, conn))
+        assert asked[0] == today - timedelta(days=garmin.WEIGHT_HISTORY_DAYS)  # the first time: two years back
+        asyncio.run(garmin.sync(db, conn))
+        assert asked[1] > today - timedelta(days=5)  # then since the last sync
+    rows = {r["day"]: r for r in p.get("/api/athletes/me/wellness?days=7").json()}
+    assert rows[(today - timedelta(days=3)).isoformat()]["weight_kg"] == 55.0
+    assert rows[today.isoformat()]["weight_kg"] == 54.7 and rows[today.isoformat()]["resting_hr"] == 44
+    # A weight typed in on the Profile goes on today's line too.
+    p.patch("/api/me", json={"weight_kg": 54.2})
+    rows = {r["day"]: r for r in p.get("/api/athletes/me/wellness?days=7").json()}
+    assert rows[today.isoformat()]["weight_kg"] == 54.2

@@ -26,6 +26,7 @@ from ..security import decrypt_json, encrypt_json
 log = logging.getLogger("coachquest.garmin")
 
 INITIAL_DAYS = 30
+WEIGHT_HISTORY_DAYS = 730  # the first sync with weigh-ins brings this many days of them
 MFA_TTL = timedelta(minutes=10)
 
 
@@ -101,6 +102,39 @@ def _num(d: dict | None, *path):
             return None
         cur = cur.get(key)
     return cur if isinstance(cur, (int, float)) else None
+
+
+def _kg(grams) -> float | None:
+    if not isinstance(grams, (int, float)) or grams <= 0:
+        return None
+    kg = round(grams / 1000, 1) if grams > 1000 else round(float(grams), 1)
+    return kg if 20 <= kg <= 400 else None
+
+
+def weigh_ins(data) -> dict[date, float]:
+    """Each day's last weigh-in (kg) from Garmin's body composition reply (dateWeightList) or its
+    weigh-ins reply (dailyWeightSummaries)."""
+    out: dict[date, tuple[float, float]] = {}  # day -> (timestamp, kg)
+    if not isinstance(data, dict):
+        return {}
+    items = list(data.get("dateWeightList") or [])
+    for summary in data.get("dailyWeightSummaries") or []:
+        if isinstance(summary, dict):
+            latest = [summary["latestWeight"]] if summary.get("latestWeight") else []
+            items += summary.get("allWeightMetrics") or latest
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        kg = _kg(item.get("weight"))
+        try:
+            day = date.fromisoformat(str(item.get("calendarDate") or "")[:10])
+        except ValueError:
+            continue
+        stamp = item.get("timestampGMT") or item.get("date") or 0
+        stamp = stamp if isinstance(stamp, (int, float)) else 0
+        if kg is not None and (day not in out or stamp >= out[day][0]):
+            out[day] = (stamp, kg)
+    return {d: kg for d, (_, kg) in out.items()}
 
 
 def latest_weight(data) -> tuple[float, datetime] | None:
@@ -211,6 +245,7 @@ def _fetch(
     want_weight: bool,
     want_thresholds: bool = False,
     want_birth_date: bool = False,
+    weight_since: date | None = None,
 ):
     """Blocking Garmin calls; runs in a thread.
 
@@ -251,6 +286,19 @@ def _fetch(
             weight = latest_weight(api.get_latest_weight())
         except Exception as exc:
             log.debug("latest weight failed: %s", exc)
+        if weight_since is not None:
+            # Every weigh-in since then, for the weight line on the Wellness chart.
+            try:
+                found = weigh_ins(api.get_body_composition(weight_since.isoformat(), date.today().isoformat()))
+            except Exception as exc:
+                log.debug("weigh-ins failed: %s", exc)
+                found = {}
+            rows = {r["day"]: r for r in wellness}
+            for day, kg in found.items():
+                if day in rows:
+                    rows[day]["weight_kg"] = kg
+                else:
+                    wellness.append({"day": day, "weight_kg": kg})
     thresholds = _thresholds(api) if want_thresholds else None
     if want_birth_date:
         thresholds = {**(thresholds or {}), "birth_date": _birth_date(api)}
@@ -297,6 +345,11 @@ async def sync(db: DbSession, conn: Connection) -> int:
     try:
         tokens = decrypt_json(conn.token_enc)["tokens"]
         opts = sync_options.options(conn)
+        # Weigh-ins since the last sync; the first time, the last WEIGHT_HISTORY_DAYS.
+        has_weights = db.scalar(
+            select(WellnessDay.id).where(WellnessDay.user_id == user.id, WellnessDay.weight_kg.is_not(None)).limit(1)
+        )
+        weight_since = start if has_weights else today - timedelta(days=WEIGHT_HISTORY_DAYS)
         new_tokens, wellness, activities, weight, thresholds = await asyncio.to_thread(
             _fetch,
             tokens,
@@ -305,6 +358,7 @@ async def sync(db: DbSession, conn: Connection) -> int:
             opts["weight"],
             opts["thresholds"],
             opts["birth_date"],
+            weight_since,
         )
 
     except Exception as exc:
@@ -330,7 +384,8 @@ def _store(db: DbSession, user: User, wellness: list, activities: list | None, w
         if day is None:
             day = WellnessDay(user_id=user.id, day=row["day"])
             db.add(day)
-        day.source = "garmin"  # Garmin's values win over gaps filled from Intervals.icu
+        if set(row) - {"day", "weight_kg"}:
+            day.source = "garmin"  # Garmin's values win over gaps filled from Intervals.icu
         for key, value in row.items():
             if key != "day" and value is not None:
                 setattr(day, key, value)

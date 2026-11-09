@@ -191,4 +191,5 @@ def wellness_out(w: WellnessDay) -> dict:
         "body_battery_max": w.body_battery_max,
         "stress_avg": w.stress_avg,
         "steps": w.steps,
+        "weight_kg": w.weight_kg,
     }

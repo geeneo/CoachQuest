@@ -41,6 +41,7 @@ WELLNESS_FIELDS = {
     "sleepSecs": "sleep_s",
     "sleepScore": "sleep_score",
     "steps": "steps",
+    "weight": "weight_kg",
 }
 
 
