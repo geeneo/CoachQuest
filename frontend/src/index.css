@@ -2015,6 +2015,14 @@ ul.segments li {
 .race-route select {
   width: 14rem;
 }
+.race-banner {
+  border: 1px solid var(--c1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .badge.race {
   border-color: var(--c1);
   color: var(--c1);

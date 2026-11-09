@@ -67,3 +67,25 @@ def test_race_route_and_race_day(setup, make_user):
     other = make_user("b@example.com")
     theirs = other.post("/api/races", json={"code": "x", "name": "X"}).json()
     assert p.patch(f"{base}/days/{sat}", json={"race_id": theirs["id"]}).status_code == 422
+
+
+def test_race_after_the_plan_ends_adds_the_race_day(setup):
+    p, plan, race, (course, _), _ = setup
+    base = f"/api/athletes/me/plans/{plan['id']}"
+    last = plan["weeks"][-1]["days"][-1]["date"]
+    race_date = (date.fromisoformat(last) + timedelta(days=1)).isoformat()  # the day after the plan ends
+    p.patch(f"/api/races/{race['id']}", json={"target_date": race_date, "segment_id": course, "target_time": "8:30"})
+    out = p.post(f"{base}/race-day", json={"race_id": race["id"]}).json()
+    assert len(out["weeks"]) == 3 and out["weeks"][-1]["phase"] == "Race"
+    d = _day(out, race_date)
+    assert d["type"] == "Race" and d["locked"] and d["race"]["name"] == "Double Century"
+    assert d["segment"]["name"] == "DC course" and d["duration_min"] == 510
+    assert d["description"] == "Double Century: race day. Start 06:00."
+    after = _day(out, (date.fromisoformat(race_date) + timedelta(days=1)).isoformat())
+    assert after["type"] == "Rest" and after["description"] == "Recovery after the race."
+
+    # Too far after the plan, or before it: a new plan is the way.
+    far = (date.fromisoformat(last) + timedelta(days=60)).isoformat()
+    p.patch(f"/api/races/{race['id']}", json={"target_date": far})
+    r = p.post(f"{base}/race-day", json={"race_id": race["id"]})
+    assert r.status_code == 422 and "make a new plan" in r.json()["detail"]

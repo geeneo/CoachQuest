@@ -215,6 +215,16 @@ export default function PlanTracker({ plan, athleteId, setPlan }) {
       {swapFrom && <div className="ok small">Pick the day to swap with {fmtDate(swapFrom)}, or click ⇄ again to cancel.</div>}
       {notice && <div className="ok small">{notice}</div>}
       {error && <div className="error">{error}</div>}
+      {!ro && (
+        <RaceDayBanner
+          plan={plan}
+          races={races.data || []}
+          add={async (r) => {
+            const updated = await call("/race-day", "POST", { race_id: r.id });
+            if (updated) setNotice(`${r.name} is in the plan on ${fmtDate(r.target_date)}, locked so re-plans keep it.`);
+          }}
+        />
+      )}
       {plan.weeks.map((w, i) => (
         <Week key={w.start} week={w} index={i} editWeek={editWeek} ctx={ctx} />
       ))}
@@ -292,6 +302,39 @@ function Week({ week, index, editWeek, ctx }) {
       </div>
     </section>
   );
+}
+
+// Races to come that this plan has no race day for, on a date within the plan or up to three weeks after its
+// last day (backend plan_tracker.RACE_DAY_REACH): one click puts the race day in, adding the days up to it.
+function RaceDayBanner({ plan, races, add }) {
+  const days = plan.weeks.flatMap((w) => w.days);
+  if (!days.length) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const first = days[0].date;
+  const reach = new Date(days[days.length - 1].date);
+  reach.setDate(reach.getDate() + 21);
+  const missing = races.filter(
+    (r) =>
+      r.active &&
+      r.target_date &&
+      r.target_date >= today &&
+      r.target_date >= first &&
+      r.target_date <= reach.toISOString().slice(0, 10) &&
+      !days.some((d) => d.race_id === r.id),
+  );
+  if (!missing.length) return null;
+  const last = days[days.length - 1].date;
+  return missing.map((r) => (
+    <div key={r.id} className="hint race-banner row between">
+      <span>
+        🏁 <strong>{r.name}</strong> is on {fmtDate(r.target_date)}
+        {r.target_date > last ? `, after this plan ends (${fmtDate(last)}).` : ", but no day in the plan is its race day."}
+      </span>
+      <button className="btn primary" onClick={() => add(r)}>
+        {r.target_date > last ? "Add race day to the plan" : "Make it the race day"}
+      </button>
+    </div>
+  ));
 }
 
 function Day({ day, ctx }) {

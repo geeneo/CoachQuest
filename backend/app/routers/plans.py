@@ -493,6 +493,52 @@ def edit_day(
     return plan_out(p, db, full=True, viewer=user)
 
 
+class RaceDay(BaseModel):
+    race_id: int
+
+
+@router.post("/{plan_id}/race-day")
+def add_race_day(
+    athlete: str,
+    plan_id: int,
+    body: RaceDay,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Make the race's date its race day in this plan, adding the days up to it when the race is after the
+    plan's last day. The day is linked to the race, locked, and rides the race's route."""
+    p = _plan(db, user, athlete, plan_id)
+    race = db.get(Race, body.race_id)
+    if race is None or race.user_id != p.athlete_id:
+        raise HTTPException(status_code=422, detail="That race isn't one of the athlete's races")
+    if race.target_date is None:
+        raise HTTPException(status_code=422, detail="Give the race a date first (Races page)")
+    weeks = _editable(p)
+    try:
+        wi, di = plan_tracker.race_day_slot(weeks, race.target_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    mine = {s.id for s in segments.for_athlete(db, p.athlete_id)}
+    day = weeks[wi]["days"][di]
+    start = f" Start {race.start_time}." if race.start_time else ""
+    day.update(
+        type="Race",
+        race_id=race.id,
+        locked=True,
+        extra_sessions=[],
+        workout=None,
+        strength=None,
+        segment_id=race.segment_id if race.segment_id in mine else None,
+        duration_min=round(race.target_seconds / 60) if race.target_seconds else day.get("duration_min") or 0,
+        intensity=day.get("intensity") or [],
+    )
+    if not day.get("description") or day.get("description") == "Recovery after the race.":
+        day["description"] = f"{race.name}: race day.{start}"
+    _save_weeks(db, p, weeks, background)
+    return plan_out(p, db, full=True, viewer=user)
+
+
 class WeekEdit(BaseModel):
     phase: str | None = None
     focus: str | None = Field(default=None, max_length=300)

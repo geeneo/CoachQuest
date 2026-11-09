@@ -136,6 +136,32 @@ def ai_day(src_day: dict) -> dict:
     }
 
 
+RACE_DAY_REACH = 21  # a race up to this many days after the plan's last day can be added (the plan grows)
+
+
+def race_day_slot(weeks: list[dict], race_date: date) -> tuple[int, int]:
+    """(week, day) index of the race's date, adding weeks at the end when the race is after the plan's last day
+    (their other days are rest days). ValueError when the race is before the plan or too far after it."""
+    if not weeks:
+        raise ValueError("This plan has no day-by-day schedule")
+    first = date.fromisoformat(weeks[0]["start"])
+    last = date.fromisoformat(weeks[-1]["start"]) + timedelta(days=6)
+    if race_date < first:
+        raise ValueError("The race is before this plan starts")
+    if (race_date - last).days > RACE_DAY_REACH:
+        raise ValueError(f"The race is more than {RACE_DAY_REACH} days after this plan ends: make a new plan for it")
+    while race_date > last:
+        start = last + timedelta(days=1)
+        days = []
+        for j in range(7):
+            d = _blank_day(start + timedelta(days=j))
+            d["description"] = "Recovery after the race." if start + timedelta(days=j) > race_date else ""
+            days.append(d)
+        weeks.append({"start": start.isoformat(), "phase": "Race", "focus": "Race", "status": "draft", "days": days})
+        last = start + timedelta(days=6)
+    return find_day(weeks, race_date.isoformat())
+
+
 def build_weeks(ai_weeks: list[dict], first_day: date, n_weeks: int) -> list[dict]:
     """Give Claude's weeks real dates. Missing days become Rest; duplicate weekdays keep the first."""
     weeks = []
