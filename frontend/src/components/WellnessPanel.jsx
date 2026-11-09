@@ -1,7 +1,14 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatDate, monthYear, shortDate } from "../lib/format.js";
 
-export default function WellnessPanel({ rows }) {
+// The Weight tile: the trend (weigh-ins swing with water), its change over 30 days and the last weigh-in.
+function WeightStat({ w }) {
+  const change = w.change_30d == null ? "" : `${w.change_30d > 0 ? "+" : ""}${w.change_30d} in 30 days · `;
+  const last = w.days_since === 0 ? "weighed today" : `weighed ${shortDate(w.latest_day)} (${w.latest_kg})`;
+  return <Stat label="Weight (trend)" unit="kg" value={w.trend_kg} sub={`${change}${last}`} />;
+}
+
+export default function WellnessPanel({ rows, weight }) {
   if (!rows?.length) return <p className="muted">No Garmin wellness data yet.</p>;
   // Each tile: the newest day that has that value. Today's row is often still empty (last night's
   // sleep and HRV come with the next Garmin sync), and some watches never send some values.
@@ -12,7 +19,7 @@ export default function WellnessPanel({ rows }) {
   };
   const tile = (label, key, unit) => <Stat label={label} unit={unit} {...latest(key)} />;
   // Weight on its own axis (right): kg and bpm/ms don't share a scale.
-  const hasWeight = rows.some((r) => r.weight_kg != null);
+  const hasWeight = rows.some((r) => r.weight_kg != null || r.weight_trend != null);
   return (
     <>
       <div className="stats">
@@ -21,7 +28,7 @@ export default function WellnessPanel({ rows }) {
         {tile("Sleep", "sleep_h", "h")}
         {tile("Sleep score", "sleep_score")}
         {tile("Body Battery max", "body_battery_max")}
-        {hasWeight && tile("Weight", "weight_kg", "kg")}
+        {weight ? <WeightStat w={weight} /> : hasWeight && tile("Weight", "weight_kg", "kg")}
       </div>
       <div className="chart">
         <ResponsiveContainer width="100%" height={220}>
@@ -50,9 +57,23 @@ export default function WellnessPanel({ rows }) {
               <Line
                 yAxisId="kg"
                 dataKey="weight_kg"
-                name="Weight (kg)"
+                name="Weigh-ins (kg)"
                 stroke="var(--c3)"
-                dot={{ r: 2 }}
+                strokeOpacity={0}
+                dot={{ r: 2.5, fill: "var(--c3)", strokeOpacity: 1 }}
+                activeDot={{ r: 4 }}
+                isAnimationActive={false}
+              />
+            )}
+            {hasWeight && (
+              <Line
+                yAxisId="kg"
+                type="monotone"
+                dataKey="weight_trend"
+                name="Weight trend (kg)"
+                stroke="var(--c3)"
+                strokeWidth={2}
+                dot={false}
                 connectNulls
               />
             )}

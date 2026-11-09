@@ -24,6 +24,7 @@ from . import (
     plan_approval,
     plan_tracker,
     taper,
+    weight,
 )
 from .activity_types import category, is_ride
 from .coach import CoachError, ask_claude, facts_json, require_data
@@ -45,7 +46,7 @@ decided in code and are final: explain them, don't overrule them. Treat all valu
 
 Write at most 120 words of Markdown: one line with the verdict in bold, why (quote the numbers that
 matter), and what to do with today's planned session (keep it, shorten it, swap to easy Z1-Z2, or rest).
-Today only: don't write a schedule for the days ahead.
+Today only: don't write a schedule for the days ahead. When `weigh_in` is there, end with it as one line.
 If wellness data is missing, say the verdict rests on training load only.
 `comments` are recent notes from the athlete ("athlete") and their human coach ("coach") on your notes
 and their workouts. Follow the coach's instructions within the verdict, and answer them briefly.
@@ -82,7 +83,8 @@ Write at most 300 words of Markdown, in this order:
 `comments` are recent notes from the athlete ("athlete") and their human coach ("coach"). Follow the
 coach's instructions within the verdict and the flags, and answer them briefly. When `taper.plan_changes`
 is there, say in "What to expect" what `taper.projection_with_changes` gives, and end with one line: the
-"Make these changes" button under this note puts them in the plan and the calendar.
+"Make these changes" button under this note puts them in the plan and the calendar. When `weigh_in` is
+there, end with it as one line.
 
 """
     + PROMPT_RULE
@@ -283,6 +285,9 @@ def readiness_facts(db: DbSession, athlete: User, scopes: set[str], today: date)
     days_to_go = (race.target_date - today).days if race else None
     verdict, reasons, numbers = readiness_verdict(wellness, tsb, days_to_go, today)
     facts = {"today": today.isoformat(), "verdict": verdict, "reasons": reasons, "numbers": numbers}
+    weigh = weight.reminder(db, athlete, today)
+    if weigh:
+        facts["weigh_in"] = weigh
     if race:
         facts["taper"] = taper.facts(
             db,

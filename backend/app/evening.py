@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from . import assessments, localtime, mailer, plan_tracker, taper
+from . import assessments, localtime, mailer, plan_tracker, taper, weight
 from .db import SessionLocal, User
 from .queries import load_curve
 
@@ -101,6 +101,8 @@ def markdown(p: dict, user: User) -> str:
     elif verdict == "REST":
         lines += ["", "Plan on resting, unless the morning note says otherwise."]
     s = user.ai_settings or {}
+    if weight.weigh_day(user) == p["tomorrow"].weekday():
+        lines += ["", "Tomorrow is weigh-in day: step on the scale after the toilet, before breakfast."]
     if s.get("daily"):
         lines += [
             "",

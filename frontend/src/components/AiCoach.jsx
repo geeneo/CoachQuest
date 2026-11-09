@@ -411,6 +411,28 @@ function Schedule({ settings }) {
           </div>
         )}
         {!s.email && <p className="hint indent">The evening preview needs "Also email them to me" below.</p>}
+        <label className="inline">
+          Weigh-in reminder{" "}
+          <select
+            aria-label="Weigh-in day"
+            value={s.weigh_day ?? ""}
+            onChange={(e) => put({ ...s, weigh_day: e.target.value === "" ? null : Number(e.target.value) })}
+          >
+            <option value="">off</option>
+            {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d, i) => (
+              <option key={d} value={i}>
+                every {d}
+              </option>
+            ))}
+          </select>
+        </label>
+        {s.weigh_day != null && (
+          <p className="hint indent">
+            That morning's note (and the evening preview the night before) reminds you to weigh in after the toilet
+            and before breakfast; if you miss it, the next morning's note asks again. Once a week is enough: the
+            Wellness chart draws a trend through your weigh-ins.
+          </p>
+        )}
         <label className="check">
           <input type="checkbox" checked={s.weekly} onChange={() => toggle("weekly")} /> Weekly review every Monday
         </label>

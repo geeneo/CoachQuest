@@ -98,6 +98,8 @@ class AiSettings(BaseModel):
     # The evening preview by email (evening.py), and when (local time).
     preview: bool = False
     preview_time: str = Field(default=evening.DEFAULT_TIME, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    # The weekly weigh-in reminder (weight.py): 0 = Monday ... 6 = Sunday, or null for none.
+    weigh_day: int | None = Field(default=None, ge=0, le=6)
 
 
 def _taper(db: DbSession, user: User, athlete: str):

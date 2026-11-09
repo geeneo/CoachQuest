@@ -11,7 +11,17 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import activity_delete, dashboard, localtime, profile_sync, runtime, strava_notes, sync_options, tp_thresholds
+from .. import (
+    activity_delete,
+    dashboard,
+    localtime,
+    profile_sync,
+    runtime,
+    strava_notes,
+    sync_options,
+    tp_thresholds,
+    weight,
+)
 from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
 from ..db import Activity, Connection, Grant, Race, User, WellnessDay, get_db, utcnow
@@ -404,7 +414,17 @@ def wellness(
 ):
     athlete_id = resolve_athlete_id(athlete, user)
     require_scope(db, user, athlete_id, "wellness")
-    return [wellness_out(w) for w in wellness_since(db, athlete_id, date.today() - timedelta(days=days))]
+    rows = [wellness_out(w) for w in wellness_since(db, athlete_id, date.today() - timedelta(days=days))]
+    weight.add_trend(db, athlete_id, rows)
+    return rows
+
+
+@router.get("/athletes/{athlete}/weight")
+def weight_summary(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """The Weight tile: latest weigh-in, the trend and its change over 30 days (weight.py), or null."""
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "wellness")
+    return weight.summary(db, athlete_id, localtime.today(db.get(User, athlete_id)))
 
 
 @router.get("/me/strava-notes")

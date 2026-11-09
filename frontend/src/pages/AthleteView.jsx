@@ -146,6 +146,7 @@ function Overview({ id, scopes, isMe }) {
   const [days, setDays] = usePeriod();
   const fitness = useApi(scopes.has("fitness") ? `/api/athletes/${id}/fitness?days=${days}` : null);
   const wellness = useApi(scopes.has("wellness") ? `/api/athletes/${id}/wellness?days=${days}` : null);
+  const weight = useApi(scopes.has("wellness") ? `/api/athletes/${id}/weight` : null);
   const today = fitness.data?.[fitness.data.length - 1];
   return (
     <>
@@ -192,7 +193,7 @@ function Overview({ id, scopes, isMe }) {
       {scopes.has("wellness") && (
         <section className="card">
           <h2>Wellness (last {lastPeriod(days)})</h2>
-          {wellness.error ? <div className="error">{wellness.error.message}</div> : <WellnessPanel rows={wellness.data} />}
+          {wellness.error ? <div className="error">{wellness.error.message}</div> : <WellnessPanel rows={wellness.data} weight={weight.data} />}
         </section>
       )}
     </>

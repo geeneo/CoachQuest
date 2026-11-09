@@ -2,6 +2,12 @@
 
 ## Next up
 
+- [x] **Weight from occasional weigh-ins (9 Nov): done.** Weight on the Wellness chart (Garmin weigh-ins, two
+  years back on the first sync; Intervals.icu; a Profile entry goes on today) as dots, with a trend line
+  through them (`weight.py`: smoothed, allowing for the gaps between weigh-ins) and a "Weight (trend)" tile
+  with its 30-day change and the last weigh-in. AI coach tab → "Weigh-in reminder: every <day>": that
+  morning's note, the evening preview the night before, and the next morning when it was missed.
+
 - [x] **Morning note at a time the athlete chooses (9 Nov): done.** AI coach tab → Automatic notes: "Send it
   at" (local time, default 06:30) and "wait for last night's sleep up to" (default 90 min). `morning.py` runs
   every 5 min: at the athlete's time it syncs their Garmin on demand (every 30 min while waiting), sends once
