@@ -1,9 +1,12 @@
 import { Check, ExternalLink, Plus, Search, Trash2, Users } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import RoutePicker from "../components/RoutePicker.jsx";
 import Segments, { KIND, stats } from "../components/Segments.jsx";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
+import { shortDate } from "../lib/format.js";
 
 // Routes: your favourite Strava routes and segments (the AI coach plans rides on them), and the ones
 // athletes shared with everyone in CoachQuest, to add to your own favourites in one click.
@@ -20,9 +23,95 @@ export default function Routes() {
           </p>
         </div>
       </div>
+      <RaceRoutes version={version} onSaved={() => setVersion((v) => v + 1)} />
       <Segments key={version} id="me" canShare />
       <SharedRoutes onAdded={() => setVersion((v) => v + 1)} />
     </>
+  );
+}
+
+// Your races to come and the route each is ridden on (the same as the Races page's Route column): race days in
+// your plan ride it, and the weather and the AI coach use it.
+function RaceRoutes({ version, onSaved }) {
+  const races = useApi("/api/athletes/me/races");
+  const favourites = useApi(`/api/athletes/me/segments?v=${version}`);
+  const [error, setError] = useState(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const list = (races.data || []).filter((r) => r.active && (!r.target_date || r.target_date >= today));
+  const saved = favourites.data?.favourites || [];
+  const pick = async (race, id) => {
+    setError(null);
+    try {
+      await api(`/api/races/${race.id}`, { method: "PATCH", body: { segment_id: id } });
+      races.reload();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  if (!races.data) return null;
+  return (
+    <section className="card">
+      <h2>🏁 Race routes</h2>
+      <p className="muted small">
+        The route of each race to come. Race days in your plan ride it, and the weather and the AI coach use it. Pick
+        one of your routes, or one of your Strava routes (it's saved to your favourites).{" "}
+        <Link to="/races">Add or edit races</Link>
+      </p>
+      {error && <div className="error">{error}</div>}
+      {list.length === 0 ? (
+        <p className="muted">
+          No races to come. <Link to="/races">Add your race</Link>
+        </p>
+      ) : (
+        <div className="table-wrap">
+          <table className="race-routes">
+            <thead>
+              <tr>
+                <th>Race</th>
+                <th>Date</th>
+                <th>Distance</th>
+                <th>Route</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((r) => {
+                const route = saved.find((f) => f.id === r.segment_id);
+                return (
+                  <tr key={r.id}>
+                    <td>{r.name}</td>
+                    <td>{r.target_date ? shortDate(r.target_date) : "–"}</td>
+                    <td>
+                      {r.distance_km ? `${Math.round(r.distance_km)} km` : "–"}
+                      {r.elevation_m ? ` · ${Math.round(r.elevation_m)} m` : ""}
+                    </td>
+                    <td className="race-route">
+                      <RoutePicker
+                        label={`Route of ${r.name}`}
+                        saved={saved}
+                        stravaLinked={!!favourites.data?.strava_linked}
+                        routesOnly
+                        value={r.segment_id}
+                        onSaved={async () => {
+                          await favourites.reload();
+                          onSaved();
+                        }}
+                        onPick={(id) => pick(r, id)}
+                      />
+                      {route?.distance_m && r.distance_km && Math.abs(route.distance_m / 1000 - r.distance_km) > 0.1 * r.distance_km ? (
+                        <span className="hint small">
+                          {" "}
+                          The route is {Math.round(route.distance_m / 1000)} km, the race {Math.round(r.distance_km)} km.
+                        </span>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
