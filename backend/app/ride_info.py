@@ -178,6 +178,10 @@ def numbers(
         out["distance_rough"] = True
     if speed:
         out["speed_kmh"] = speed
+        if kind != "ride":  # walks and runs read as pace (min/km), as runners and walkers think of them
+            secs = round(3600 / speed)
+            out["pace_per_km"] = f"{secs // 60}:{secs % 60:02d}"
+    out["kind"] = kind
     if history:
         out["ridden"] = history["count"]
         out["fastest_minutes"] = history.get("fastest_minutes")

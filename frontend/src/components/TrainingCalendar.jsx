@@ -393,7 +393,7 @@ function RideInfo({ info, full, isMe, date }) {
   const stats = [
     n.distance_km && `${n.distance_rough ? "~" : ""}${n.distance_km} km`,
     n.climb_m && `${n.climb_m} m↑`,
-    n.speed_kmh && `${n.speed_kmh} km/h`,
+    n.pace_per_km ? `${n.pace_per_km} /km` : n.speed_kmh && `${n.speed_kmh} km/h`,
     n.finish && `${n.start}–${n.finish}`,
   ].filter(Boolean);
   const sky = w && `${w.icon} ${w.temp_min}–${w.temp_max}° · 💨 ${w.wind_kmh} ${w.wind_from}`;
@@ -416,7 +416,7 @@ function RideInfo({ info, full, isMe, date }) {
         <p className="small">
           <strong>{stats.join(" · ")}</strong>
           {n.ride_minutes ? ` · ${duration(n.ride_minutes * 60)} riding` : ""}
-          {n.speed_from && <span className="muted"> (speed from {n.speed_from}</span>}
+          {n.speed_from && <span className="muted"> ({n.pace_per_km ? "pace" : "speed"} from {n.speed_from}</span>}
           {n.speed_from && n.fastest_minutes ? (
             <span className="muted">; fastest {duration(n.fastest_minutes * 60)})</span>
           ) : (

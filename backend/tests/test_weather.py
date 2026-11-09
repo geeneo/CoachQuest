@@ -415,5 +415,7 @@ def test_walks_and_runs_get_their_own_speed(make_user, fake_weather):
     walk, run, ride = (r[(today + timedelta(days=i)).isoformat()] for i in range(3))
     assert walk["numbers"]["speed_kmh"] == 5.0 and walk["numbers"]["distance_km"] == 2.5
     assert walk["numbers"]["speed_from"] == "your recent walks" and walk["fuel"] is None and walk["kit"] == []
+    assert walk["numbers"]["pace_per_km"] == "12:00" and run["numbers"]["pace_per_km"] == "6:00"
+    assert "pace_per_km" not in ride["numbers"]
     assert run["numbers"]["speed_kmh"] == 10.0 and run["numbers"]["distance_km"] == 5.0 and run["pacing"] == []
     assert ride["numbers"]["speed_kmh"] == 24.0 and ride["numbers"]["distance_km"] == 24
