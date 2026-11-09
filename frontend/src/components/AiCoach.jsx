@@ -322,6 +322,24 @@ function Schedule({ settings }) {
           </p>
         )}
         <label className="check">
+          <input type="checkbox" checked={s.preview} disabled={!s.email} onChange={() => toggle("preview")} /> Evening
+          preview by email: tomorrow's session and a verdict on training load
+        </label>
+        {s.preview && (
+          <div className="row tight indent">
+            <label className="inline">
+              Send it at{" "}
+              <input
+                type="time"
+                aria-label="Evening preview time"
+                value={s.preview_time}
+                onChange={(e) => e.target.value && put({ ...s, preview_time: e.target.value })}
+              />
+            </label>
+          </div>
+        )}
+        {!s.email && <p className="hint indent">The evening preview needs "Also email them to me" below.</p>}
+        <label className="check">
           <input type="checkbox" checked={s.weekly} onChange={() => toggle("weekly")} /> Weekly review every Monday
         </label>
         <label className="check">

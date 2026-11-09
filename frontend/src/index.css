@@ -1989,6 +1989,9 @@ ul.segments li {
   white-space: nowrap;
   text-decoration: none;
 }
+.hint.indent {
+  margin-left: 1.6rem;
+}
 .row.indent {
   margin-left: 1.6rem;
   flex-wrap: wrap;

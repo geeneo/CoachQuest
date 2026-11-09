@@ -14,6 +14,7 @@ from . import (
     assessments,
     auth_log,
     backfill,
+    evening,
     inactivity,
     morning,
     plan_approval,
@@ -98,6 +99,7 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(plan_approval.remind_job, "cron", minute=5, id="approval-reminders")  # hourly
         # The morning note at each athlete's own time, once last night's sleep is in (morning.py).
         scheduler.add_job(morning.run, "interval", minutes=5, id="ai-daily")
+        scheduler.add_job(evening.run, "interval", minutes=5, id="evening-preview")
         # Runs daily; each athlete gets their review on the first day of their own week.
         scheduler.add_job(assessments.run_scheduled, "cron", hour=6, minute=50, args=["weekly"], id="ai-weekly")
         scheduler.start()

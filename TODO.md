@@ -8,8 +8,10 @@
   today's sleep or HRV is in, or after the wait on training load alone; sleep data that arrives later (before
   noon) rewrites the note, with a short "Update: today is REST, not GO" email only when the verdict changes.
   Notes and Garmin wellness now use the athlete's local date.
-  - [ ] Still open: "Also send a preview the evening before" (e.g. 20:00, tomorrow's session and the
-    load-based verdict).
+  - [x] Evening preview (9 Nov): "Evening preview by email" at a chosen time (default 20:00; needs the email
+    switch). `evening.py`, code only (no AI request): tomorrow's session from the plan, tomorrow morning's form
+    (today's logged load, or today's planned session when nothing is logged yet) and the verdict it gives,
+    the taper rules within two weeks of a race; once a day.
 
 - [x] **Taper mode for the morning note (9 Nov): done.** In the last 14 days before a race the readiness note
   (backend/app/taper.py) lists every day to the race from the plan as written, flags what breaks a taper

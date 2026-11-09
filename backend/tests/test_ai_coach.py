@@ -191,6 +191,8 @@ def test_ai_settings(make_user):
         "email": False,
         "daily_time": "06:30",
         "sleep_wait_min": 90,
+        "preview": False,
+        "preview_time": "20:00",
     }
     p.request("PUT", "/api/me/ai-settings", json={"daily": True, "weekly": True, "email": False})
     assert p.get("/api/athletes/me/coach").json()["ai_settings"]["daily"] is True

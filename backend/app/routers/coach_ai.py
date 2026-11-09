@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
-from .. import assessments, coach_chat, comments, morning, race_target, week_status
+from .. import assessments, coach_chat, comments, evening, morning, race_target, week_status
 from ..coach import CoachError
 from ..db import Assessment, CoachChat, Comment, Race, User, get_db
 from ..deps import allowed_scopes, current_user, require_scope, resolve_athlete_id
@@ -36,6 +36,7 @@ def overview(athlete: str, user: User = Depends(current_user), db: DbSession = D
     }
     if athlete_id == user.id:
         out["ai_settings"] = {**AiSettings().model_dump(), **(user.ai_settings or {})}
+        out["ai_settings"].pop("preview_sent_for", None)
     return out
 
 
@@ -83,13 +84,17 @@ class AiSettings(BaseModel):
     # The morning note: when (local time, HH:MM) and how long to wait for last night's sleep (morning.py).
     daily_time: str = Field(default=morning.DEFAULT_TIME, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     sleep_wait_min: int = Field(default=morning.DEFAULT_WAIT_MIN, ge=0, le=morning.MAX_WAIT_MIN)
+    # The evening preview by email (evening.py), and when (local time).
+    preview: bool = False
+    preview_time: str = Field(default=evening.DEFAULT_TIME, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 @router.put("/me/ai-settings")
 def set_ai_settings(body: AiSettings, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-    user.ai_settings = body.model_dump()
+    kept = {k: v for k, v in (user.ai_settings or {}).items() if k == "preview_sent_for"}  # bookkeeping
+    user.ai_settings = {**body.model_dump(), **kept}
     db.commit()
-    return user.ai_settings
+    return body.model_dump()
 
 
 def chat_out(chat: CoachChat) -> dict:
