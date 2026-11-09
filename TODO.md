@@ -2,6 +2,23 @@
 
 ## Next up
 
+- [ ] **Morning note at a time the athlete chooses (asked 9 Nov).** Today the daily readiness note goes to
+  everyone at 06:40 UTC (08:40 in South Africa: `main.py`, job `ai-daily`), after the Garmin sync at 06:15
+  UTC. That's after an early ride (e.g. the 07:00 Stellies loop), so the note arrives too late to act on.
+  - **Profile → AI coach: "Send my morning note at"** (local time, e.g. 05:30; default 06:30), in the
+    athlete's time zone. The job runs every 15 min and handles the athletes whose time has come.
+  - **Sleep data first:** last night's sleep and HRV only reach CoachQuest once the watch has synced to Garmin
+    Connect (usually when the athlete wakes and opens the app). At the chosen time: sync that athlete's Garmin
+    on demand (not the 06:15 / 18:15 UTC batch) → is last night's sleep in? Send. If not, check every
+    15 min up to a limit (e.g. 90 min, set in Profile), then send anyway on training load alone and say so
+    ("no sleep data yet: the verdict rests on training load"). When the sleep data arrives later, update the
+    note, and send a short second email only if the verdict changes (GO → EASY/REST).
+  - **The evening before, as an option:** "Also send a preview the evening before" (e.g. 20:00): tomorrow's
+    session and the load-based verdict, so an early rider knows the plan before they sleep; the morning note
+    then only confirms it, or changes it once the HRV/sleep is in.
+  - Check: the dates in the note and the subject are the athlete's local date (`assessments.create` uses
+    `date.today()` on the server, not `localtime.today(athlete)`).
+
 - [x] **Taper mode for the morning note (9 Nov): done.** In the last 14 days before a race the readiness note
   (backend/app/taper.py) lists every day to the race from the plan as written, flags what breaks a taper
   (strength in the last 10 days, sessions over 90 min in race week, too much time against a usual week),
