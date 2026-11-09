@@ -258,6 +258,7 @@ export default function Profile() {
         onPulled={(u) => {
           setUser(u);
           setForm((f) => ({ ...f, ...Object.fromEntries(NUMBER_FIELDS.map(([k]) => [k, u[k] ?? ""])) }));
+          api("/api/me/profile/synced").then(setSynced, () => {});
         }}
       />
       <TrainingPreferences />
