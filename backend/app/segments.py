@@ -32,6 +32,7 @@ USES = (
     "long ride",
     "recovery",
     "race simulation",
+    "race",  # the course of a race (Races page / Routes → Race routes)
 )
 LINK = re.compile(r"strava\.com/(segments|routes|activities)/(\d{3,20})(?:[/?#]|$)")
 BARE = re.compile(r"^\d{3,20}$")

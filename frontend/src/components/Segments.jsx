@@ -107,6 +107,11 @@ export default function Segments({ id, readOnly, canShare }) {
                       {f.name} <ExternalLink size={12} />
                     </a>
                     <span className="muted small">{stats(f).map((x) => ` · ${x}`).join("")}</span>
+                    {f.races?.map((name) => (
+                      <span key={name} className="badge race small-badge">
+                        🏁 {name}
+                      </span>
+                    ))}
                     <div className="chips tight">
                       {(readOnly ? f.uses : uses).map((u) => (
                         <button

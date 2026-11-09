@@ -19,8 +19,10 @@ export default function RoutePicker({
   const [strava, setStrava] = useState(null); // null = not loaded, "loading", or the list
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const keep = (x) => !routesOnly || x.kind === "route";
-  const mine = saved.filter(keep);
+  const keep = (x) => !routesOnly || x.kind !== "segment"; // routes and rides saved as routes
+  // Routes tagged "race" (Routes page) first: they're the likely race courses.
+  const raceFirst = (x) => (routesOnly && x.uses?.includes("race") ? 0 : 1);
+  const mine = saved.filter(keep).sort((a, b) => raceFirst(a) - raceFirst(b));
 
   const loadStrava = async () => {
     if (!stravaLinked || strava !== null) return;
@@ -72,7 +74,7 @@ export default function RoutePicker({
           <optgroup label="My saved routes">
             {mine.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.kind === "segment" ? "⛰" : "🗺"} {s.name}
+                {s.uses?.includes("race") ? "🏁" : s.kind === "segment" ? "⛰" : "🗺"} {s.name}
                 {km(s.distance_m)}
               </option>
             ))}

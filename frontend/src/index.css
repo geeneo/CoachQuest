@@ -2023,6 +2023,10 @@ ul.segments li {
   gap: 8px;
   flex-wrap: wrap;
 }
+.small-badge {
+  margin-left: 6px;
+  font-size: 0.75rem;
+}
 .badge.race {
   border-color: var(--c1);
   color: var(--c1);

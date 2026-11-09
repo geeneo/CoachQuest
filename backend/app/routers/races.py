@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from .. import localtime, race_stages, segments
 from ..activity_types import category
-from ..db import Plan, Race, User, get_db
+from ..db import Plan, Race, Segment, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
 from ..queries import activities_since
 from ..race_estimate import estimate, format_time, parse_time
@@ -149,6 +149,13 @@ def _check_route(db: DbSession, user: User, fields: dict) -> None:
         raise HTTPException(status_code=422, detail="That route isn't one of your saved routes")
 
 
+def _tag_race(db: DbSession, race: Race) -> None:
+    """The race's route gets the "race" tag on the Routes page (it's a race course)."""
+    seg = db.get(Segment, race.segment_id) if race.segment_id else None
+    if seg is not None and "race" not in (seg.uses or []):
+        seg.uses = segments.clean_uses([*(seg.uses or []), "race"])
+
+
 def _route_to_plan(db: DbSession, race: Race) -> None:
     """The race's route changed: plan days linked to the race (today and later) ride the new one."""
     today = date.today().isoformat()
@@ -199,6 +206,7 @@ def create_race(body: RaceCreate, user: User = Depends(current_user), db: DbSess
     fields = body.model_dump(exclude_unset=True)
     _check_route(db, user, fields)
     _apply(race, fields)
+    _tag_race(db, race)
     db.add(race)
     try:
         db.commit()
@@ -216,6 +224,7 @@ def update_race(race_id: int, body: RaceFields, user: User = Depends(current_use
     _apply(race, fields)
     if "segment_id" in fields:
         _route_to_plan(db, race)
+        _tag_race(db, race)
     try:
         db.commit()
     except IntegrityError:

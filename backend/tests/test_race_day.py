@@ -89,3 +89,15 @@ def test_race_after_the_plan_ends_adds_the_race_day(setup):
     p.patch(f"/api/races/{race['id']}", json={"target_date": far})
     r = p.post(f"{base}/race-day", json={"race_id": race["id"]})
     assert r.status_code == 422 and "make a new plan" in r.json()["detail"]
+
+
+def test_race_tag_on_the_route(setup):
+    p, plan, race, (course, short), sat = setup
+    assert "race" in p.get("/api/athletes/me/segments").json()["uses"]
+    p.patch(f"/api/races/{race['id']}", json={"segment_id": course})
+    fav = {f["id"]: f for f in p.get("/api/athletes/me/segments").json()["favourites"]}
+    assert "race" in fav[course]["uses"] and fav[course]["races"] == ["Double Century"]
+    assert fav[short]["races"] == [] and "race" not in (fav[short]["uses"] or [])
+    # Tagged by hand too, like any other use.
+    r = p.patch(f"/api/athletes/me/segments/{short}", json={"uses": ["long ride", "race"]})
+    assert r.status_code == 200 and r.json()["uses"] == ["long ride", "race"]

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from .. import segments
-from ..db import Activity, Connection, Segment, User, get_db
+from ..db import Activity, Connection, Race, Segment, User, get_db
 from ..deps import admin_user, current_user, require_scope, resolve_athlete_id
 from ..providers import strava
 
@@ -34,8 +34,14 @@ def _strava(db: DbSession, athlete_id: int) -> Connection | None:
 @router.get("")
 def list_segments(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     athlete_id = _athlete_id(db, user, athlete)
+    # Which of the athlete's races each favourite is the course of (Races page / Routes → Race routes).
+    races: dict[int, list[str]] = {}
+    for r in db.scalars(select(Race).where(Race.user_id == athlete_id, Race.segment_id.is_not(None))):
+        races.setdefault(r.segment_id, []).append(r.name)
     return {
-        "favourites": [segments.segment_out(s) for s in segments.for_athlete(db, athlete_id)],
+        "favourites": [
+            {**segments.segment_out(s), "races": races.get(s.id, [])} for s in segments.for_athlete(db, athlete_id)
+        ],
         "uses": list(segments.USES),
         "strava_linked": _strava(db, athlete_id) is not None,
     }
