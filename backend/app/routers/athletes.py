@@ -83,8 +83,9 @@ def update_profile(body: ProfileUpdate, user: User = Depends(current_user), db: 
         # Thresholds: from today on, or for every workout when it's a correction.
         profile_sync.record_change(user, key, getattr(user, key), value, correct=correct)
         setattr(user, key, value)
-    if "weight_kg" in changes:
-        # A value typed in by hand wins until Garmin records a newer weigh-in.
+    if "weight_kg" in changed:
+        # A value typed in by hand wins until Garmin records a newer weigh-in. Only when it was changed:
+        # the form sends every field, and saving it for another field mustn't hide Garmin's weigh-ins.
         user.weight_source = "manual" if changes["weight_kg"] is not None else None
         user.weight_updated_at = utcnow()
     profile_sync.mark_manual(user, changed)  # a value a coach or Garmin set stays theirs until changed

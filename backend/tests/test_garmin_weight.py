@@ -49,3 +49,16 @@ def test_weight_option_off_leaves_profile_alone(monkeypatch, make_user):
     uid = p.get("/api/auth/me").json()["id"]
     user = _sync_with_weight(monkeypatch, uid, 80.0, datetime.now(), options={"weight": False})
     assert user.weight_kg is None
+
+
+def test_saving_the_profile_for_another_field_keeps_garmins_weight(monkeypatch, make_user):
+    p = make_user("a@example.com")
+    uid = p.get("/api/auth/me").json()["id"]
+    _sync_with_weight(monkeypatch, uid, 54.7, datetime.now() - timedelta(hours=3))
+    # The Profile form sends every field: the weight unchanged, the FTP new.
+    p.patch("/api/me", json={"weight_kg": 54.7, "ftp_watts": 213})
+    me = p.get("/api/auth/me").json()
+    assert me["weight_source"] == "garmin"
+    # A weigh-in older than the save but newer than the last one still comes through.
+    user = _sync_with_weight(monkeypatch, uid, 54.2, datetime.now() - timedelta(hours=1))
+    assert user.weight_kg == 54.2 and user.weight_source == "garmin"
