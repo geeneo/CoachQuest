@@ -18,6 +18,8 @@ from .db import AccessLog, AuthEvent, SessionLocal, User, utcnow
 from .security import proxy_secret_ok
 
 EVENTS = {
+    "admin_name_changed": "Name changed by an admin",
+    "admin_email_changed": "Sign-in email changed by an admin",
     "login_ok": "Signed in",
     "login_failed": "Wrong email or password",
     "login_pending": "Tried to sign in while waiting for approval",

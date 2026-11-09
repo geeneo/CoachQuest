@@ -20,6 +20,7 @@ from .. import (
     backfill,
     data_export,
     deploy_requests,
+    email_md,
     mailer,
     news_email,
     platform_catalog,
@@ -628,6 +629,59 @@ def update_user(
         auth_log.admin_action(db, request, "admin_ai_limit", admin, user)
     db.commit()
     return {"ok": True}
+
+
+class Identity(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    email: EmailStr | None = None
+
+
+@router.patch("/users/{user_id}/identity")
+async def update_identity(
+    user_id: int, body: Identity, request: Request, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)
+):
+    """Super admins fix a user's name (first name and surname) or sign-in email. On a new email, both the old
+    and the new address are told (when email is set up); the user signs in with the new one from now on."""
+    if not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only a super admin can change names and emails")
+    user = _other_user(db, user_id)
+    changed = []
+    if body.display_name is not None and body.display_name.strip() != user.display_name:
+        name = " ".join(body.display_name.split())
+        if not name:
+            raise HTTPException(status_code=422, detail="Enter a name")
+        user.display_name = name
+        auth_log.admin_action(db, request, "admin_name_changed", admin, user)
+        changed.append("name")
+    old_email = user.email
+    if body.email is not None and body.email.strip().lower() != user.email:
+        email = body.email.strip().lower()
+        if db.scalar(select(User.id).where(func.lower(User.email) == email, User.id != user.id)):
+            raise HTTPException(status_code=409, detail="Another account already uses that email")
+        user.email = email
+        auth_log.admin_action(db, request, "admin_email_changed", admin, user, f"{old_email} → {email}")
+        changed.append("email")
+    db.commit()
+    emailed = ""
+    if "email" in changed and mailer.configured():  # a security notice: sent even with emails switched off
+        subject = "Your CoachQuest sign-in email changed"
+        text = (
+            f"Hi {user.display_name},\n\nAn admin changed the email you sign in to CoachQuest with from "
+            f"{old_email} to {user.email}. Sign in with {user.email} from now on; your password stays the same.\n\n"
+            "If you didn't ask for this, reply to this email.\n"
+        )
+        html = email_md.page(
+            subject, email_md.to_html(text, breaks=True), ("Open CoachQuest", settings.public_base_url)
+        )
+        sent = []
+        for to in (old_email, user.email):
+            try:
+                await mailer.send(to, subject, text, html)
+                sent.append(to)
+            except mailer.MailError as exc:
+                log.warning("Telling %s about the email change failed: %s", to, exc)
+        emailed = f"Told {' and '.join(sent)}." if sent else "Couldn't email them about it."
+    return {"ok": True, "changed": changed, "emailed": emailed, "display_name": user.display_name, "email": user.email}
 
 
 @router.get("/sign-ins")

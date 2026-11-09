@@ -787,6 +787,7 @@ function UserDetail({ u, isMe, update, reload }) {
           </div>
         )}
       </div>
+      {me.is_super_admin && <Identity u={u} reload={reload} />}
       {d.data && <AiUse u={u} ai={d.data.ai} update={update} />}
       {!isMe && u.is_super_admin && !me.is_super_admin && (
         <p className="muted small">This is a super admin: only another super admin can change their account.</p>
@@ -1017,6 +1018,60 @@ function AiUse({ u, ai, update }) {
         </span>
       </div>
     </div>
+  );
+}
+
+// Super admins fix a user's name (first name and surname) and sign-in email.
+function Identity({ u, reload }) {
+  const [name, setName] = useState(u.display_name);
+  const [email, setEmail] = useState(u.email);
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const changed = name.trim() !== u.display_name || email.trim().toLowerCase() !== u.email;
+  const save = async (e) => {
+    e.preventDefault();
+    const body = {};
+    if (name.trim() !== u.display_name) body.display_name = name;
+    if (email.trim().toLowerCase() !== u.email) {
+      if (!confirm(`Change the sign-in email from ${u.email} to ${email.trim().toLowerCase()}? They sign in with the new one from now on.`))
+        return;
+      body.email = email.trim();
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api(`/api/admin/users/${u.id}/identity`, { method: "PATCH", body });
+      setName(r.display_name);
+      setEmail(r.email);
+      setMsg({ ok: `Saved.${r.emailed ? ` ${r.emailed}` : ""}` });
+      reload();
+    } catch (err) {
+      setMsg({ error: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="identity" onSubmit={save}>
+      <h4>Name and email</h4>
+      <div className="row wrap tight">
+        <label className="inline">
+          Name and surname <input value={name} maxLength={100} required onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="inline">
+          Sign-in email <input type="email" value={email} required onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <button className="btn" disabled={!changed || busy}>
+          {busy ? "Saving…" : "Save"}
+        </button>
+      </div>
+      <p className="muted small">
+        Super admins only. A new email is used to sign in from now on (the password stays); the old and the new
+        address are both told. It's logged under Sign-ins.
+      </p>
+      {msg?.ok && <div className="ok small">{msg.ok}</div>}
+      {msg?.error && <div className="error small">{msg.error}</div>}
+    </form>
   );
 }
 
