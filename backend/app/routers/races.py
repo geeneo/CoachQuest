@@ -1,5 +1,6 @@
 """Races / events per athlete. The athlete edits; coaches with the plans scope can read."""
 
+import logging
 import re
 from datetime import date, datetime, time, timedelta
 
@@ -12,12 +13,13 @@ from sqlalchemy.orm import Session as DbSession
 
 from .. import localtime, pacing, race_stages, segments
 from ..activity_types import category
-from ..db import Plan, Race, Segment, User, get_db
+from ..db import Connection, Plan, Race, Segment, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
 from ..queries import activities_since
 from ..race_estimate import estimate, format_time, parse_time
 
 router = APIRouter(prefix="/api", tags=["races"])
+log = logging.getLogger("coachquest.races")
 
 DISCIPLINES = (
     "Road",
@@ -286,13 +288,43 @@ async def _pacing(db: DbSession, race: Race, user: User, group: str | None, stop
         raise HTTPException(status_code=422, detail="Pick the race's route first (Races page → Route)")
     try:
         points = pacing.route_points(await _line_for_favourite(db, race.user_id, seg))
-        heights = await pacing.elevations(points)
-        return points, pacing.plan(points, heights, race, user, group, stops)
+        heights, source = await _heights(db, race, seg, points)
+        p = pacing.plan(points, heights, race, user, group, stops)
     except pacing.PacingError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+    p["heights_from"] = source
+    if source == "spread":
+        p["notes"].append(
+            f"no heights along the route could be had, so the race's {round(race.elevation_m or 0)} m of climbing "
+            "is spread evenly: the climb powers are rough"
+        )
+    return points, p
 
 
-# Riding alone, in a team or in a bunch: the race's own setting unless the page asks for another.
+async def _heights(db: DbSession, race: Race, seg: Segment, points: list) -> tuple[list[float], str]:
+    """Heights along the route: the route's own from Strava (it keeps them with the route, or the ride),
+    else Open-Meteo's elevation service, else the race's climbing spread evenly."""
+    from ..providers import strava
+
+    conn = db.scalar(
+        select(Connection).where(
+            Connection.user_id == race.user_id, Connection.provider == "strava", Connection.status == "active"
+        )
+    )
+    if conn is not None:
+        try:
+            stream = await strava.line_with_heights(db, conn, seg.kind, seg.strava_id)
+            if stream:
+                return pacing.from_streams(points, stream), "strava"
+        except Exception as exc:  # not found, rate limit, token, network: try the next source
+            log.warning("Strava heights for route %s failed: %r", seg.id, exc)
+    try:
+        return await pacing.elevations(points), "open-meteo"
+    except pacing.PacingError:
+        pass
+    return pacing.evenly(points, race.elevation_m or seg.elevation_m or 0), "spread"
+
+
 PacingGroup = Query(default=None, pattern="^(alone|team|bunch)$")
 PacingStops = Query(default=0, ge=0, le=600)
 

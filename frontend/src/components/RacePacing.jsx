@@ -133,7 +133,11 @@ export default function RacePacing({ race }) {
               </div>
             </>
           )}
-          <p className="muted small">Assumes {p.notes.join("; ")}.</p>
+          <p className="muted small">
+            Heights along the route:{" "}
+            {{ strava: "from your Strava route", "open-meteo": "from Open-Meteo's elevation map", spread: "not available, so the race's climbing is spread evenly (rough)" }[p.heights_from] || "–"}
+            . Assumes {p.notes.join("; ")}.
+          </p>
           <h3>On your Garmin Edge</h3>
           <div className="row tight wrap">
             <button className="btn primary" onClick={() => get("fit")}>

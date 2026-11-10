@@ -412,6 +412,21 @@ async def route(db: DbSession, conn: Connection, route_id: int) -> dict:
     return _route_out(await _get(db, conn, f"/routes/{route_id}"))
 
 
+async def line_with_heights(db: DbSession, conn: Connection, kind: str, strava_id: int) -> list[tuple]:
+    """A route's (or a ride's) points with their height: [(lat, lng, metres)], from Strava's streams."""
+    path = f"/routes/{strava_id}/streams" if kind == "route" else f"/activities/{strava_id}/streams"
+    params = None if kind == "route" else {"keys": "latlng,altitude", "key_by_type": "true"}
+    streams = await _get(db, conn, path, params)
+    if isinstance(streams, dict):  # activities, keyed by type: {"latlng": {"data": [...]}, ...}
+        by_type = {k: (v or {}).get("data") or [] for k, v in streams.items() if isinstance(v, dict)}
+    else:  # routes: [{"type": "latlng", "data": [...]}, ...]
+        by_type = {x.get("type"): x.get("data") or [] for x in streams or [] if isinstance(x, dict)}
+    points, heights = by_type.get("latlng") or [], by_type.get("altitude") or []
+    if not points or len(points) != len(heights):
+        return []
+    return [(p[0], p[1], h) for p, h in zip(points, heights, strict=True) if isinstance(p, list) and len(p) == 2]
+
+
 async def activity(db: DbSession, conn: Connection, activity_id: int) -> dict:
     """One of the athlete's own rides, to save as a route (when it isn't imported yet)."""
     a = await _get(db, conn, f"/activities/{activity_id}")

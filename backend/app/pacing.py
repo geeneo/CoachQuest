@@ -18,6 +18,7 @@ athlete's weight and FTP, worked out in code:
 Rules of thumb, not a prescription: wind, the bunch and the day decide the rest.
 """
 
+import asyncio
 import io
 import logging
 import math
@@ -25,12 +26,13 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from . import geo
+from . import geo, runtime
 from .race_estimate import BIKES, DEFAULT_WEIGHT, DRIVETRAIN, RHO, G, format_time
 
 log = logging.getLogger("coachquest.pacing")
 
 ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
+PAID_ELEVATION_URL = "https://customer-api.open-meteo.com/v1/elevation"  # with the weather's API key
 SPACING_M = 200
 MAX_POINTS = 2000  # 400 km at 200 m
 CHECKPOINT_KM = 25
@@ -55,25 +57,70 @@ class PacingError(Exception):
 
 
 async def elevations(points: list[geo.Point]) -> list[float]:
-    """Height (m) of each point, 100 per request (cached per route)."""
+    """Height (m) of each point from Open-Meteo, 100 per request, with a short wait and a retry when it's
+    busy (cached per route). PacingError with Open-Meteo's own reason when it still says no."""
     key = geo.encode(points)
     if key in _elevations:
         return _elevations[key]
+    api_key = runtime.get("open_meteo_key")
+    url = PAID_ELEVATION_URL if api_key else ELEVATION_URL
     out: list[float] = []
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         for i in range(0, len(points), 100):
             chunk = points[i : i + 100]
             params = {
                 "latitude": ",".join(f"{p[0]:.5f}" for p in chunk),
                 "longitude": ",".join(f"{p[1]:.5f}" for p in chunk),
+                **({"apikey": api_key} if api_key else {}),
             }
-            try:
-                r = await client.get(ELEVATION_URL, params=params)
-                r.raise_for_status()
-                out += [float(h) for h in r.json()["elevation"]]
-            except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
-                raise PacingError("The elevation service didn't answer; try again in a minute") from exc
+            for attempt in range(3):
+                try:
+                    r = await client.get(url, params=params)
+                    if r.status_code == 429 or r.status_code >= 500:
+                        raise httpx.HTTPStatusError(f"{r.status_code}", request=r.request, response=r)
+                    r.raise_for_status()
+                    heights = r.json()["elevation"]
+                    if len(heights) != len(chunk):
+                        raise ValueError(f"{len(heights)} heights for {len(chunk)} points")
+                    out += [float(h) for h in heights]
+                    break
+                except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+                    body = getattr(getattr(exc, "response", None), "text", "")[:200]
+                    if attempt < 2 and not (isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 429):
+                        await asyncio.sleep(2 * (attempt + 1))
+                        continue
+                    log.warning("Open-Meteo elevation failed (%s points): %r %s", len(points), exc, body)
+                    raise PacingError(f"Open-Meteo's elevation service said no ({type(exc).__name__})") from exc
     _elevations[key] = out
+    return out
+
+
+def evenly(points: list[geo.Point], climbing_m: float) -> list[float]:
+    """Without heights along the route: the race's climbing spread over it as a steady rise and fall (the
+    climbs then cost the same power everywhere; better than nothing, and the plan says so)."""
+    n = len(points)
+    if n < 2 or not climbing_m:
+        return [0.0] * n
+    # Up and down in waves of ~10 km, adding up to the race's total climbing.
+    total_m = geo.length_m(points)
+    waves = max(1, round(total_m / 10_000))
+    amp = climbing_m / (2 * waves)
+    return [amp * (1 - math.cos(2 * math.pi * waves * i / (n - 1))) for i in range(n)]
+
+
+def from_streams(points: list[geo.Point], stream: list[tuple]) -> list[float]:
+    """Heights for our points from Strava's (lat, lng, height) stream: the nearest stream point, searched
+    forwards along the route."""
+    out, j = [], 0
+    flat_stream = geo.flat([(p[0], p[1]) for p in stream])
+    for x, y in geo.flat(points):
+        best, best_d = j, float("inf")
+        for k in range(j, min(len(stream), j + 400)):
+            d = (flat_stream[k][0] - x) ** 2 + (flat_stream[k][1] - y) ** 2
+            if d < best_d:
+                best, best_d = k, d
+        j = best
+        out.append(float(stream[best][2]))
     return out
 
 

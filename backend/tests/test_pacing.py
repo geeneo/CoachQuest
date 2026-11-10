@@ -119,3 +119,42 @@ def test_riding_setting(make_user, monkeypatch):
     assert p.get(f"/api/races/{race['id']}/pacing").json()["group"] == "alone"  # the race's own setting
     assert p.get(f"/api/races/{race['id']}/pacing?group=bunch").json()["group"] == "bunch"  # the page's choice
     assert p.patch(f"/api/races/{race['id']}", json={"riding": "peloton"}).status_code == 422
+
+
+def test_heights_from_the_route_first(make_user, monkeypatch):
+    from app.db import Connection
+    from app.providers import strava
+
+    async def no_meteo(points):
+        raise pacing.PacingError("Open-Meteo's elevation service said no (ConnectError)")
+
+    stream = [(lat, lng, h) for (lat, lng), h in zip(LINE, _hill(LINE), strict=True)]
+    asked = []
+
+    async def fake_streams(db, conn, kind, strava_id):
+        asked.append((kind, strava_id))
+        return stream
+
+    monkeypatch.setattr(pacing, "elevations", no_meteo)
+    monkeypatch.setattr(strava, "line_with_heights", fake_streams)
+    p = make_user("a@example.com")
+    uid = p.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        seg = Segment(athlete_id=uid, strava_id=77, kind="route", name="DC", polyline=geo.encode(LINE))
+        db.add(seg)
+        db.commit()
+        sid = seg.id
+    race = p.post(
+        "/api/races",
+        json={"code": "dc", "name": "DC", "target_time": "7:00", "segment_id": sid, "elevation_m": 2400},
+    ).json()
+    url = f"/api/races/{race['id']}/pacing"
+    # No Strava linked: Open-Meteo says no, so the race's climbing is spread (and the plan says so).
+    plan = p.get(url).json()
+    assert plan["heights_from"] == "spread" and "2400 m of climbing" in plan["notes"][-1]
+    with SessionLocal() as db:
+        db.add(Connection(user_id=uid, provider="strava", token_enc="", status="active"))
+        db.commit()
+    plan = p.get(url).json()  # the route's own heights from Strava
+    assert plan["heights_from"] == "strava" and asked == [("route", 77)] and plan["climbs"]
+    assert 200 <= plan["climbing_m"] <= 300  # the route's own 240 m climb, not the 2400 m spread
