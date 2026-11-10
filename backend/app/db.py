@@ -298,6 +298,9 @@ class Race(Base):
     distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
     elevation_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     discipline: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # How it's ridden: "solo" (on your own, or a time trial), "team" (a team sharing the work, e.g. the
+    # DC) or "bunch" (a mass start, sitting in). Pacing and the target-time estimate use it.
+    riding: Mapped[str | None] = mapped_column(String(10), nullable=True)
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     start_time: Mapped[str | None] = mapped_column(String(5), nullable=True)  # "06:30"
     target_ctl: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -839,7 +842,13 @@ _ADDED_COLUMNS = {
         "ai_monthly_limit": "INTEGER",
         "time_format": "VARCHAR(4)",
     },
-    "races": {"target_seconds": "INTEGER", "ctl_advice": "JSON", "stages": "JSON", "segment_id": "INTEGER"},
+    "races": {
+        "target_seconds": "INTEGER",
+        "ctl_advice": "JSON",
+        "stages": "JSON",
+        "segment_id": "INTEGER",
+        "riding": "VARCHAR(10)",
+    },
     "platform_workouts": {"collection": "VARCHAR(160) NOT NULL DEFAULT ''"},
     "grants": {"role": "VARCHAR(10) NOT NULL DEFAULT 'coach'"},
     "segments": {

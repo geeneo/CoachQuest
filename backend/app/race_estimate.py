@@ -17,6 +17,14 @@ BIKES = {
     "Mountain bike": (12, 0.012, 0.45, 1.12),
 }
 RUNS = ("Run", "Trail run", "Ultra")
+# How the race is ridden (Races page): the share of the drag of riding alone.
+DRAG_SHARE = {"solo": 1.0, "team": 0.75, "bunch": 0.65}
+RIDING_NOTE = {
+    None: "riding alone (set Riding on the race: in a team or a bunch it takes roughly 25-35% less)",
+    "solo": "riding alone",
+    "team": "in a team that shares the work (about 25% less drag than alone)",
+    "bunch": "sitting in a bunch (about 35% less drag than alone)",
+}
 DEFAULT_WEIGHT = 75
 
 
@@ -50,6 +58,8 @@ def estimate(race: Race, athlete: User) -> dict | None:
     out: dict = {"hours": round(hours, 2), "avg_speed_kmh": round(km / hours, 1)}
     if race.discipline in BIKES:
         bike, crr, cda, vi = BIKES[race.discipline]
+        riding = getattr(race, "riding", None)
+        cda *= DRAG_SHARE.get(riding, 1.0)
         weight = athlete.weight_kg or DEFAULT_WEIGHT
         mass, dist = weight + bike, km * 1000
         speed = dist / seconds
@@ -63,7 +73,7 @@ def estimate(race: Race, athlete: User) -> dict | None:
             assumptions=[
                 f"{weight:g} kg rider{'' if athlete.weight_kg else ' (no weight in Profile, so a guess)'}"
                 f" + {bike} kg bike",
-                "riding alone: in a bunch on the road it takes roughly 20-30% less",
+                RIDING_NOTE.get(riding, RIDING_NOTE[None]),
                 "the climbing is spread over the whole ride",
             ],
         )

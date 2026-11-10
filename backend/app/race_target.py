@@ -78,6 +78,7 @@ def facts(db: DbSession, race: Race, athlete: User, today: date | None = None) -
         "race": {
             "name": race.name,
             "discipline": race.discipline,
+            "riding": race.riding or "not set",
             "date": race.target_date,
             "distance_km": race.distance_km,
             "elevation_m": race.elevation_m,

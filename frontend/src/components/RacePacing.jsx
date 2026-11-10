@@ -12,7 +12,8 @@ const GROUPS = [
 // The pacing plan on the race's route for its target time, and the course for a Garmin Edge whose
 // Virtual Partner rides it (backend pacing.py).
 export default function RacePacing({ race }) {
-  const [group, setGroup] = useState("team");
+  // The race's own Riding setting (Races page) to start with.
+  const [group, setGroup] = useState({ solo: "alone", team: "team", bunch: "bunch" }[race.riding] || "team");
   const [stops, setStops] = useState(0);
   const query = `group=${group}&stops=${stops}`;
   const res = useApi(`/api/races/${race.id}/pacing?${query}`);

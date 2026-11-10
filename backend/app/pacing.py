@@ -39,6 +39,14 @@ DESCENT_MIN = 0.4
 MAX_DESCENT_KMH = 60
 CLIMB_MIN_GRADE, CLIMB_MIN_M = 0.03, 600  # a climb: at least 600 m at 3% or more
 GROUPS = {"alone": 1.0, "team": 0.75, "bunch": 0.65}  # CdA share: in a rotating team, sitting in a bunch
+RIDING = {"solo": "alone", "team": "team", "bunch": "bunch"}  # the race's setting (Races page) to a group
+
+
+def group_of(race) -> str:
+    """How the race is ridden (Races page), "team" when it isn't set."""
+    return RIDING.get(getattr(race, "riding", None) or "", "team")
+
+
 _elevations: dict[str, list[float]] = {}
 
 

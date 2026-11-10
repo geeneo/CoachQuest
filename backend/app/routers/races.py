@@ -42,6 +42,7 @@ class RaceFields(BaseModel):
     distance_km: float | None = Field(default=None, ge=0, le=10000)
     elevation_m: float | None = Field(default=None, ge=0, le=100000)
     discipline: str | None = None
+    riding: str | None = Field(default=None, pattern="^(solo|team|bunch)$")
     target_date: date | None = None
     start_time: time | None = None
     target_ctl: int | None = Field(default=None, ge=0, le=250)
@@ -87,6 +88,7 @@ def race_out(r: Race, today: date | None = None) -> dict:
         "distance_km": r.distance_km,
         "elevation_m": r.elevation_m,
         "discipline": r.discipline,
+        "riding": r.riding,
         "target_date": r.target_date,
         "start_time": r.start_time,
         "target_ctl": r.target_ctl,
@@ -273,9 +275,10 @@ def delete_race(race_id: int, user: User = Depends(current_user), db: DbSession 
     return {"ok": True}
 
 
-async def _pacing(db: DbSession, race: Race, user: User, group: str, stops: int) -> tuple[list, dict]:
+async def _pacing(db: DbSession, race: Race, user: User, group: str | None, stops: int) -> tuple[list, dict]:
     from .weather import _line_for_favourite  # Strava's line for a route saved without one
 
+    group = group or pacing.group_of(race)
     if not race.target_seconds:
         raise HTTPException(status_code=422, detail="Set a target time for the race first (Races page)")
     seg = db.get(Segment, race.segment_id) if race.segment_id else None
@@ -289,14 +292,15 @@ async def _pacing(db: DbSession, race: Race, user: User, group: str, stops: int)
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
-PacingGroup = Query(default="team", pattern="^(alone|team|bunch)$")
+# Riding alone, in a team or in a bunch: the race's own setting unless the page asks for another.
+PacingGroup = Query(default=None, pattern="^(alone|team|bunch)$")
 PacingStops = Query(default=0, ge=0, le=600)
 
 
 @router.get("/races/{race_id}/pacing")
 async def race_pacing(
     race_id: int,
-    group: str = PacingGroup,
+    group: str | None = PacingGroup,
     stops: int = PacingStops,
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),
@@ -311,7 +315,7 @@ async def race_pacing(
 async def race_pacing_file(
     race_id: int,
     fmt: str,
-    group: str = PacingGroup,
+    group: str | None = PacingGroup,
     stops: int = PacingStops,
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),

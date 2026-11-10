@@ -84,3 +84,38 @@ def test_pacing_endpoints(make_user, monkeypatch):
     assert p.get(f"{url}.pdf").status_code == 404
     other = make_user("b@example.com")
     assert other.get(url).status_code == 404
+
+
+def test_riding_setting(make_user, monkeypatch):
+    from app import race_estimate
+
+    rider = N(weight_kg=74, ftp_watts=213)
+    base = dict(distance_km=202, elevation_m=1100, discipline="Road", target_seconds=7 * 3600)
+    solo = race_estimate.estimate(N(**base, riding="solo"), rider)
+    team = race_estimate.estimate(N(**base, riding="team"), rider)
+    bunch = race_estimate.estimate(N(**base, riding="bunch"), rider)
+    assert solo["avg_power_w"] > team["avg_power_w"] > bunch["avg_power_w"]
+    assert (
+        "team" in team["assumptions"][1] and "set Riding" in race_estimate.estimate(N(**base), rider)["assumptions"][1]
+    )
+    assert pacing.group_of(N(riding="solo")) == "alone" and pacing.group_of(N(riding=None)) == "team"
+
+    async def fake_heights(points):
+        return _hill(points)
+
+    monkeypatch.setattr(pacing, "elevations", fake_heights)
+    p = make_user("a@example.com")
+    uid = p.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        seg = Segment(athlete_id=uid, strava_id=9, kind="route", name="DC", polyline=geo.encode(LINE))
+        db.add(seg)
+        db.commit()
+        sid = seg.id
+    race = p.post(
+        "/api/races",
+        json={"code": "dc", "name": "DC", "target_time": "7:00", "segment_id": sid, "riding": "solo"},
+    ).json()
+    assert race["riding"] == "solo"
+    assert p.get(f"/api/races/{race['id']}/pacing").json()["group"] == "alone"  # the race's own setting
+    assert p.get(f"/api/races/{race['id']}/pacing?group=bunch").json()["group"] == "bunch"  # the page's choice
+    assert p.patch(f"/api/races/{race['id']}", json={"riding": "peloton"}).status_code == 422

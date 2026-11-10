@@ -6,6 +6,13 @@ import { api } from "../lib/api.js";
 import RoutePicker from "../components/RoutePicker.jsx";
 import { duration, shortDate } from "../lib/format.js";
 
+// How a race is ridden: pacing and the target-time estimate use it.
+const RIDING = [
+  ["solo", "Solo"],
+  ["team", "Team (sharing the work)"],
+  ["bunch", "Bunch (mass start)"],
+];
+
 // Click a field, change it, click away: it saves. Empty number fields clear the value.
 const FIELDS = [
   ["name", "Name", "text", "wide-cell"],
@@ -13,6 +20,7 @@ const FIELDS = [
   ["distance_km", "Dist (km)", "number", "num-cell"],
   ["elevation_m", "Elev (m)", "number", "num-cell"],
   ["discipline", "Discipline", "select", ""],
+  ["riding", "Riding", "select", ""],
   ["target_date", "Date / start", "date", "date-cell"], // the start time sits under the date
   ["target_time", "Target time", "text", "short-cell"],
   ["target_ctl", "Target CTL", "number", "num-cell"],
@@ -101,7 +109,14 @@ export default function Races() {
                   {FIELDS.map(([f, label, type, cls]) => (
                     <td key={f} className={cls}>
                       <span className={f === "target_ctl" ? "cell-with-btn" : undefined}>
-                        <Cell race={r} field={f} label={label} type={type} options={disciplines.data} save={save} />
+                        <Cell
+                          race={r}
+                          field={f}
+                          label={label}
+                          type={type}
+                          options={f === "riding" ? RIDING : disciplines.data}
+                          save={save}
+                        />
                         {/* The race's code (used to link activities) under its name, not a column of its own. */}
                         {f === "name" && <span className="race-code muted small">{r.code}</span>}
                         {f === "target_date" && (
@@ -467,9 +482,15 @@ function Cell({ race, field, label, type, options, save }) {
     return (
       <select aria-label={label} value={value} onChange={(e) => save(race, field, e.target.value)}>
         <option value="">— not set</option>
-        {(options || []).map((d) => (
-          <option key={d}>{d}</option>
-        ))}
+        {(options || []).map((d) =>
+          Array.isArray(d) ? (
+            <option key={d[0]} value={d[0]}>
+              {d[1]}
+            </option>
+          ) : (
+            <option key={d}>{d}</option>
+          ),
+        )}
       </select>
     );
   }
@@ -487,7 +508,7 @@ function Cell({ race, field, label, type, options, save }) {
 }
 
 function AddRace({ disciplines, onAdded }) {
-  const empty = { code: "", name: "", short_name: "", distance_km: "", elevation_m: "", discipline: "", target_date: "", start_time: "", target_time: "", target_ctl: "", days: "1" };
+  const empty = { code: "", name: "", short_name: "", distance_km: "", elevation_m: "", discipline: "", riding: "", target_date: "", start_time: "", target_time: "", target_ctl: "", days: "1" };
   const [form, setForm] = useState(empty);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -516,6 +537,14 @@ function AddRace({ disciplines, onAdded }) {
         <input placeholder="Short (e.g. K2C)" value={form.short_name} onChange={set("short_name")} size={8} />
         <input type="number" min={0} placeholder="Dist km" value={form.distance_km} onChange={set("distance_km")} />
         <input type="number" min={0} placeholder="Elev m" value={form.elevation_m} onChange={set("elevation_m")} />
+        <select value={form.riding} onChange={set("riding")} aria-label="Riding">
+          <option value="">Riding: not set</option>
+          {RIDING.map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
         <select value={form.discipline} onChange={set("discipline")}>
           <option value="">— discipline</option>
           {disciplines.map((d) => (
