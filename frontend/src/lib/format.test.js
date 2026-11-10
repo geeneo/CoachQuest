@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { dateTime, duration, formatDate, formLabel, setFormatPrefs, shortDate, timeOfDay } from "./format.js";
+import { dateTime, duration, formatDate, formLabel, loadToday, setFormatPrefs, shortDate, timeOfDay } from "./format.js";
 
 describe("format", () => {
   it("formats durations", () => {
@@ -42,5 +42,22 @@ describe("date format", () => {
     setFormatPrefs({ timezone: "Pacific/Honolulu" });
     expect(formatDate("2026-01-01")).toBe("1 Jan 2026");
     expect(dateTime(null)).toBe("never");
+  });
+});
+
+describe("loadToday", () => {
+  const rows = [
+    { day: "2026-11-09", tss: 90, ctl: 57.2, atl: 60.6, tsb: -1.0 },
+    { day: "2026-11-10", tss: 0, ctl: 55.9, atl: 52.0, tsb: -3.4 },
+  ];
+  it("shows the end of yesterday until something is logged today", () => {
+    expect(loadToday(rows)).toMatchObject({ ctl: 57.2, atl: 60.6, tsb: -3.4, asOf: "yesterday" });
+  });
+  it("shows today once something is logged", () => {
+    const done = [rows[0], { ...rows[1], tss: 70, ctl: 57.5, atl: 62 }];
+    expect(loadToday(done)).toMatchObject({ ctl: 57.5, atl: 62, asOf: "today" });
+  });
+  it("copes with no data", () => {
+    expect(loadToday([])).toBe(null);
   });
 });

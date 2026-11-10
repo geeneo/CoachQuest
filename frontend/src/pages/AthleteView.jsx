@@ -11,7 +11,7 @@ import UpcomingRaces from "../components/UpcomingRaces.jsx";
 import VolumeStats from "../components/VolumeStats.jsx";
 import WellnessPanel, { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
-import { dateTime, formLabel } from "../lib/format.js";
+import { dateTime, formLabel, loadToday } from "../lib/format.js";
 import Segments from "../components/Segments.jsx";
 import TrainingPreferences from "../components/TrainingPreferences.jsx";
 import HealthConditions from "../components/HealthConditions.jsx";
@@ -150,7 +150,8 @@ function Overview({ id, scopes, isMe }) {
   const fitness = useApi(scopes.has("fitness") ? `/api/athletes/${id}/fitness?days=${days}` : null);
   const wellness = useApi(scopes.has("wellness") ? `/api/athletes/${id}/wellness?days=${days}` : null);
   const weight = useApi(scopes.has("wellness") ? `/api/athletes/${id}/weight` : null);
-  const today = fitness.data?.[fitness.data.length - 1];
+  const today = loadToday(fitness.data);
+  const yesterday = today?.asOf === "yesterday" ? "end of yesterday" : null;
   return (
     <>
       {scopes.has("plans") && <UpcomingRaces id={id} isMe={isMe} ctl={today?.ctl} />}
@@ -178,9 +179,9 @@ function Overview({ id, scopes, isMe }) {
         <section className="card">
           <h2>Training load (last {lastPeriod(days)})</h2>
           <div className="stats">
-            <Stat label="Fitness (CTL)" value={today?.ctl} />
-            <Stat label="Fatigue (ATL)" value={today?.atl} />
-            <Stat label="Form (TSB)" value={today?.tsb} />
+            <Stat label="Fitness (CTL)" value={today?.ctl} sub={yesterday} />
+            <Stat label="Fatigue (ATL)" value={today?.atl} sub={yesterday} />
+            <Stat label="Form (TSB)" value={today?.tsb} sub="this morning" />
             <Stat label="Status" value={formLabel(today?.tsb)} />
           </div>
           {fitness.error ? <div className="error">{fitness.error.message}</div> : <FitnessChart data={fitness.data} />}

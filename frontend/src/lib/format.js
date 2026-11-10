@@ -133,3 +133,14 @@ export function monthYear(value) {
   const s = String(value || "");
   return s.length >= 7 ? `${MONTH_SHORT[Number(s.slice(5, 7)) - 1]} ${s.slice(2, 4)}` : s;
 }
+
+// The training load tiles: today's fitness and fatigue once something is logged today; until then the
+// values at the end of yesterday (as Intervals.icu shows them), so they don't drop overnight as if today
+// were already a rest day. Form is the same either way: this morning's, yesterday's fitness − fatigue.
+export function loadToday(rows) {
+  if (!rows?.length) return null;
+  const last = rows[rows.length - 1];
+  if (last.tss || rows.length < 2) return { ...last, asOf: "today" };
+  const prev = rows[rows.length - 2];
+  return { ...last, ctl: prev.ctl, atl: prev.atl, asOf: "yesterday" };
+}
