@@ -419,3 +419,16 @@ def test_walks_and_runs_get_their_own_speed(make_user, fake_weather):
     assert "pace_per_km" not in ride["numbers"]
     assert run["numbers"]["speed_kmh"] == 10.0 and run["numbers"]["distance_km"] == 5.0 and run["pacing"] == []
     assert ride["numbers"]["speed_kmh"] == 24.0 and ride["numbers"]["distance_km"] == 24
+
+
+def test_quick_route_comparison_agrees_with_the_exact_one():
+    import random
+
+    from app import ride_routes
+
+    rnd = random.Random(3)
+    base = [(-33.9 + i * 0.002, 18.4 + (i % 7) * 0.001) for i in range(40)]
+    for shift in (0.0, 0.001, 0.003, 0.004, 0.01):
+        other = [(lat + shift + rnd.uniform(-0.0002, 0.0002), lng) for lat, lng in base]
+        exact = geo.mean_gap_m(base, other) <= ride_routes.GAP_M
+        assert geo.mean_gap_within(geo.flat(base), geo.flat(other), ride_routes.GAP_M) == exact

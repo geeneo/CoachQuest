@@ -84,6 +84,28 @@ def mean_gap_m(a: list[Point], b: list[Point]) -> float:
     return sum(min(distance_m(p, q) for q in b) for p in a) / len(a)
 
 
+M_PER_DEG_LAT = 110_574
+
+
+def flat(points) -> list[tuple[float, float]]:
+    """Points in metres on a flat map (each point's own longitude scale): close enough for routes a few
+    km apart, and much quicker to compare than great-circle distances."""
+    return [(lng * 111_320 * math.cos(math.radians(lat)), lat * M_PER_DEG_LAT) for lat, lng in points]
+
+
+def mean_gap_within(a: list[tuple[float, float]], b: list[tuple[float, float]], limit_m: float) -> bool:
+    """mean_gap_m(a, b) <= limit_m on flat() points, stopping as soon as the answer is no."""
+    if not a or not b:
+        return False
+    budget = limit_m * len(a)
+    total = 0.0
+    for ax, ay in a:
+        total += math.sqrt(min((ax - bx) ** 2 + (ay - by) ** 2 for bx, by in b))
+        if total > budget:
+            return False
+    return True
+
+
 def encode(points: list[Point]) -> str:
     """The reverse of decode (used to store lines and in tests)."""
     out, last = [], (0, 0)

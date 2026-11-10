@@ -1,5 +1,6 @@
 """The weather page: the athlete's routes (rides grouped, and favourites) and the forecast along them."""
 
+import asyncio
 import logging
 from datetime import date, timedelta
 
@@ -52,6 +53,12 @@ def _routes(db: DbSession, athlete_id: int) -> list[dict]:
         _groups[key] = ride_routes.ride_groups(db, athlete_id)
     favs = ride_routes.favourites(db, athlete_id)
     return favs + [{**g, "favourite_id": _saved_as(g, favs)} for g in _groups[key]]
+
+
+async def _routes_in_thread(db: DbSession, athlete_id: int) -> list[dict]:
+    """_routes for the async endpoints: grouping the rides (the first time, and after each new ride) can take
+    a few seconds, and on the event loop it would hold up every other request (the Calendar waited on it)."""
+    return await asyncio.to_thread(_routes, db, athlete_id)
 
 
 def _saved_as(group: dict, favs: list[dict]) -> int | None:
@@ -115,7 +122,7 @@ async def route(
 ):
     """One route: its numbers, its line, and riding it at `start` on each of the next 16 days."""
     a = _athlete(db, user, athlete)
-    r = next((x for x in _routes(db, a.id) if x["key"] == key), None)
+    r = next((x for x in await _routes_in_thread(db, a.id) if x["key"] == key), None)
     if r is None:
         raise HTTPException(status_code=404, detail="Route not found")
     if r["source"] == "favourite" and not r["polyline"]:
@@ -304,7 +311,7 @@ async def _ride_day(
     history = None
     if seg is not None and seg.kind != "segment" and await _line_for_favourite(db, a.id, seg):
         if not groups:
-            groups.append([g for g in _routes(db, a.id) if g["source"] == "rides"])
+            groups.append([g for g in await _routes_in_thread(db, a.id) if g["source"] == "rides"])
         history = ride_info.route_history(groups[0], seg)
     kind = ride_info.mode(d["type"])
     nums = ride_info.numbers(d, seg, history if kind == "ride" else None, speed, ride_start, kind or "ride")

@@ -37,12 +37,18 @@ def _rides(db: DbSession, athlete_id: int) -> list[Activity]:
     return [a for a in rows if is_ride(a) and is_outdoor(a)]
 
 
+@lru_cache(maxsize=8192)
+def _flat(shape: tuple) -> list[tuple[float, float]]:
+    return geo.flat(shape)
+
+
 def _same(a: dict, b: dict) -> bool:
     if abs(a["km"] - b["km"]) > LENGTH_SHARE * max(a["km"], b["km"]):
         return False
     if geo.distance_m(a["shape"][0], b["shape"][0]) > START_M:
         return False
-    return geo.mean_gap_m(a["shape"], b["shape"]) <= GAP_M and geo.mean_gap_m(b["shape"], a["shape"]) <= GAP_M
+    fa, fb = _flat(tuple(a["shape"])), _flat(tuple(b["shape"]))
+    return geo.mean_gap_within(fa, fb, GAP_M) and geo.mean_gap_within(fb, fa, GAP_M)
 
 
 def _strava_url(a: Activity) -> str | None:
