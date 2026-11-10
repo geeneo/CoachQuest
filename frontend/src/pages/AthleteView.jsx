@@ -119,19 +119,21 @@ export default function AthleteView({ self }) {
   );
 }
 
-const PERIODS = [7, 30, 90, 180, 365, 730, 1095, 1825];
+const PERIODS = [7, 30, 42, 90, 180, 365, 730, 1095, 1825];
+// 42 days, fitness's own span (CTL is a 42-day average), unless the viewer picked another period.
+const DEFAULT_PERIOD = 42;
 const periodLabel = (d) => (d >= 365 ? `${Math.round(d / 365)} year${d > 365 ? "s" : ""}` : `${d} days`);
 // "the last 90 days", "the last year"
 const lastPeriod = (d) => (d === 365 ? "year" : periodLabel(d));
 
-// The overview's period, remembered per browser (falls back to 30 days when storage is unavailable).
+// The overview's period, remembered per browser (42 days until one is picked, or when storage is unavailable).
 function usePeriod() {
   const [days, setDays] = useState(() => {
     try {
       const saved = Number(localStorage.getItem("cq.period"));
-      return PERIODS.includes(saved) ? saved : 30;
+      return PERIODS.includes(saved) ? saved : DEFAULT_PERIOD;
     } catch {
-      return 30;
+      return DEFAULT_PERIOD;
     }
   });
   const choose = (d) => {
