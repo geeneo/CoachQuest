@@ -120,35 +120,15 @@ export default function AthleteView({ self }) {
 }
 
 const PERIODS = [7, 30, 42, 90, 180, 365, 730, 1095, 1825];
-// 42 days, fitness's own span (CTL is a 42-day average), unless the viewer picked another period.
+// The Overview always opens on 42 days, fitness's own span (CTL is a 42-day average); another period
+// picked stays only while the page is open.
 const DEFAULT_PERIOD = 42;
 const periodLabel = (d) => (d >= 365 ? `${Math.round(d / 365)} year${d > 365 ? "s" : ""}` : `${d} days`);
 // "the last 90 days", "the last year"
 const lastPeriod = (d) => (d === 365 ? "year" : periodLabel(d));
 
-// The overview's period, remembered per browser (42 days until one is picked, or when storage is unavailable).
-function usePeriod() {
-  const [days, setDays] = useState(() => {
-    try {
-      const saved = Number(localStorage.getItem("cq.period"));
-      return PERIODS.includes(saved) ? saved : DEFAULT_PERIOD;
-    } catch {
-      return DEFAULT_PERIOD;
-    }
-  });
-  const choose = (d) => {
-    setDays(d);
-    try {
-      localStorage.setItem("cq.period", String(d));
-    } catch {
-      // private window or blocked storage: just don't remember
-    }
-  };
-  return [days, choose];
-}
-
 function Overview({ id, scopes, isMe }) {
-  const [days, setDays] = usePeriod();
+  const [days, setDays] = useState(DEFAULT_PERIOD);
   const fitness = useApi(scopes.has("fitness") ? `/api/athletes/${id}/fitness?days=${days}` : null);
   const wellness = useApi(scopes.has("wellness") ? `/api/athletes/${id}/wellness?days=${days}` : null);
   const weight = useApi(scopes.has("wellness") ? `/api/athletes/${id}/weight` : null);
@@ -156,10 +136,9 @@ function Overview({ id, scopes, isMe }) {
   const yesterday = today?.asOf === "yesterday" ? "end of yesterday" : null;
   return (
     <>
-      {scopes.has("plans") && <UpcomingRaces id={id} isMe={isMe} ctl={today?.ctl} />}
       {(scopes.has("activities") || scopes.has("fitness") || scopes.has("wellness")) && (
         <div className="row between period-bar">
-          <span className="muted small">Volume, elevation, training load and wellness for the last {lastPeriod(days)}</span>
+          <span className="muted small">Training load, volume, elevation and wellness for the last {lastPeriod(days)}</span>
           <div className="chips" role="radiogroup" aria-label="Period">
             {PERIODS.map((d) => (
               <button
@@ -176,10 +155,9 @@ function Overview({ id, scopes, isMe }) {
           </div>
         </div>
       )}
-      {scopes.has("activities") && <VolumeStats id={id} days={days} />}
       {scopes.has("fitness") && (
         <section className="card">
-          <h2>Training load (last {lastPeriod(days)})</h2>
+          <h2>Training Load &amp; Fitness Metrics (last {lastPeriod(days)})</h2>
           <div className="stats">
             <Stat label="Fitness (CTL)" value={today?.ctl} sub={yesterday} />
             <Stat label="Fatigue (ATL)" value={today?.atl} sub={yesterday} />
@@ -196,6 +174,8 @@ function Overview({ id, scopes, isMe }) {
           )}
         </section>
       )}
+      {scopes.has("plans") && <UpcomingRaces id={id} isMe={isMe} ctl={today?.ctl} />}
+      {scopes.has("activities") && <VolumeStats id={id} days={days} />}
       {scopes.has("wellness") && (
         <section className="card">
           <h2>Wellness (last {lastPeriod(days)})</h2>
