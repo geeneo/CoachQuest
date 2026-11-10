@@ -2,6 +2,19 @@
 
 ## Next up
 
+- [ ] **Garmin widget with CoachQuest's numbers (asked 10 Nov; after the DC on 21 Nov).** Garmin Connect
+  can't show CTL/ATL/TSB and other apps can't write into it, so a small **Connect IQ** app (Monkey C) on the
+  Edge (830 first) or a watch that fetches them from CoachQuest:
+  - Shows: fitness, fatigue, form (as the Overview tiles: end of yesterday until today has training),
+    today's readiness verdict (GO/EASY/REST) and today's planned session; in race weeks the days to go and
+    race-morning form. A glance/widget, and maybe a data field during a ride (form, or ahead/behind pacing).
+  - Backend: a small read-only endpoint (e.g. `GET /api/device/summary`) with a per-device token the athlete
+    makes and revokes in Profile (no password on the device); Garmin devices fetch over the phone's
+    connection (Connect IQ `makeWebRequest`, HTTPS only).
+  - Garmin side: Connect IQ SDK, a developer account, test on the simulator and the Edge 830, publish in the
+    Connect IQ Store (or side-load for testing). A few days of work.
+  - Until then: the morning note and evening preview by email, and CoachQuest on the phone's home screen.
+
 - [x] **Safety net and faster training load (10 Nov): done.**
   - Deploys need passed GitHub checks (`scripts/ci-status.sh` in `deploy.sh`; GITHUB_TOKEN or GIT_TOKEN for a
     private repo; FORCE=1 / "Deploy anyway" skips it). Admin → Update shows the checks.
