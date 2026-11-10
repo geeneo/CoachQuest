@@ -2,6 +2,19 @@
 
 ## Next up
 
+- [ ] **Duplicate check for TrainingPeaks (asked 10 Nov).** TrainingPeaks doesn't merge the same ride from two
+  sources (Zwift + Garmin, Wahoo, MyWhoosh): both count, doubling that day's TSS and pushing fatigue up (a
+  likely cause of TP's fatigue 83 against 59-61). On the compare page (`load_audit.py`), from the TP
+  Workout Summary export:
+  - Find pairs on the same day that are the same session: same sport, start within 10 min or overlapping
+    half (as `fitness.same_session`), similar duration; or, without start times in the export, same day,
+    type and duration within 10%.
+  - List them: date, both copies (title, duration, TSS, power or HR), the extra TSS they add, and the effect
+    on fitness and fatigue today ("without the 6 duplicates: fatigue 64 instead of 83").
+  - Say what to do: delete one copy in TP's calendar (keep the one with power), and switch off one source
+    (Zwift → Settings → Connections, or Garmin Connect → Connected Apps).
+  - Part of the three-way compare below; could also run on its own as "Check my TrainingPeaks export".
+
 - [ ] **Compare TrainingPeaks, Intervals.icu and CoachQuest side by side (asked 10 Nov).** On 9-10 Nov the
   three disagreed: fitness about the same (TP 61, Intervals 57, CQ ~57) but fatigue far apart (TP 83,
   Intervals 59, CQ ~61). Extend **Overview → Training load → See how it's calculated and compare**
