@@ -2,6 +2,24 @@
 
 ## Next up
 
+- [ ] **Compare TrainingPeaks, Intervals.icu and CoachQuest side by side (asked 10 Nov).** On 9-10 Nov the
+  three disagreed: fitness about the same (TP 61, Intervals 57, CQ ~57) but fatigue far apart (TP 83,
+  Intervals 59, CQ ~61). Extend **Overview → Training load → See how it's calculated and compare**
+  (`load_audit.py`) to a three-way compare:
+  - **Intervals.icu from its API, no file needed**: per activity its Training Load (`icu_training_load`) and
+    the FTP/threshold HR it used, and per day its CTL/ATL from the wellness endpoint (it has `ctl`, `atl`).
+    The athlete's Intervals.icu connection already gives access; activities CQ already imports keep
+    Intervals.icu's load (`tss_method` "intervals_icu").
+  - **TrainingPeaks from its export** (Workout Summary CSV/ZIP, as now): TSS, IF and the threshold behind it.
+  - **Per day**: TSS / load in each, CTL, ATL and form (each app's own form rule: TP and CQ use yesterday's
+    CTL − ATL, Intervals.icu today's), and the first day they part.
+  - **Per activity** (matched by start time): the load in each app and *why* it differs: power vs heart rate
+    vs pace scoring, a different FTP/LTHR that day, missing in one app, a duplicate, an indoor ride with
+    virtual power, strength/walks scored differently.
+  - A short verdict: "TrainingPeaks scores your long rides by heart rate (hrTSS) 30% higher than power" etc.,
+    and what to set to line them up (thresholds, which app's load CQ should follow).
+  - Later: TrainingPeaks' API (partner application) instead of the export.
+
 - [ ] **Garmin widget with CoachQuest's numbers (asked 10 Nov; after the DC on 21 Nov).** Garmin Connect
   can't show CTL/ATL/TSB and other apps can't write into it, so a small **Connect IQ** app (Monkey C) on the
   Edge (830 first) or a watch that fetches them from CoachQuest:
