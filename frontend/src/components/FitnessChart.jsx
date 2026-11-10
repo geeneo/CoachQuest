@@ -15,7 +15,7 @@ export default function FitnessChart({ data }) {
             labelFormatter={(v) => formatDate(v)}
           />
           <Legend />
-          <Area dataKey="tsb" name="Form (TSB)" fill="var(--c3)" stroke="var(--c3)" fillOpacity={0.15} />
+          <Area dataKey="tsb" name="Form (TSB)" fill="var(--form)" stroke="var(--form)" fillOpacity={0.15} />
           <Line dataKey="ctl" name="Fitness (CTL)" stroke="var(--c1)" dot={false} strokeWidth={2} />
           <Line dataKey="atl" name="Fatigue (ATL)" stroke="var(--c2)" dot={false} strokeWidth={1.5} />
         </ComposedChart>
