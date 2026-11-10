@@ -11,7 +11,6 @@ and a TSS column) can be compared day by day, with the first day the two differ.
 
 import csv
 import io
-from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
@@ -22,7 +21,7 @@ from .activity_types import category
 from .db import Activity, User
 from .fitness import ATL_DAYS, CTL_DAYS, RUNS, dedupe, pmc, same_session, threshold_at
 from .localtime import local_date
-from .queries import WARMUP_DAYS
+from .queries import WARMUP_DAYS, daily_load, history_start
 from .sync_options import hidden_sources, primary_source
 
 VERSION = "load-audit 4"
@@ -63,10 +62,10 @@ def audit(db: DbSession, athlete: User, days: int = 180, today: date | None = No
     def counted_as(a: Activity) -> int | None:
         return next((k.id for k in kept if k.id != a.id and same_session(a, k)), None)
 
-    per_day: dict[date, float] = defaultdict(float)
-    for a in kept:
-        per_day[local_date(a.start_time, tz)] += a.tss or 0
-    curve = {p.day: p for p in pmc(dict(per_day), warm, today)}
+    # The same curve as the Fitness chart: the whole history, from the first training day.
+    by_day = daily_load(db, athlete.id)
+    first = history_start(by_day, start)
+    curve = {p.day: p for p in pmc(by_day, first, today)}
 
     activities = []
     for a in rows:
@@ -149,8 +148,9 @@ def audit(db: DbSession, athlete: User, days: int = 180, today: date | None = No
             "primary_source": primary,
             "hidden_sources": sorted(hidden),
             "calculation": (
-                f"CTL = {CTL_DAYS}-day and ATL = {ATL_DAYS}-day exponential averages of daily TSS, from 0 on "
-                f"{warm.isoformat()} ({WARMUP_DAYS} days before the period); TSB = the previous day's CTL - ATL. "
+                f"CTL = {CTL_DAYS}-day and ATL = {ATL_DAYS}-day exponential averages of daily TSS over the whole "
+                f"history, from 0 on the first training day ({first.isoformat()}), as TrainingPeaks does; "
+                "TSB = the previous day's CTL - ATL. "
                 "Days by the athlete's local date; a session imported from more than one source counts once."
             ),
             "version": VERSION,

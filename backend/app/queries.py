@@ -36,7 +36,7 @@ def wellness_since(db: DbSession, athlete_id: int, since: date) -> list[Wellness
     )
 
 
-WARMUP_DAYS = 120  # the PMC starts from 0 this long before the period, so CTL is meaningful
+WARMUP_DAYS = 120  # before 10 Nov 2026 the PMC started from 0 this long before the period (data_export still)
 
 
 # Daily TSS per athlete, worked out once and kept until their data changes (single API process, see
@@ -78,13 +78,22 @@ def daily_load(db: DbSession, athlete_id: int) -> dict[date, float]:
     return by_day
 
 
+def history_start(by_day: dict[date, float], period_start: date) -> date:
+    """Where the PMC starts: the athlete's first day with training, as TrainingPeaks does (from 0 then), so
+    every period shows the same values; the period's first day when there's nothing before it."""
+    first = min((d for d, tss in by_day.items() if tss), default=period_start)
+    return min(first, period_start)
+
+
 def load_curve(db: DbSession, athlete_id: int, days: int, today: date | None = None, with_acts: bool = False):
-    """PMC for the last `days`, warmed up over WARMUP_DAYS extra days. Each activity counts on its
-    local date (the athlete's time zone), as in the calendar, not its UTC date. The activities of the
-    period (with the warm-up) come too when `with_acts`; otherwise an empty list."""
+    """PMC for the last `days`, worked out over the athlete's whole history (from their first training
+    day, as TrainingPeaks does). Each activity counts on its local date (the athlete's time zone), as in
+    the calendar, not its UTC date. The activities of the period with WARMUP_DAYS before it come too when
+    `with_acts` (the AI coach's facts use them); otherwise an empty list."""
     today = today or date.today()
+    by_day = daily_load(db, athlete_id)
+    curve = pmc(by_day, history_start(by_day, today - timedelta(days=days - 1)), today)
     warmup_start = today - timedelta(days=days + WARMUP_DAYS)
-    curve = pmc(daily_load(db, athlete_id), warmup_start, today)
     acts = []
     if with_acts:
         # A day early: a session late on the first local day is stored as the day before in UTC.

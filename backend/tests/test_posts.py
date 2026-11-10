@@ -90,7 +90,7 @@ def test_a_rewritten_guide_is_updated_unless_edited(make_user):
     make_user("admin@example.com")
     with SessionLocal() as db:
         guide = db.query(Post).filter_by(title=posts_seed.LOAD_GUIDE[0]).one()
-        assert guide.body_md == posts_seed.LOAD_GUIDE_V3[2]  # a fresh install has the new text
+        assert guide.body_md == posts_seed.LOAD_GUIDE_V4[2]  # a fresh install has the new text
         # A server that had the first text: it's rewritten once.
         guide.body_md = posts_seed.LOAD_GUIDE[2]
         row = db.get(AppSetting, posts_seed.SEEDED)
@@ -98,7 +98,7 @@ def test_a_rewritten_guide_is_updated_unless_edited(make_user):
         row.value_enc = posts_seed.encrypt_json({"v": keys})
         db.commit()
         posts_seed.seed(db)
-        assert db.get(Post, guide.id).body_md == posts_seed.LOAD_GUIDE_V3[2]
+        assert db.get(Post, guide.id).body_md == posts_seed.LOAD_GUIDE_V4[2]
         # Edited by an admin afterwards: left alone even if seeding ran again.
         db.get(Post, guide.id).body_md = "mine"
         db.commit()

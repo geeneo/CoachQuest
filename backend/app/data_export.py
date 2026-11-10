@@ -27,7 +27,7 @@ import io
 import zipfile
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
 from . import localtime, plan_tracker
@@ -98,7 +98,9 @@ def tables(db: DbSession, since: date | None = None, until: date | None = None) 
                 "races_multi_day": sum(1 for r in races if (r.days or 1) > 1),
             }
         )
-        warm = since - timedelta(days=120)  # load needs its warm-up, as on the Fitness chart
+        # Load from the first training day, as on the Fitness chart (at least 120 days before the period).
+        first = db.scalar(select(func.min(Activity.start_time)).where(Activity.user_id == u.id))
+        warm = min(since - timedelta(days=120), first.date() if first else since)
         rows = db.scalars(
             select(Activity)
             .where(

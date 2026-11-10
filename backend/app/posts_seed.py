@@ -568,6 +568,20 @@ LOAD_GUIDE_V3 = _revised(
     ],
 )
 
+LOAD_GUIDE_V4 = _revised(
+    LOAD_GUIDE_V3,
+    [
+        (
+            "- **History.** CoachQuest starts counting 120 days before the period shown; "
+            "TrainingPeaks from your first\n  workout there. Long histories make small differences in CTL.",
+            "- **History.** Both count from your first workout (CoachQuest since 10 Nov 2026; before, from 120 days\n"
+            "  before the period shown, which left CTL a few points low). If TrainingPeaks has older workouts than\n"
+            "  CoachQuest imported, **Import older data** on Connections brings them in.",
+        )
+    ],
+)
+
+
 WHATS_NEW_2B = _revised(
     WHATS_NEW_2,
     [
@@ -736,7 +750,7 @@ POSTS = [
     {"key": "strength", "kind": "guide", "position": 27, "published": True, "post": STRENGTH_GUIDE},
     {"key": "strength-news", "kind": "news", "position": 0, "published": True, "post": STRENGTH_NEWS},
     {"key": "zwift-intervals", "kind": "guide", "position": 15, "published": True, "post": ZWIFT_GUIDE},
-    {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE_V3},
+    {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE_V4},
     {"key": "whats-new-2", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_2D},
     {"key": "weekday-preferences", "kind": "guide", "position": 12, "published": True, "post": WEEKDAY_GUIDE},
     {"key": "whats-new-3", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_3},
@@ -758,6 +772,7 @@ def _seeded(db: DbSession) -> set[str]:
 REVISIONS = [
     ("training-load-compare@2", LOAD_GUIDE, LOAD_GUIDE_V2),
     ("training-load-compare@3", LOAD_GUIDE_V2, LOAD_GUIDE_V3),
+    ("training-load-compare@4", LOAD_GUIDE_V3, LOAD_GUIDE_V4),
     ("whats-new-2@2", WHATS_NEW_2, WHATS_NEW_2B),
     ("whats-new-2@3", WHATS_NEW_2B, WHATS_NEW_2C),
     ("whats-new-2@4", WHATS_NEW_2C, WHATS_NEW_2D),

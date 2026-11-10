@@ -68,3 +68,26 @@ def test_cache_follows_every_change(make_user, monkeypatch):
         tz = queries.localtime.zone("Pacific/Auckland")
         direct = queries.pmc(queries.daily_tss([(x.start_time, x.tss) for x in acts], tz), warm, date.today())
         assert [d.ctl for d in curve] == [d.ctl for d in direct[-60:]]
+
+
+def test_whole_history_same_in_every_view(make_user):
+    """The PMC starts at the first training day (as TrainingPeaks does), not 120 days before the period:
+    every period shows the same values, and long-ago training still counts a little."""
+    p = make_user("b@example.com")
+    uid = p.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        for i in range(400):  # steady riding for 400 days
+            _ride(db, uid, i, i + 1, 60)
+        db.commit()
+        week = queries.load_curve(db, uid, 7)[0]
+        years = queries.load_curve(db, uid, 1825)[0]
+        assert [d.ctl for d in week] == [d.ctl for d in years[-7:]]
+        assert years[0].day == date.today() - timedelta(days=1824)  # the period as asked, zeros before
+        # Starting from 0 only 120 days back would leave fitness about 5% short of the full history.
+        warm = date.today() - timedelta(days=7 + queries.WARMUP_DAYS)
+        short = queries.pmc(queries.daily_load(db, uid), warm, date.today())
+        assert week[-1].ctl > short[-1].ctl * 1.04
+    audit = p.get("/api/athletes/me/load-audit?days=30")
+    assert audit.status_code == 200, audit.text
+    days = {d["date"]: d["ctl"] for d in audit.json()["days"]}  # the audit's day table is the chart's
+    assert days[date.today().isoformat()] == week[-1].ctl

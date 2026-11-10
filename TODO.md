@@ -52,8 +52,8 @@
   - Error tracking: `error_log.py` groups logged warnings/errors (Admin → Errors, "Mark fixed"), with the
     connections that stopped syncing; a daily email to super admins when something is new or back.
   - Training load: daily TSS cached per athlete until their data changes (`queries.daily_load`); the PMC is
-    unchanged (120-day warm-up). 5-year Overview 256 ms → 7 ms. Later: start the PMC from the athlete's
-    first activity instead of a warm-up, so every view and the audit agree to the decimal.
+    unchanged (120-day warm-up). 5-year Overview 256 ms → 7 ms. Since 10 Nov the PMC starts at the
+    athlete's first training day, as TrainingPeaks does: every view and the audit agree to the decimal.
 
 - [x] **Pacing course export (10 Nov): done.** Races → ⏱ (gauge) on a race with a route and a target time:
   the pacing plan (`pacing.py`: heights from Open-Meteo, more power on climbs, team/bunch/alone, stops),
