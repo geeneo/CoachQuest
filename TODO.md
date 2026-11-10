@@ -2,6 +2,15 @@
 
 ## Next up
 
+- [x] **Safety net and faster training load (10 Nov): done.**
+  - Deploys need passed GitHub checks (`scripts/ci-status.sh` in `deploy.sh`; GITHUB_TOKEN or GIT_TOKEN for a
+    private repo; FORCE=1 / "Deploy anyway" skips it). Admin → Update shows the checks.
+  - Error tracking: `error_log.py` groups logged warnings/errors (Admin → Errors, "Mark fixed"), with the
+    connections that stopped syncing; a daily email to super admins when something is new or back.
+  - Training load: daily TSS cached per athlete until their data changes (`queries.daily_load`); the PMC is
+    unchanged (120-day warm-up). 5-year Overview 256 ms → 7 ms. Later: start the PMC from the athlete's
+    first activity instead of a warm-up, so every view and the audit agree to the decimal.
+
 - [x] **Pacing course export (10 Nov): done.** Races → ⏱ (gauge) on a race with a route and a target time:
   the pacing plan (`pacing.py`: heights from Open-Meteo, more power on climbs, team/bunch/alone, stops),
   checkpoints every 25 km with the time of day, climbs with target power, and a FIT course with a time on

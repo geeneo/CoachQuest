@@ -158,7 +158,7 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
     }
     curve, acts, wellness = [], [], []
     if scopes & {"fitness", "activities"}:
-        curve, acts = load_curve(db, athlete.id, 42, today)
+        curve, acts = load_curve(db, athlete.id, 42, today, with_acts=True)
     if "fitness" in scopes:
         now = curve[-1]
         facts["load"] = {

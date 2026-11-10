@@ -72,6 +72,9 @@ class Proxy:
 
 @pytest.fixture()
 def client():
+    from app import queries
+
+    queries._daily.clear()  # ids start again at 1 in each test's database
     Base.metadata.drop_all(engine)
     with TestClient(app) as c:
         yield c

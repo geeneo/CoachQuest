@@ -228,7 +228,7 @@ def readiness_verdict(
 def progress(db: DbSession, athlete_id: int, today: date | None = None) -> dict:
     """Fitness trend, bests and how fitness is tracking toward the next race. No AI involved."""
     today = today or date.today()
-    curve, acts = load_curve(db, athlete_id, 84, today)
+    curve, acts = load_curve(db, athlete_id, 84, today, with_acts=True)
     ctl_now, ctl_4w, ctl_12w = curve[-1].ctl, curve[-29].ctl, curve[0].ctl
     weekly_ramp = round((ctl_now - ctl_4w) / 4, 1)
     rides = [a for a in acts if is_ride(a)]

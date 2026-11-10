@@ -61,7 +61,7 @@ SCHEMA = {
 
 def facts(db: DbSession, race: Race, athlete: User, today: date | None = None) -> dict:
     today = today or date.today()
-    curve, acts = load_curve(db, athlete.id, 42, today)
+    curve, acts = load_curve(db, athlete.id, 42, today, with_acts=True)
     now = curve[-1]
     weeks_left = max(0, ((race.target_date or today) - today).days / 7)
     longest = db.scalars(

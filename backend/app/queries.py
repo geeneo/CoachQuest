@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
 from . import localtime, profile_sync
@@ -39,16 +39,56 @@ def wellness_since(db: DbSession, athlete_id: int, since: date) -> list[Wellness
 WARMUP_DAYS = 120  # the PMC starts from 0 this long before the period, so CTL is meaningful
 
 
-def load_curve(db: DbSession, athlete_id: int, days: int, today: date | None = None):
+# Daily TSS per athlete, worked out once and kept until their data changes (single API process, see
+# Dockerfile): loading and de-duplicating every activity is the slow part of the PMC; the curve itself
+# is a quick loop. The key is read from the data, so nothing has to remember to clear it.
+_daily: dict[int, tuple[tuple, dict[date, float]]] = {}
+
+
+def _data_key(db: DbSession, athlete_id: int, tz_name: str | None) -> tuple:
+    """Changes whenever anything the daily TSS depends on changes: an activity added, removed, rescored,
+    moved or given another sport; a source hidden or made the main one; the time zone."""
+    row = db.execute(
+        select(
+            func.count(Activity.id),
+            func.max(Activity.id),
+            func.sum(Activity.tss),
+            func.sum(Activity.duration_s),
+            func.max(Activity.start_time),
+            func.min(Activity.start_time),
+            func.sum(func.length(Activity.sport)),
+            func.sum(func.length(Activity.source)),
+        ).where(Activity.user_id == athlete_id)
+    ).one()
+    hidden = tuple(sorted(hidden_sources(db, athlete_id, "activities")))
+    return (*(round(v, 3) if isinstance(v, float) else v for v in row), hidden, primary_source(db, athlete_id), tz_name)
+
+
+def daily_load(db: DbSession, athlete_id: int) -> dict[date, float]:
+    """TSS per local day over the athlete's whole history (de-duplicated, hidden sources left out)."""
+    athlete = db.get(User, athlete_id)
+    tz_name = athlete.timezone if athlete else None
+    key = _data_key(db, athlete_id, tz_name)
+    cached = _daily.get(athlete_id)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    acts = activities_since(db, athlete_id, datetime.min)
+    by_day = daily_tss([(a.start_time, a.tss) for a in acts], localtime.zone(tz_name))
+    _daily[athlete_id] = (key, by_day)
+    return by_day
+
+
+def load_curve(db: DbSession, athlete_id: int, days: int, today: date | None = None, with_acts: bool = False):
     """PMC for the last `days`, warmed up over WARMUP_DAYS extra days. Each activity counts on its
-    local date (the athlete's time zone), as in the calendar, not its UTC date."""
+    local date (the athlete's time zone), as in the calendar, not its UTC date. The activities of the
+    period (with the warm-up) come too when `with_acts`; otherwise an empty list."""
     today = today or date.today()
     warmup_start = today - timedelta(days=days + WARMUP_DAYS)
-    # A day early: a session late on the first local day is stored as the day before in UTC.
-    acts = activities_since(db, athlete_id, datetime.combine(warmup_start - timedelta(days=1), datetime.min.time()))
-    athlete = db.get(User, athlete_id)
-    tz = localtime.zone(athlete.timezone if athlete else None)
-    curve = pmc(daily_tss([(a.start_time, a.tss) for a in acts], tz), warmup_start, today)
+    curve = pmc(daily_load(db, athlete_id), warmup_start, today)
+    acts = []
+    if with_acts:
+        # A day early: a session late on the first local day is stored as the day before in UTC.
+        acts = activities_since(db, athlete_id, datetime.combine(warmup_start - timedelta(days=1), datetime.min.time()))
     return curve[-days:], acts
 
 
