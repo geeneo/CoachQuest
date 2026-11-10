@@ -15,7 +15,11 @@
     upload can be used. Show the pacing plan next to it (time at each checkpoint/water point, power
     per climb) on the race day in the plan.
   - **Team events (DC):** the team rides together, so one shared pace plan (and course) per team.
-  - Question first: which Garmin model, and is it the Edge or a watch on race day?
+  - **Device: Edge 830 (Michael, 10 Nov).** It does courses with **Virtual Partner** (a target speed or
+    time; ahead/behind on the map and data fields) and **ClimbPro** (each climb's length and gradient). As
+    far as we know it also gets **Power Guide** with a recent firmware and a power meter (check on the
+    device: Garmin Connect → Courses → the course → Power Guide). So: a CoachQuest course with the target
+    time sets the Virtual Partner; Power Guide adds power per section. Race: DC, Sat 21 Nov.
 
 - [x] **Weight from occasional weigh-ins (9 Nov): done.** Weight on the Wellness chart (Garmin weigh-ins, two
   years back on the first sync; Intervals.icu; a Profile entry goes on today) as dots, with a trend line
