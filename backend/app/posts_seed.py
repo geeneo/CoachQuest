@@ -655,6 +655,75 @@ tab; you see their change in your Profile.
 """,
 )
 
+WHATS_NEW_3 = (
+    "What's new in CoachQuest: ready for race day",
+    "A taper that plans itself, race days and pacing for your Garmin, notes when you want them, your weight "
+    "over time, and a faster calendar.",
+    """## Taper for your race
+
+In the last **two weeks before a race** the AI coach switches to taper mode:
+
+- **Your morning note** lists every day up to the race from your plan, checks it against taper rules (no
+  strength in the last 10 days, at most 90 minutes a session in race week, less time than a usual week),
+  and works out your **fitness, fatigue and form on race morning**. A race wants form of about +5 to +15.
+- **Go/no-go on any session**: easy or rest when your HRV or resting heart rate is off your own baseline.
+- **AI coach → Taper for <race>**: the changes the rules ask for, your race-morning form with and without
+  them, and one button, **Make these changes**, that puts them in your plan and your calendar. Locked days
+  stay as they are.
+- Outside a taper the morning note sticks to today and doesn't write its own schedule.
+
+## Race day in your plan
+
+- Set a day's type to **Race** and pick **which race** it is: the day is locked, shows the race (distance,
+  climbing, start time) and rides its route.
+- Is the race after your plan ends? A banner offers **Add race day to the plan**.
+- Each race has a **Route** (Races page, or **Routes → Race routes**) and a **Riding** setting: **solo**,
+  **team** (sharing the work, like the DC) or **bunch** (a mass start). The target-time estimate and the
+  pacing use it, so a team or bunch race no longer looks as hard as riding alone.
+- On the **Routes** page you can tag a route **race**, and a 🏁 badge shows which race rides it. Route
+  pickers also offer your Strava routes that aren't saved yet: pick one and it's saved.
+
+## Pacing for your Garmin Edge
+
+**Races → the gauge button** on a race with a route and a target time:
+
+- Average speed and power for your target, **checkpoints every 25 km** with the time of day, and **each
+  climb** with a target power.
+- Heights come from your Strava route. Set how you ride (team, bunch or alone) and your stops.
+- Download the **pacing course (.fit)**: copy it to your Edge (Garmin/NewFiles) and the **Virtual Partner**
+  rides your plan, so you see if you're ahead or behind. Turn on **ClimbPro** for the climbs. Test it on a
+  short ride before race day.
+
+## Notes when you want them
+
+**AI coach → Automatic notes**:
+
+- **Send it at**: your morning note at your own time, in your time zone. It waits for last night's sleep
+  and HRV (up to the time you choose) and syncs your Garmin for them; open Garmin Connect when you wake up.
+  If the sleep comes in later and changes the verdict, you get a short update.
+- **Evening preview by email**: tomorrow's session and a verdict on training load the night before. It
+  doesn't use the AI, so it doesn't count toward your monthly allowance.
+- **Weigh-in reminder**: pick a day; that morning's note reminds you, and the next morning if you missed it.
+
+## Your weight over time
+
+- **Weight on the Wellness chart**: your Garmin weigh-ins (two years back) as dots, with a **trend line**
+  that ignores the day-to-day swings, and a tile with the trend and its change over 30 days.
+- **Profile → Use this**: under a field, what your synced data says (e.g. *Garmin: 73.7 kg, weighed
+  31 Oct*); one click takes it for that field. Saving your Profile for another field no longer marks your
+  weight as typed in.
+
+## And more
+
+- **The Calendar loads much faster**, also right after a sync; ride details fill in a moment later.
+- **Walks and runs** in the Calendar use your walking and running pace (min/km), not your riding speed.
+- **Data health** is a tab on My training, next to Plans.
+- The guide *Weekday preferences: tell the coach what you do on each day* explains picking several sessions
+  a day.
+""",
+)
+
+
 # Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
 POSTS = [
     *(
@@ -670,6 +739,7 @@ POSTS = [
     {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE_V3},
     {"key": "whats-new-2", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_2D},
     {"key": "weekday-preferences", "kind": "guide", "position": 12, "published": True, "post": WEEKDAY_GUIDE},
+    {"key": "whats-new-3", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_3},
 ]
 FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
 SEEDED = "posts_seeded"
