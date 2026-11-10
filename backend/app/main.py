@@ -16,6 +16,7 @@ from . import (
     backfill,
     error_log,
     evening,
+    hr_load,
     inactivity,
     morning,
     plan_approval,
@@ -102,6 +103,8 @@ async def lifespan(app: FastAPI):
         # The morning note at each athlete's own time, once last night's sleep is in (morning.py).
         scheduler.add_job(morning.run, "interval", minutes=5, id="ai-daily")
         scheduler.add_job(evening.run, "interval", minutes=5, id="evening-preview")
+        # Heart-rate zones for sessions without power (training load as TrainingPeaks' hrTSS), a few at a time.
+        scheduler.add_job(hr_load.fill, "interval", minutes=10, id="hr-zones")
         scheduler.add_job(error_log.daily, "cron", hour=4, minute=45, id="problems-email")  # 06:45 in SA
         # Runs daily; each athlete gets their review on the first day of their own week.
         scheduler.add_job(assessments.run_scheduled, "cron", hour=6, minute=50, args=["weekly"], id="ai-weekly")

@@ -2,6 +2,13 @@
 
 ## Next up
 
+- [x] **Heart-rate training load from time in zones (10 Nov): done.** Sessions without power were scored
+  from their average heart rate; now, like TrainingPeaks' hrTSS, from the seconds at each heart rate against
+  LTHR (`hr_load.py`, Activity.hr_histogram). A job every 10 minutes fetches the heart-rate stream of the
+  newest sessions still scored by their average (Strava streams, 15 a run; Garmin activity details, one
+  sign-in per athlete), last 400 days. TP doesn't publish its zone weights: ZONE_IF follows the usual
+  TSS-an-hour per zone; calibrate it with the three-way compare.
+
 - [ ] **Duplicate check for TrainingPeaks (asked 10 Nov).** TrainingPeaks doesn't merge the same ride from two
   sources (Zwift + Garmin, Wahoo, MyWhoosh): both count, doubling that day's TSS and pushing fatigue up (a
   likely cause of TP's fatigue 83 against 59-61). On the compare page (`load_audit.py`), from the TP

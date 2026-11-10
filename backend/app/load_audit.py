@@ -27,7 +27,9 @@ from .sync_options import hidden_sources, primary_source
 VERSION = "load-audit 4"
 METHODS = {
     "power": "Power and FTP",
-    "hr": "Heart rate and LTHR",
+    "hr": "Heart rate and LTHR (average; zones once its heart rate stream is fetched)",
+    "hr zones": "Heart rate: time in zones and LTHR, as TrainingPeaks' hrTSS",
+    "walk hr zones": "Walk or hike: time in heart rate zones, x 0.65",
     "effort": "Strava Relative Effort, used as TSS",
     "duration": "Estimate: 50 TSS an hour",
     "intervals_icu": "Intervals.icu training load",

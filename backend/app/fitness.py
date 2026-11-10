@@ -93,7 +93,10 @@ def score(a, user) -> tuple[float, str]:
     duration = a.duration_s or 0
     start = getattr(a, "start_time", None)
     user = _At(user, start.date() if start else None)
+    zones = _zone_tss(a, user.lthr_bpm)  # time in heart-rate zones, when the stream was fetched (hr_load.py)
     if c in HR_ONLY | LIGHT:
+        if zones is not None:
+            return (round(zones * WALK_FACTOR, 1), "walk hr zones") if c in LIGHT else (zones, "hr zones")
         if not (a.avg_hr and user.lthr_bpm):
             return 0.0, "no heart rate"
         tss, _ = estimate_tss(duration, None, None, a.avg_hr, None, None, user.lthr_bpm)
@@ -104,7 +107,7 @@ def score(a, user) -> tuple[float, str]:
         ftp = user.run_ftp_watts
     else:
         ftp = None  # power on other sports isn't on the cycling scale
-    return estimate_tss(
+    tss, method = estimate_tss(
         duration,
         a.norm_power if ftp else None,
         a.avg_power if ftp else None,
@@ -113,6 +116,15 @@ def score(a, user) -> tuple[float, str]:
         ftp,
         user.lthr_bpm,
     )
+    if method == "hr" and zones is not None:
+        return zones, "hr zones"
+    return tss, method
+
+
+def _zone_tss(a, lthr) -> float | None:
+    from .hr_load import tss  # hr_load imports this module
+
+    return tss(getattr(a, "hr_histogram", None), lthr)
 
 
 def rescore(a, user) -> None:

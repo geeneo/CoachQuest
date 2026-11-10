@@ -212,6 +212,10 @@ class Activity(Base):
     relative_effort: Mapped[float | None] = mapped_column(Float, nullable=True)
     tss: Mapped[float] = mapped_column(Float, default=0)
     tss_method: Mapped[str] = mapped_column(String(20), default="duration")
+    # Seconds at each heart rate ({"142": 315, ...}) from the session's heart-rate stream, for training load
+    # from time in zones when there's no power (hr_load.py), and when fetching it was tried.
+    hr_histogram: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    hr_tried_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     avg_cadence: Mapped[float | None] = mapped_column(Float, nullable=True)
     avg_speed_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     kilojoules: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -787,6 +791,8 @@ _ADDED_COLUMNS = {
         "match": "VARCHAR(10) NOT NULL DEFAULT 'auto'",
     },
     "activities": {
+        "hr_histogram": "JSON",
+        "hr_tried_at": "DATETIME",
         "avg_cadence": "FLOAT",
         "avg_speed_ms": "FLOAT",
         "kilojoules": "FLOAT",
