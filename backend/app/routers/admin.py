@@ -21,6 +21,7 @@ from .. import (
     data_export,
     deploy_requests,
     email_md,
+    error_log,
     mailer,
     news_email,
     platform_catalog,
@@ -34,6 +35,7 @@ from ..db import (
     AiCall,
     AuthEvent,
     Connection,
+    ErrorGroup,
     Grant,
     NewsEmail,
     Plan,
@@ -684,6 +686,29 @@ async def update_identity(
     return {"ok": True, "changed": changed, "emailed": emailed, "display_name": user.display_name, "email": user.email}
 
 
+@router.get("/errors")
+def errors(all: bool = False, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """What the app logged, grouped (error_log.py): open ones first, newest first; `all` adds the fixed ones."""
+    groups = db.scalars(select(ErrorGroup).order_by(ErrorGroup.last_seen.desc()).limit(500)).all()
+    out = [error_log.group_out(g) for g in groups]
+    return {
+        "groups": [g for g in out if all or g["open"]],
+        "open": sum(1 for g in out if g["open"]),
+        "connections": error_log.failed_connections(db),
+    }
+
+
+@router.post("/errors/{group_id}/resolve")
+def resolve_error(group_id: int, admin: User = Depends(admin_user), db: DbSession = Depends(get_db)):
+    """Mark a kind of problem fixed: it leaves the list, and comes back if it happens again."""
+    g = db.get(ErrorGroup, group_id)
+    if g is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    g.resolved_at = utcnow()
+    db.commit()
+    return error_log.group_out(g)
+
+
 @router.get("/sign-ins")
 def sign_ins(
     q: str = "",
@@ -848,6 +873,8 @@ def update_check(admin: User = Depends(admin_user)):
 class DeployIn(BaseModel):
     target: str = "all"
     password: str = Field(min_length=1, max_length=256)
+    # Deploy even when the newest commit's GitHub checks didn't pass (deploy.sh refuses otherwise).
+    force: bool = False
 
 
 @router.post("/update/deploy")
@@ -864,9 +891,11 @@ def update_deploy(body: DeployIn, request: Request, admin: User = Depends(admin_
     if now["pending"] or (now["status"] or {}).get("state") == "running":
         raise HTTPException(status_code=409, detail="An update is already waiting or running")
     try:
-        deploy_requests.request("deploy", admin.email, body.target)
+        deploy_requests.request("deploy", admin.email, body.target, body.force)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    auth_log.admin_action(db, request, "admin_deploy", admin, None, f"{body.target}")
+    auth_log.admin_action(
+        db, request, "admin_deploy", admin, None, f"{body.target}{' (checks skipped)' if body.force else ''}"
+    )
     log.info("Admin %s asked to deploy %s", admin.id, body.target)
     return deploy_requests.state()

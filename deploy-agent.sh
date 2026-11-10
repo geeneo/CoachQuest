@@ -36,6 +36,7 @@ versions() {
     echo "disk=$(git rev-parse --short HEAD)"
     echo "remote=$(git rev-parse --short "$upstream" 2>/dev/null)"
     echo "dirty=$(git status --porcelain --untracked-files=no | wc -l)"
+    echo "ci=$(bash scripts/ci-status.sh "$(git rev-parse "$upstream")" 2>/dev/null)"
     echo "--- commits"
     git log --format='%h%x09%ad%x09%s' --date=short "HEAD..$upstream" 2>/dev/null | head -50
   } > "$DIR/versions.txt.tmp" && chmod 644 "$DIR/versions.txt.tmp" && mv "$DIR/versions.txt.tmp" "$DIR/versions.txt"
@@ -48,6 +49,7 @@ if [[ -f $REQ ]]; then
   kind=$(field kind "$REQ")
   target=$(field target "$REQ")
   by=$(field by "$REQ")
+  force=$(field force "$REQ")
   rm -f "$REQ"
   case $kind in
     check) versions ;;
@@ -56,14 +58,14 @@ if [[ -f $REQ ]]; then
       before=$(git rev-parse --short HEAD)
       started=$(now)
       write "$DIR/status.txt" "state=running" "target=$target" "by=$by" "started=$started" "before=$before"
-      bash deploy.sh "$target" > "$DIR/deploy.log" 2>&1
+      FORCE=$([[ $force == 1 ]] && echo 1 || echo 0) bash deploy.sh "$target" > "$DIR/deploy.log" 2>&1
       rc=$?
       chmod 644 "$DIR/deploy.log"
       after=$(git rev-parse --short HEAD)
       state=$([[ $rc == 0 ]] && echo done || echo failed)
       write "$DIR/status.txt" "state=$state" "target=$target" "by=$by" "started=$started" \
         "finished=$(now)" "before=$before" "after=$after" "exit=$rc"
-      echo "$started $state $target $before→$after by $by" >> "$DIR/history.log"
+      echo "$started $state $target $before→$after by $by$([[ $force == 1 ]] && echo ' (checks skipped)')" >> "$DIR/history.log"
       chmod 644 "$DIR/history.log"
       versions
       ;;

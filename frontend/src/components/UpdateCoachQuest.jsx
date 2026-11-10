@@ -31,6 +31,7 @@ export default function UpdateCoachQuest() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const busy = s && (s.pending || s.status?.state === "running");
+  const [force, setForce] = useState(false);
   useEffect(() => {
     if (!busy && !error) return;
     const t = setInterval(load, 4000); // follow a check or deploy as it happens
@@ -48,8 +49,9 @@ export default function UpdateCoachQuest() {
   const deploy = async (e) => {
     e.preventDefault();
     try {
-      setS(await api("/api/admin/update/deploy", { method: "POST", body: { target, password } }));
+      setS(await api("/api/admin/update/deploy", { method: "POST", body: { target, password, force } }));
       setPassword("");
+      setForce(false);
       setAsking(false);
     } catch (err) {
       setError(err.message);
@@ -87,6 +89,12 @@ export default function UpdateCoachQuest() {
             <span>
               · newest on GitHub ({v.branch}) <code>{v.remote}</code>
             </span>
+            {v.ci && (
+              <span className={v.ci === "success" ? "ok-text" : v.ci === "failure" ? "error-text" : "muted"}>
+                · its GitHub checks:{" "}
+                {{ success: "✓ passed", failure: "✗ failed", pending: "⏳ still running" }[v.ci] || "unknown"}
+              </span>
+            )}
             <span className="muted">· checked {dateTime(v.checked)}</span>
           </>
         )}
@@ -119,6 +127,15 @@ export default function UpdateCoachQuest() {
       ) : (
         v && <p className="small ok-text">✓ Up to date with GitHub.</p>
       )}
+      {v?.ci && v.ci !== "success" && behind > 0 && (
+        <p className="small warn-text">
+          {v.ci === "failure"
+            ? "The newest commit's checks failed: the update stops before it changes anything, unless you deploy anyway."
+            : v.ci === "pending"
+              ? "The newest commit's checks are still running: wait for them (Check now), then update."
+              : "Couldn't read the checks from GitHub (a private repository needs GITHUB_TOKEN in the server's .env): the update stops unless you deploy anyway."}
+        </p>
+      )}
       {s.pending && <p className="small">⏳ Waiting for the server to pick it up (within a minute)…</p>}
       {st && (
         <p className={`small ${st.state === "failed" ? "error-text" : st.state === "done" ? "ok-text" : ""}`}>
@@ -149,6 +166,12 @@ export default function UpdateCoachQuest() {
               autoFocus
             />
             <button className="btn primary">Update now</button>
+            {v?.ci !== "success" && (
+              <label className="check small">
+                <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} /> Deploy anyway,
+                without passed checks (an emergency fix)
+              </label>
+            )}
             <button type="button" className="link-btn small" onClick={() => setAsking(false)}>
               Cancel
             </button>

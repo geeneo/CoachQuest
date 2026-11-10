@@ -565,6 +565,26 @@ class CoachChat(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class ErrorGroup(Base):
+    """Errors and warnings the app logged (error_log.py), one row per kind (logger + message template +
+    exception type), counted, for Admin → Errors and the daily problems email."""
+
+    __tablename__ = "error_groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    level: Mapped[str] = mapped_column(String(10))  # ERROR | WARNING
+    logger: Mapped[str] = mapped_column(String(100))
+    message: Mapped[str] = mapped_column(String(1000))  # the latest, formatted
+    traceback: Mapped[str] = mapped_column(Text, default="")
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    # Marked fixed by an admin; it opens again when it happens after that.
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    emailed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class AuthEvent(Base):
     """Sign-in log: sign-ins (and failed attempts), sign-outs, password and admin account events."""
 

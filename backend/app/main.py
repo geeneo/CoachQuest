@@ -14,6 +14,7 @@ from . import (
     assessments,
     auth_log,
     backfill,
+    error_log,
     evening,
     inactivity,
     morning,
@@ -77,6 +78,7 @@ async def sync_all(provider: str) -> None:
 async def lifespan(app: FastAPI):
     check_required()
     init_db()
+    error_log.install()  # warnings and errors to Admin → Errors (after the tables exist)
     with SessionLocal() as db:
         runtime.load(db)
         accounts.promote_super_admins(db)
@@ -100,6 +102,7 @@ async def lifespan(app: FastAPI):
         # The morning note at each athlete's own time, once last night's sleep is in (morning.py).
         scheduler.add_job(morning.run, "interval", minutes=5, id="ai-daily")
         scheduler.add_job(evening.run, "interval", minutes=5, id="evening-preview")
+        scheduler.add_job(error_log.daily, "cron", hour=4, minute=45, id="problems-email")  # 06:45 in SA
         # Runs daily; each athlete gets their review on the first day of their own week.
         scheduler.add_job(assessments.run_scheduled, "cron", hour=6, minute=50, args=["weekly"], id="ai-weekly")
         scheduler.start()

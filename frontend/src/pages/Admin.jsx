@@ -11,6 +11,7 @@ import { AdminSignIns } from "../components/SignInLog.jsx";
 import NewsEmails from "../components/NewsEmails.jsx";
 import DataExport from "../components/DataExport.jsx";
 import UpdateCoachQuest from "../components/UpdateCoachQuest.jsx";
+import AdminErrors from "../components/AdminErrors.jsx";
 import WelcomeAdmin from "../components/WelcomeAdmin.jsx";
 import { Backfill } from "./Connections.jsx";
 
@@ -26,6 +27,7 @@ const ADMIN_TABS = [
   ["ai", "AI usage"],
   ["storage", "Storage"],
   ["sign-ins", "Sign-ins"],
+  ["errors", "Errors"],
   ["email", "Email users", "super"],
   ["data", "Data", "super"],
   ["update", "Update", "super"],
@@ -64,6 +66,7 @@ export default function Admin() {
       {current === "ai" && <AiUsage rev={rev} />}
       {current === "storage" && <Storage rev={rev} />}
       {current === "sign-ins" && <AdminSignIns />}
+      {current === "errors" && <AdminErrors />}
       {current === "update" && <UpdateCoachQuest />}
       {current === "email" && <NewsEmails />}
       {current === "data" && <DataExport />}

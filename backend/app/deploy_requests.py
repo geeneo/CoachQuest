@@ -77,12 +77,14 @@ def state() -> dict:
     }
 
 
-def request(kind: str, by: str, target: str = "all") -> None:
+def request(kind: str, by: str, target: str = "all", force: bool = False) -> None:
     """Leave a request for the agent (written whole, then renamed, so it never reads half a file)."""
     if kind not in ("check", "deploy") or target not in TARGETS:
         raise ValueError("Unknown request")
     d = folder()
     d.mkdir(parents=True, exist_ok=True)
     tmp = d / "request.txt.tmp"
-    tmp.write_text(f"kind={kind}\ntarget={target}\nby={by}\nat={datetime.now(UTC):%Y-%m-%dT%H:%M:%SZ}\n")
+    tmp.write_text(
+        f"kind={kind}\ntarget={target}\nby={by}\nforce={1 if force else 0}\nat={datetime.now(UTC):%Y-%m-%dT%H:%M:%SZ}\n"
+    )
     os.replace(tmp, d / "request.txt")
