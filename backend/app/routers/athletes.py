@@ -422,8 +422,21 @@ def fitness(
 ):
     athlete_id = resolve_athlete_id(athlete, user)
     require_scope(db, user, athlete_id, "fitness")
-    curve, _ = load_curve(db, athlete_id, days)
+    curve, _ = load_curve(db, athlete_id, days, localtime.today(db.get(User, athlete_id)))
     return [{"day": d.day, "tss": d.tss, "ctl": d.ctl, "atl": d.atl, "tsb": d.tsb} for d in curve]
+
+
+@router.get("/athletes/{athlete}/fitness/projection")
+def fitness_projection(athlete: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    """Fitness, fatigue and form ahead if the plan is followed (taper.projection), up to the next race when
+    it's close. Empty without the plans share (it reads the plan)."""
+    from .. import taper
+
+    athlete_id = resolve_athlete_id(athlete, user)
+    require_scope(db, user, athlete_id, "fitness")
+    if "plans" not in allowed_scopes(db, user, athlete_id):
+        return []
+    return taper.projection(db, athlete_id, localtime.today(db.get(User, athlete_id)))
 
 
 @router.get("/athletes/{athlete}/wellness")

@@ -269,3 +269,39 @@ def test_week_volume_cut(make_user):
     t = p2.get("/api/athletes/me/coach/taper").json()
     total = sum(c["after"]["minutes"] for c in t["changes"])
     assert len(t["changes"]) == 2 and total <= 130 and all(c["after"]["minutes"] >= 30 for c in t["changes"])
+
+
+def test_projection_to_the_race(make_user):
+    p = make_user("p@example.com")
+    aid = p.get("/api/auth/me").json()["id"]
+    today = date.today()
+    with SessionLocal() as db:
+        for i in range(1, 60):
+            db.add(
+                Activity(
+                    user_id=aid,
+                    source="strava",
+                    external_id=f"p{i}",
+                    name="Ride",
+                    sport="Ride",
+                    start_time=datetime.combine(today - timedelta(days=i), datetime.min.time()) + timedelta(hours=7),
+                    duration_s=5400,
+                    distance_m=45000,
+                    elevation_m=300,
+                    tss=80,
+                )
+            )
+        db.add(Race(user_id=aid, code="dc", name="Double Century", target_date=today + timedelta(days=11)))
+        db.commit()
+    _plan(aid, today, {1: ("Road", 90), 3: ("Road", 60), 11: ("Race", 480)})
+    rows = p.get("/api/athletes/me/fitness/projection").json()
+    assert rows[0]["day"] == today.isoformat() and rows[-1]["day"] == (today + timedelta(days=11)).isoformat()
+    assert rows[-1]["race"] == "Double Century" and rows[1]["planned_tss"] and rows[2]["planned_tss"] is None
+    # A taper: fatigue falls faster than fitness, so form climbs towards race day.
+    assert rows[-1]["tsb"] > rows[0]["tsb"] and rows[-2]["atl"] < rows[0]["atl"]  # race morning; the eve
+    # The chart's history ends where the projection starts from.
+    hist = p.get("/api/athletes/me/fitness?days=7").json()
+    assert hist[-1]["day"] == today.isoformat() and rows[0]["tsb"] == hist[-1]["tsb"]
+    # No race close: two weeks ahead.
+    other = make_user("q@example.com")
+    assert len(other.get("/api/athletes/me/fitness/projection").json()) == 15

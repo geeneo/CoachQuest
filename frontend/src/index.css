@@ -1992,6 +1992,21 @@ ul.segments li {
   white-space: nowrap;
   text-decoration: none;
 }
+.chart-toggles {
+  margin: 6px 0 4px;
+  justify-content: center;
+}
+.chart-toggles .chip:not(.on) {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
 .taper-changes {
   margin: 8px 0;
   padding-left: 1.2rem;

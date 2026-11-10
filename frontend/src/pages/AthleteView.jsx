@@ -130,6 +130,8 @@ const lastPeriod = (d) => (d === 365 ? "year" : periodLabel(d));
 function Overview({ id, scopes, isMe }) {
   const [days, setDays] = useState(DEFAULT_PERIOD);
   const fitness = useApi(scopes.has("fitness") ? `/api/athletes/${id}/fitness?days=${days}` : null);
+  // Where fitness goes if the plan is followed (TrainingPeaks' projection), up to the next race when close.
+  const ahead = useApi(scopes.has("fitness") && scopes.has("plans") ? `/api/athletes/${id}/fitness/projection` : null);
   const wellness = useApi(scopes.has("wellness") ? `/api/athletes/${id}/wellness?days=${days}` : null);
   const weight = useApi(scopes.has("wellness") ? `/api/athletes/${id}/weight` : null);
   const today = loadToday(fitness.data);
@@ -164,7 +166,7 @@ function Overview({ id, scopes, isMe }) {
             <Stat label="Form (TSB)" value={today?.tsb} sub="this morning" />
             <Stat label="Status" value={formLabel(today?.tsb)} />
           </div>
-          {fitness.error ? <div className="error">{fitness.error.message}</div> : <FitnessChart data={fitness.data} />}
+          {fitness.error ? <div className="error">{fitness.error.message}</div> : <FitnessChart data={fitness.data} projection={ahead.data} />}
           {scopes.has("activities") && (
             <p className="small muted">
               Different from TrainingPeaks or another app?{" "}

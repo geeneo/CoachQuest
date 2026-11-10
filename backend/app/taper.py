@@ -326,3 +326,43 @@ def facts(
     if go:
         out["go_no_go"] = go
     return out
+
+
+PROJECT_DAYS = 14  # how far the chart looks ahead without a race coming
+PROJECT_TO_RACE_DAYS = 56  # up to a race this close
+
+
+def projection(db: DbSession, athlete_id: int, today: date) -> list[dict]:
+    """Fitness, fatigue and form from today on if the plan is followed (the planned sessions' TSS), as
+    TrainingPeaks projects its chart: up to the next race when it's within PROJECT_TO_RACE_DAYS, else
+    PROJECT_DAYS. Today counts what's logged, or what's planned when that's more."""
+    race = next((r for r in upcoming(db, athlete_id, today) if r.target_date and r.target_date >= today), None)
+    if race and (race.target_date - today).days <= PROJECT_TO_RACE_DAYS:
+        end = race.target_date
+    else:
+        race, end = None, today + timedelta(days=PROJECT_DAYS)
+    curve, _ = load_curve(db, athlete_id, 2, today)
+    ctl, atl = curve[-2].ctl, curve[-2].atl
+    done_today = curve[-1].tss
+    plan = plan_days(db, athlete_id, today, end)
+    out = []
+    day = today
+    while day <= end:
+        d = plan.get(day.isoformat())
+        planned = plan_tracker.day_tss(d) if d else 0
+        tss = max(done_today, planned) if day == today else planned
+        tsb = ctl - atl
+        ctl += (tss - ctl) / CTL_DAYS
+        atl += (tss - atl) / ATL_DAYS
+        row = {
+            "day": day.isoformat(),
+            "planned_tss": planned or None,
+            "ctl": round(ctl, 1),
+            "atl": round(atl, 1),
+            "tsb": round(tsb, 1),
+        }
+        if race and day == race.target_date:
+            row["race"] = race.name
+        out.append(row)
+        day += timedelta(days=1)
+    return out
