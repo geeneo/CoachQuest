@@ -17,6 +17,7 @@ import TrainingPreferences from "../components/TrainingPreferences.jsx";
 import HealthConditions from "../components/HealthConditions.jsx";
 import { ReadOnly } from "../lib/readOnly.js";
 import PlansPanel from "./PlansPanel.jsx";
+import { DataHealth } from "./Diagnostics.jsx";
 import AthleteThresholds from "../components/AthleteThresholds.jsx";
 
 const TABS = [
@@ -25,6 +26,7 @@ const TABS = [
   { id: "calendar", label: "Calendar", needs: ["plans"] },
   { id: "coach", label: "AI coach", needs: ["plans"] },
   { id: "plans", label: "Plans", needs: ["plans"] },
+  { id: "health", label: "Data health", needs: ["activities"] },
 ];
 
 export default function AthleteView({ self }) {
@@ -112,6 +114,7 @@ export default function AthleteView({ self }) {
           <PlansPanel id={id} athlete={s} />
         </>
       )}
+      {current === "health" && <DataHealth athleteId={id} />}
     </ReadOnly.Provider>
   );
 }

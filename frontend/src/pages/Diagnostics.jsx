@@ -13,10 +13,9 @@ const HEADLINE = {
 
 // Data health (backend diagnostics.py): connections, activities, the profile values training load
 // needs, wellness, and the plan's workout delivery, each with what to do. Read only.
+// The page (Admin → Users → Data health, or a link): with a way to the athlete's whole view.
 export default function Diagnostics() {
   const { athleteId } = useParams();
-  const res = useApi(`/api/athletes/${athleteId}/diagnostics`);
-  const d = res.data;
   return (
     <>
       <div className="page-head">
@@ -28,6 +27,17 @@ export default function Diagnostics() {
           </p>
         </div>
       </div>
+      <DataHealth athleteId={athleteId} page />
+    </>
+  );
+}
+
+// Also the athlete view's "Data health" tab (AthleteView.jsx).
+export function DataHealth({ athleteId, page = false }) {
+  const res = useApi(`/api/athletes/${athleteId}/diagnostics`);
+  const d = res.data;
+  return (
+    <>
       <div className="row tight wrap">
         <button type="button" className="btn small" onClick={res.reload} disabled={res.loading}>
           <RefreshCw size={14} className={res.loading ? "spin" : ""} /> Check again
@@ -38,6 +48,11 @@ export default function Diagnostics() {
         <Link className="btn small" to={`/load-audit/${athleteId}`}>
           Training load audit →
         </Link>
+        {page && (
+          <Link className="btn small" to={athleteId === "me" ? "/" : `/athletes/${athleteId}`}>
+            {athleteId === "me" ? "My training →" : `${d?.athlete?.name || "Athlete"}: overview, activities, plans →`}
+          </Link>
+        )}
       </div>
       {res.error && <div className="error">{res.error.message}</div>}
       {!d && !res.error && <p className="muted">Checking…</p>}
