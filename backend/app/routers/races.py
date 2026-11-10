@@ -3,13 +3,14 @@
 import re
 from datetime import date, datetime, time, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
-from .. import localtime, race_stages, segments
+from .. import localtime, pacing, race_stages, segments
 from ..activity_types import category
 from ..db import Plan, Race, Segment, User, get_db
 from ..deps import current_user, require_scope, resolve_athlete_id
@@ -270,3 +271,59 @@ def delete_race(race_id: int, user: User = Depends(current_user), db: DbSession 
     db.delete(race)
     db.commit()
     return {"ok": True}
+
+
+async def _pacing(db: DbSession, race: Race, user: User, group: str, stops: int) -> tuple[list, dict]:
+    from .weather import _line_for_favourite  # Strava's line for a route saved without one
+
+    if not race.target_seconds:
+        raise HTTPException(status_code=422, detail="Set a target time for the race first (Races page)")
+    seg = db.get(Segment, race.segment_id) if race.segment_id else None
+    if seg is None or seg.kind == "segment":
+        raise HTTPException(status_code=422, detail="Pick the race's route first (Races page → Route)")
+    try:
+        points = pacing.route_points(await _line_for_favourite(db, race.user_id, seg))
+        heights = await pacing.elevations(points)
+        return points, pacing.plan(points, heights, race, user, group, stops)
+    except pacing.PacingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+PacingGroup = Query(default="team", pattern="^(alone|team|bunch)$")
+PacingStops = Query(default=0, ge=0, le=600)
+
+
+@router.get("/races/{race_id}/pacing")
+async def race_pacing(
+    race_id: int,
+    group: str = PacingGroup,
+    stops: int = PacingStops,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """The pacing plan on the race's route for its target time (pacing.py)."""
+    race = _own(db, race_id, user)
+    _, p = await _pacing(db, race, user, group, stops)
+    return pacing.public(p)
+
+
+@router.get("/races/{race_id}/pacing.{fmt}")
+async def race_pacing_file(
+    race_id: int,
+    fmt: str,
+    group: str = PacingGroup,
+    stops: int = PacingStops,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """The pacing course for a Garmin Edge (FIT: the Virtual Partner rides the plan) or as GPX."""
+    if fmt not in ("fit", "gpx"):
+        raise HTTPException(status_code=404, detail="Not found")
+    race = _own(db, race_id, user)
+    points, p = await _pacing(db, race, user, group, stops)
+    name = race.short_name or race.code.upper()
+    filename = f"{race.code}-pacing.{fmt}"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if fmt == "fit":
+        return Response(pacing.course_fit(points, p, name), media_type="application/vnd.ant.fit", headers=headers)
+    return Response(pacing.course_gpx(points, p, race.name), media_type="application/gpx+xml", headers=headers)

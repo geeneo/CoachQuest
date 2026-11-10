@@ -1,4 +1,5 @@
-import { CalendarDays, Sparkles, Trash2, X } from "lucide-react";
+import { CalendarDays, Gauge, Sparkles, Trash2, X } from "lucide-react";
+import RacePacing from "../components/RacePacing.jsx";
 import { Fragment, useEffect, useState } from "react";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
@@ -29,6 +30,11 @@ export default function Races() {
   const [error, setError] = useState(null);
   const [asking, setAsking] = useState(null);
   const [openStages, setOpenStages] = useState(null); // race id whose days are shown
+  const [openPacing, setOpenPacing] = useState(null); // race id whose pacing plan is shown
+  const pacingOf = races.data?.find((r) => r.id === openPacing);
+  useEffect(() => {
+    if (openPacing) document.getElementById("race-pacing")?.scrollIntoView({ behavior: "smooth" });
+  }, [openPacing]);
   const favourites = useApi("/api/athletes/me/segments");
   const stagesOf = races.data?.find((r) => r.id === openStages);
   useEffect(() => {
@@ -135,6 +141,21 @@ export default function Races() {
                     />
                   </td>
                   <td className="row tight">
+                    {r.days_to_go >= 0 && (
+                      <button
+                        className={`icon-btn ${openPacing === r.id ? "active" : ""}`}
+                        title={
+                          r.segment_id && r.target_time
+                            ? "Pacing plan and a course for your Garmin Edge"
+                            : "Pacing plan: set a target time and a route first"
+                        }
+                        aria-label={`Pacing for ${r.name}`}
+                        disabled={!r.segment_id || !r.target_time}
+                        onClick={() => setOpenPacing(openPacing === r.id ? null : r.id)}
+                      >
+                        <Gauge size={16} />
+                      </button>
+                    )}
                     <button
                       className={`icon-btn ${openStages === r.id || r.stages.length ? "active" : ""}`}
                       title={r.stages.length ? `${r.stages.length} days: show or edit` : "Multi-day event: add its days"}
@@ -171,6 +192,19 @@ export default function Races() {
         {races.data?.length === 0 && <p className="muted">No races yet. Add your first one below.</p>}
         <AddRace disciplines={disciplines.data || []} onAdded={races.reload} />
       </section>
+      {pacingOf && (
+        <section className="card" id="race-pacing">
+          <div className="row between">
+            <h2>
+              <Gauge size={18} /> Pacing for {pacingOf.name}
+            </h2>
+            <button className="icon-btn" aria-label="Close the pacing" onClick={() => setOpenPacing(null)}>
+              <X size={16} />
+            </button>
+          </div>
+          <RacePacing key={pacingOf.id} race={pacingOf} />
+        </section>
+      )}
       {stagesOf && (
         <section className="card" id="race-days">
           <div className="row between">

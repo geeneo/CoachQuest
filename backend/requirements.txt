@@ -10,3 +10,4 @@ garminconnect==0.3.20
 python-dotenv==1.2.4
 email-validator==2.3.0
 tzdata==2025.2
+fit-tool==0.9.17

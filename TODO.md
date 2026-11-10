@@ -2,6 +2,10 @@
 
 ## Next up
 
+- [x] **Pacing course export (10 Nov): done.** Races → ⏱ (gauge) on a race with a route and a target time:
+  the pacing plan (`pacing.py`: heights from Open-Meteo, more power on climbs, team/bunch/alone, stops),
+  checkpoints every 25 km with the time of day, climbs with target power, and a FIT course with a time on
+  every point (Edge Virtual Partner) plus GPX. Later: water points as checkpoints, wind from the forecast.
 - [ ] **Pace partner on the race with Garmin (asked 10 Nov).** Can a Garmin (Edge or watch) show during the race
   whether the athlete is ahead of or behind the pacing plan? First check what Garmin offers, then what
   CoachQuest can prepare:
