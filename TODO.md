@@ -2,6 +2,21 @@
 
 ## Next up
 
+- [ ] **Pace partner on the race with Garmin (asked 10 Nov).** Can a Garmin (Edge or watch) show during the race
+  whether the athlete is ahead of or behind the pacing plan? First check what Garmin offers, then what
+  CoachQuest can prepare:
+  - **Garmin, to check:** a *Course* with a target time or speed gives a **Virtual Partner** on Edge
+    devices (ahead / behind in time and distance). **Power Guide** (newer Edge models) gives a target power
+    for each part of a course. **PacePro** does this for running pace, not cycling. Which models the athlete
+    has decides which of these works.
+  - **CoachQuest could make the course:** from the race's route (Races → Route) and the target finish time,
+    export a FIT/GPX course with the speed per section (slower on climbs, from the climbing and the athlete's
+    own rides on the route) to load in Garmin Connect, or send it straight to Garmin Connect if its course
+    upload can be used. Show the pacing plan next to it (time at each checkpoint/water point, power
+    per climb) on the race day in the plan.
+  - **Team events (DC):** the team rides together, so one shared pace plan (and course) per team.
+  - Question first: which Garmin model, and is it the Edge or a watch on race day?
+
 - [x] **Weight from occasional weigh-ins (9 Nov): done.** Weight on the Wellness chart (Garmin weigh-ins, two
   years back on the first sync; Intervals.icu; a Profile entry goes on today) as dots, with a trend line
   through them (`weight.py`: smoothed, allowing for the gaps between weigh-ins) and a "Weight (trend)" tile
