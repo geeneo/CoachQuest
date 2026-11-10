@@ -738,6 +738,43 @@ In the last **two weeks before a race** the AI coach switches to taper mode:
 )
 
 
+WHATS_NEW_3B_LOAD = """## Training load like TrainingPeaks
+
+- **Training Load & Fitness Metrics** comes first on the Overview, which opens on **42 days**: the span
+  fitness (CTL) is averaged over.
+- **Fitness counts your whole history**, from your first workout, as TrainingPeaks does: every period shows
+  the same values, and fitness is a few points higher than before.
+- **Rides without power are scored from time in heart-rate zones**, as TrainingPeaks' hrTSS: hard efforts
+  count more than an easy hour with the same average. Older rides are filled in over a few hours.
+- **The tiles show the end of yesterday** until you've trained today, as Intervals.icu does, so fitness and
+  fatigue don't drop overnight. Form is this morning's: yesterday's fitness minus fatigue, as TrainingPeaks
+  defines it.
+- **The chart reads like TrainingPeaks' Performance Management Chart**: fitness blue, fatigue red, form
+  **yellow**, and each day's **TSS as a red dot**.
+- **Planned ahead**: dashed lines show where fitness, fatigue and form go if you follow your plan, up to
+  your next race (🏁) with your race-morning form. Planned sessions are hollow dots; a long race counts at
+  an intensity you can actually hold.
+- **Show or hide** fitness, fatigue, form, TSS or the planned lines with the buttons under the chart.
+- The **Glossary** explains all the new terms.
+
+## And more"""
+
+WHATS_NEW_3B = _revised(
+    WHATS_NEW_3,
+    [
+        (
+            "## And more",
+            WHATS_NEW_3B_LOAD,
+        ),
+        (
+            "- Heights come from your Strava route. Set how you ride (team, bunch or alone) and your stops.",
+            "- Heights come from your race route on Strava (Open-Meteo when it can't). Set how you ride (team, "
+            "bunch or alone) and your stops.",
+        ),
+    ],
+)
+
+
 # Every post that ships with CoachQuest, by key. Keys never change; new posts get new keys.
 POSTS = [
     *(
@@ -753,7 +790,7 @@ POSTS = [
     {"key": "training-load-compare", "kind": "guide", "position": 30, "published": True, "post": LOAD_GUIDE_V4},
     {"key": "whats-new-2", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_2D},
     {"key": "weekday-preferences", "kind": "guide", "position": 12, "published": True, "post": WEEKDAY_GUIDE},
-    {"key": "whats-new-3", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_3},
+    {"key": "whats-new-3", "kind": "news", "position": 0, "published": True, "post": WHATS_NEW_3B},
 ]
 FIRST_BATCH = {"strava-garmin", "intervals", "mywhoosh", "calendar", "whats-new-1"}
 SEEDED = "posts_seeded"
@@ -776,6 +813,7 @@ REVISIONS = [
     ("whats-new-2@2", WHATS_NEW_2, WHATS_NEW_2B),
     ("whats-new-2@3", WHATS_NEW_2B, WHATS_NEW_2C),
     ("whats-new-2@4", WHATS_NEW_2C, WHATS_NEW_2D),
+    ("whats-new-3@2", WHATS_NEW_3, WHATS_NEW_3B),
 ]
 
 
