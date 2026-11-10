@@ -210,6 +210,19 @@ ZONE_IF = {"1": 0.55, "2": 0.68, "3": 0.8, "4": 0.95, "5": 1.05}
 NO_LOAD = {"Rest", "Strength", "Yoga / mobility"}
 
 
+def race_if(minutes: int) -> float:
+    """A race's intensity by its length: nobody holds 85% of FTP for 9 hours (a 1 h race ~0.95, a 3 h one
+    ~0.85, 6 h and more ~0.70)."""
+    hours = minutes / 60
+    if hours <= 1:
+        return 0.95
+    if hours <= 3:
+        return 0.95 - 0.05 * (hours - 1)
+    if hours <= 6:
+        return 0.85 - 0.05 * (hours - 3)
+    return 0.70
+
+
 def planned_tss(session: dict) -> int:
     """A session's planned TSS: its workout's when it has one, else roughly from its time and its
     highest zone (Z2 when none is given); strength, yoga and rest count as none."""
@@ -219,7 +232,10 @@ def planned_tss(session: dict) -> int:
     if w and w.get("steps"):
         return workouts.estimate(w["steps"]).get("tss") or 0
     zones = [z for chip in session.get("intensity") or [] for z in re.findall(r"Z([1-5])", str(chip).upper())]
-    factor = ZONE_IF[max(zones)] if zones else (0.85 if session.get("type") == "Race" else ZONE_IF["2"])
+    factor = ZONE_IF[max(zones)] if zones else ZONE_IF["2"]
+    if session.get("type") == "Race":  # as hard as its length allows, whatever its zone chip says
+        cap = race_if(session["duration_min"])
+        factor = min(factor, cap) if zones else cap
     return round(session["duration_min"] / 60 * factor**2 * 100)
 
 

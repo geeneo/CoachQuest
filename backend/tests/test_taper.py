@@ -298,7 +298,11 @@ def test_projection_to_the_race(make_user):
     assert rows[0]["day"] == today.isoformat() and rows[-1]["day"] == (today + timedelta(days=11)).isoformat()
     assert rows[-1]["race"] == "Double Century" and rows[1]["planned_tss"] and rows[2]["planned_tss"] is None
     # A taper: fatigue falls faster than fitness, so form climbs towards race day.
-    assert rows[-1]["tsb"] > rows[0]["tsb"] and rows[-2]["atl"] < rows[0]["atl"]  # race morning; the eve
+    assert rows[-1]["tsb"] > rows[0]["tsb"] and rows[-1]["atl"] < rows[0]["atl"]
+    # Race day shows the start line (the race's TSS is the planned dot, not added in), and ends the line.
+    assert (
+        rows[-1]["race_morning"] and rows[-1]["atl"] == rows[-2]["atl"] and rows[-1]["planned_tss"] == 370
+    )  # 8 h at Z2 (0.68), under the 8 h cap (0.70)
     # The chart's history ends where the projection starts from.
     hist = p.get("/api/athletes/me/fitness?days=7").json()
     assert hist[-1]["day"] == today.isoformat() and rows[0]["tsb"] == hist[-1]["tsb"]

@@ -352,17 +352,31 @@ def projection(db: DbSession, athlete_id: int, today: date) -> list[dict]:
         planned = plan_tracker.day_tss(d) if d else 0
         tss = max(done_today, planned) if day == today else planned
         tsb = ctl - atl
+        if race and day == race.target_date:
+            # Race day: the numbers on the start line (what matters), not after the race; its TSS shows
+            # as the planned dot, and the projection ends here.
+            out.append(
+                {
+                    "day": day.isoformat(),
+                    "planned_tss": planned or None,
+                    "ctl": round(ctl, 1),
+                    "atl": round(atl, 1),
+                    "tsb": round(tsb, 1),
+                    "race": race.name,
+                    "race_morning": True,
+                }
+            )
+            break
         ctl += (tss - ctl) / CTL_DAYS
         atl += (tss - atl) / ATL_DAYS
-        row = {
-            "day": day.isoformat(),
-            "planned_tss": planned or None,
-            "ctl": round(ctl, 1),
-            "atl": round(atl, 1),
-            "tsb": round(tsb, 1),
-        }
-        if race and day == race.target_date:
-            row["race"] = race.name
-        out.append(row)
+        out.append(
+            {
+                "day": day.isoformat(),
+                "planned_tss": planned or None,
+                "ctl": round(ctl, 1),
+                "atl": round(atl, 1),
+                "tsb": round(tsb, 1),
+            }
+        )
         day += timedelta(days=1)
     return out
