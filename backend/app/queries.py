@@ -8,11 +8,11 @@ from sqlalchemy.orm import Session as DbSession
 from . import localtime, profile_sync
 from .activity_types import category, is_outdoor, is_ride
 from .db import Activity, User, WellnessDay
-from .fitness import daily_tss, dedupe, pmc, week_start_of
+from .fitness import counted_tss, daily_tss, dedupe, pmc, week_start_of
 from .sync_options import hidden_sources, primary_source
 
 
-def activities_since(db: DbSession, athlete_id: int, since: datetime) -> list[Activity]:
+def activities_since(db: DbSession, athlete_id: int, since: datetime, copies: dict | None = None) -> list[Activity]:
     rows = db.scalars(
         select(Activity)
         .where(
@@ -22,7 +22,7 @@ def activities_since(db: DbSession, athlete_id: int, since: datetime) -> list[Ac
         )
         .order_by(Activity.start_time)
     ).all()
-    return dedupe(list(rows), primary_source(db, athlete_id))
+    return dedupe(list(rows), primary_source(db, athlete_id), copies)
 
 
 def wellness_since(db: DbSession, athlete_id: int, since: date) -> list[WellnessDay]:
@@ -72,8 +72,9 @@ def daily_load(db: DbSession, athlete_id: int) -> dict[date, float]:
     cached = _daily.get(athlete_id)
     if cached is not None and cached[0] == key:
         return cached[1]
-    acts = activities_since(db, athlete_id, datetime.min)
-    by_day = daily_tss([(a.start_time, a.tss) for a in acts], localtime.zone(tz_name))
+    copies: dict = {}
+    acts = activities_since(db, athlete_id, datetime.min, copies)
+    by_day = daily_tss([(a.start_time, counted_tss(a, copies)[0]) for a in acts], localtime.zone(tz_name))
     _daily[athlete_id] = (key, by_day)
     return by_day
 

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session as DbSession
 from . import localtime
 from .activity_types import category
 from .db import Activity, User
-from .fitness import ATL_DAYS, CTL_DAYS, RUNS, dedupe, pmc, same_session, threshold_at
+from .fitness import ATL_DAYS, CTL_DAYS, RUNS, counted_tss, dedupe, pmc, same_session, threshold_at
 from .localtime import local_date
 from .queries import WARMUP_DAYS, daily_load, history_start
 from .sync_options import hidden_sources, primary_source
@@ -42,6 +42,13 @@ METHODS = {
 ESTIMATES = ("effort", "duration")
 
 
+def _label(method: str) -> str:
+    """'hr zones (garmin copy)' -> the method's label, and that the Garmin copy's scoring counts."""
+    base, _, rest = method.partition(" (")
+    label = METHODS.get(base, base)
+    return f"{label}, from the {rest.split()[0].capitalize()} copy (not Intervals.icu's load)" if rest else label
+
+
 def audit(db: DbSession, athlete: User, days: int = 180, today: date | None = None) -> dict:
     tz = localtime.zone(athlete.timezone)
     today = today or localtime.today(athlete)
@@ -58,7 +65,8 @@ def audit(db: DbSession, athlete: User, days: int = 180, today: date | None = No
     hidden = hidden_sources(db, athlete.id, "activities")
     primary = primary_source(db, athlete.id)
     visible = [a for a in rows if a.source not in hidden]
-    kept = dedupe(visible, primary)
+    copies: dict = {}
+    kept = dedupe(visible, primary, copies)
     kept_ids = {a.id for a in kept}
 
     def counted_as(a: Activity) -> int | None:
@@ -98,8 +106,8 @@ def audit(db: DbSession, athlete: User, days: int = 180, today: date | None = No
                 "sport": sport,
                 "minutes": round((a.duration_s or 0) / 60),
                 "tss": round(a.tss or 0, 1),
-                "counted_tss": round(a.tss or 0, 1) if status == "counted" else 0,
-                "method": a.tss_method,
+                "counted_tss": round(counted_tss(a, copies)[0], 1) if status == "counted" else 0,
+                "method": counted_tss(a, copies)[1] if status == "counted" else a.tss_method,
                 "power_w": round(power) if power else None,
                 "ftp_w": ftp,
                 "intensity": round(power / ftp, 2) if power and ftp else None,
@@ -130,7 +138,7 @@ def audit(db: DbSession, athlete: User, days: int = 180, today: date | None = No
     for x in counted:
         m = by_method.setdefault(
             x["method"],
-            {"method": x["method"], "label": METHODS.get(x["method"], x["method"]), "activities": 0, "tss": 0.0},
+            {"method": x["method"], "label": _label(x["method"]), "activities": 0, "tss": 0.0},
         )
         m["activities"] += 1
         m["tss"] += x["counted_tss"]

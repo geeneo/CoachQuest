@@ -211,12 +211,13 @@ def _keep_first(primary: str | None):
     return key
 
 
-def dedupe(activities: list, primary: str | None = None) -> list:
+def dedupe(activities: list, primary: str | None = None, copies: dict | None = None) -> list:
     """Show a session once when it was recorded or imported more than once (see same_session).
 
     That covers one ride from Strava and Garmin, and also two copies from the same source, e.g. Zwift and a
     Garmin head unit both uploading the same ride to Strava. `primary` is the athlete's main activity source
-    (sync_options.primary_source), whose copy wins. Keeps the input order.
+    (sync_options.primary_source), whose copy wins. Keeps the input order. With `copies` (a dict), it's
+    filled with id(kept activity) -> the copies of it that were left out (counted_tss uses them).
     """
     kept: list = []  # sorted by start time
     for a in sorted(activities, key=_keep_first(primary)):
@@ -228,11 +229,30 @@ def dedupe(activities: list, primary: str | None = None) -> list:
                 break
             if same_session(a, k):
                 duplicate = True
+                if copies is not None:
+                    copies.setdefault(id(k), []).append(a)
                 break
         if not duplicate:
             insort(kept, a, key=lambda k: k.start_time)
     keep = {id(a) for a in kept}
     return [a for a in activities if id(a) in keep]
+
+
+# Our own scoring of a copy, best first: power, then heart-rate zones, then the average heart rate.
+OWN_SCORING = ("power", "hr zones", "hr", "walk hr zones", "walk hr")
+
+
+def counted_tss(a, copies: dict | None = None) -> tuple[float, str]:
+    """The TSS a kept session counts with, and how it was scored. A session kept from Intervals.icu (the
+    athlete's main source) carries Intervals.icu's own training load, which scores heart-rate rides lower
+    than TrainingPeaks; when the same session also came from Garmin or Strava, CoachQuest's own scoring of
+    that copy counts instead (power, or heart-rate zones as TrainingPeaks' hrTSS)."""
+    if a.tss_method == "intervals_icu" and copies:
+        own = [c for c in copies.get(id(a), []) if c.source in ("garmin", "strava") and c.tss_method in OWN_SCORING]
+        if own:
+            best = min(own, key=lambda c: OWN_SCORING.index(c.tss_method))
+            return best.tss or 0.0, f"{best.tss_method} ({best.source} copy)"
+    return a.tss or 0.0, a.tss_method
 
 
 def week_start_of(d: date, week_start: int = 0) -> date:
