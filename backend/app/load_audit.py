@@ -229,7 +229,20 @@ def parse_other(text: str | io.TextIOBase) -> dict[str, dict]:
     workouts on one day are added up. CTL / ATL (Fitness / Fatigue) are used when there."""
     # Text, or a text stream (a CSV read straight out of a ZIP, so a big export is never held whole).
     src = io.StringIO(text.lstrip("\ufeff")) if isinstance(text, str) else text
-    reader = csv.DictReader(src)
+    # Free-text columns (descriptions, comments) can be long, and one stray quote makes a field run on:
+    # past the csv module's 128 KB default that was an error page (500). The upload itself is capped.
+    csv.field_size_limit(OTHER_FIELD_LIMIT)
+    try:
+        return _parse_other(csv.DictReader(src))
+    except csv.Error as exc:
+        raise ValueError(f"Couldn't read that CSV: {exc}") from exc
+
+
+# Bounded by the upload limits (routers/load_audit.py): 30 MB of CSV.
+OTHER_FIELD_LIMIT = 32_000_000
+
+
+def _parse_other(reader: csv.DictReader) -> dict[str, dict]:
     cols = {(c or "").strip().lower(): c for c in reader.fieldnames or []}
 
     def pick(names):

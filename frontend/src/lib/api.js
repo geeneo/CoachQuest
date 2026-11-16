@@ -31,6 +31,13 @@ export async function api(path, { method = "GET", body } = {}) {
         "That file is too large for the server to accept (HTTP 413). Try a shorter date range or a smaller file.",
       );
     }
+    if (res.status === 500) {
+      throw new ApiError(
+        res.status,
+        "The server hit an error with that request (HTTP 500). Try again; if it persists, the api container " +
+          "logs (menu option 5) show what went wrong.",
+      );
+    }
     throw new ApiError(
       res.status,
       `The server answered with an error page (HTTP ${res.status}). CoachQuest may be restarting or its API ` +

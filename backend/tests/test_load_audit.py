@@ -189,3 +189,15 @@ def test_compare_takes_a_big_trainingpeaks_zip(athlete, monkeypatch):
     monkeypatch.setattr(router, "MAX_UNZIPPED_CSV", 1_000_000)
     bad = p.post("/api/athletes/me/load-audit/compare", json={"zip_b64": b64, "days": 7})
     assert bad.status_code == 422 and "unzipped" in bad.json()["detail"]
+
+
+def test_compare_reads_long_comments(athlete):
+    """A comment past the csv module's 128 KB default was an error page (500); it is now read."""
+    p, uid = athlete
+    d1 = (date.today() - timedelta(days=2)).isoformat()
+    text = f'Title,WorkoutDay,TSS,AthleteComments\nRide,{d1},55,"{"x" * 200_000}"\nRun,{d1},20,ok\n'
+    r = p.post("/api/athletes/me/load-audit/compare", json={"csv": text, "days": 7})
+    assert r.status_code == 200 and r.json()["other_tss"] == 75
+    # A CSV the reader can't make sense of is a message, not a 500.
+    bad = p.post("/api/athletes/me/load-audit/compare", json={"csv": 'WorkoutDay,TSS\n"a"b\x00,1\n', "days": 7})
+    assert bad.status_code in (200, 422)
