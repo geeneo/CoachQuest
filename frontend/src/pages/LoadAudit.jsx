@@ -137,6 +137,8 @@ export default function LoadAudit() {
                   </strong>{" "}
                   {cmp.first_difference ? `First day that differs: ${cmp.first_difference}.` : "No day differs by more than 10%."}
                 </p>
+                {cmp.intensity && <IntensityVerdict s={cmp.intensity} />}
+                {cmp.sessions?.some((r) => r.cq_if || r.other_if) && <SessionTable rows={cmp.sessions} />}
                 <div className="table-wrap audit-table">
                   <table>
                     <thead>
@@ -247,6 +249,91 @@ export default function LoadAudit() {
           </section>
         </>
       )}
+    </>
+  );
+}
+
+// Where the TSS difference with TrainingPeaks comes from: intensity (IF, squared in TSS), duration, and
+// for rides scored by power the FTP each platform used.
+function IntensityVerdict({ s }) {
+  const ftpOff = s.cq_ftp && s.other_ftp && Math.abs(s.other_ftp - s.cq_ftp) / s.cq_ftp > 0.03;
+  const timeOff = s.duration_ratio && Math.abs(s.duration_ratio - 1) > 0.05;
+  return (
+    <div className="intensity-verdict">
+      {s.power_sessions > 0 && (
+        <p>
+          <strong>
+            FTP: TrainingPeaks scored {s.power_sessions} ride{s.power_sessions === 1 ? "" : "s"} with about{" "}
+            {s.other_ftp} W, CoachQuest with {s.cq_ftp} W.
+          </strong>{" "}
+          {ftpOff ? (
+            <>
+              To match, set FTP to {s.other_ftp} W in <Link to="/profile">Profile</Link>, and check its Threshold
+              history for these dates: TSS goes with the square of the difference.
+            </>
+          ) : (
+            "The same, within 3%."
+          )}
+        </p>
+      )}
+      <p>
+        Intensity: CoachQuest's IF is ×{s.if_ratio} TrainingPeaks' (median of {s.sessions} sessions), which alone
+        makes TSS ×{s.tss_ratio_from_if}.
+        {timeOff && ` Durations differ too: ×${s.duration_ratio} (moving or elapsed time).`}
+        {s.unpaired_other > 0 &&
+          ` ${s.unpaired_other} TrainingPeaks session${s.unpaired_other === 1 ? " has" : "s have"} no CoachQuest session beside ${s.unpaired_other === 1 ? "it" : "them"}.`}
+        {s.unpaired_cq > 0 &&
+          ` ${s.unpaired_cq} CoachQuest session${s.unpaired_cq === 1 ? " has" : "s have"} none in TrainingPeaks.`}
+      </p>
+    </div>
+  );
+}
+
+const fmt = (v) => (v === null || v === undefined ? "–" : v);
+
+function SessionTable({ rows }) {
+  return (
+    <>
+      <h3>Session by session</h3>
+      <div className="table-wrap audit-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Session</th>
+              <th className="num">Min CQ</th>
+              <th className="num">Min TP</th>
+              <th className="num">IF CQ</th>
+              <th className="num">IF TP</th>
+              <th className="num">TSS CQ</th>
+              <th className="num">TSS TP</th>
+              <th className="num">FTP CQ</th>
+              <th className="num">FTP TP ≈</th>
+              <th>CQ scored by</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const off = r.cq_if && r.other_if && Math.abs(r.cq_if - r.other_if) > 0.03;
+              return (
+                <tr key={`${r.date}-${i}`} className={off || !r.cq_tss || !r.other_tss ? "diff" : ""}>
+                  <td>{r.date}</td>
+                  <td>{r.cq_name || r.other_title || "–"}</td>
+                  <td className="num">{fmt(r.cq_minutes)}</td>
+                  <td className="num">{fmt(r.other_minutes)}</td>
+                  <td className="num">{fmt(r.cq_if)}</td>
+                  <td className="num">{fmt(r.other_if)}</td>
+                  <td className="num">{fmt(r.cq_tss)}</td>
+                  <td className="num">{fmt(r.other_tss)}</td>
+                  <td className="num">{fmt(r.cq_ftp)}</td>
+                  <td className="num">{fmt(r.other_ftp)}</td>
+                  <td>{fmt(r.cq_method)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

@@ -11,7 +11,9 @@ and a TSS column) can be compared day by day, with the first day the two differ.
 
 import csv
 import io
+import math
 from datetime import UTC, date, datetime, timedelta
+from statistics import median
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
@@ -220,6 +222,11 @@ DATE_COLUMNS = ("workoutday", "date", "day", "workout day")
 TSS_COLUMNS = ("tss", "trainingstressscore", "training stress score", "load", "training load")
 CTL_COLUMNS = ("ctl", "fitness")
 ATL_COLUMNS = ("atl", "fatigue")
+# Per workout, when the export has them (TrainingPeaks' Workout Summary does): to compare intensity.
+IF_COLUMNS = ("if", "intensityfactor", "intensity factor")
+HOURS_COLUMNS = ("timetotalinhours", "time total in hours", "hours")
+TITLE_COLUMNS = ("title", "name")
+TYPE_COLUMNS = ("workouttype", "workout type", "type", "sport")
 
 
 def parse_other(text: str | io.TextIOBase) -> dict[str, dict]:
@@ -249,6 +256,7 @@ def _parse_other(reader: csv.DictReader) -> dict[str, dict]:
         return next((cols[n] for n in names if n in cols), None)
 
     dcol, tcol, ccol, acol = pick(DATE_COLUMNS), pick(TSS_COLUMNS), pick(CTL_COLUMNS), pick(ATL_COLUMNS)
+    icol, hcol, ncol, ycol = pick(IF_COLUMNS), pick(HOURS_COLUMNS), pick(TITLE_COLUMNS), pick(TYPE_COLUMNS)
     if not dcol or not (tcol or ccol):
         raise ValueError("The CSV needs a date column (WorkoutDay or Date) and a TSS (or CTL) column")
     out: dict[str, dict] = {}
@@ -258,11 +266,33 @@ def _parse_other(reader: csv.DictReader) -> dict[str, dict]:
             continue
         d = out.setdefault(day, {"tss": 0.0})
         if tcol:
-            d["tss"] += _num(row.get(tcol)) or 0
+            tss = _num(row.get(tcol)) or 0
+            d["tss"] += tss
+            workout = _workout(row, tss, icol, hcol, ncol, ycol)
+            if workout:
+                d.setdefault("workouts", []).append(workout)
         for key, col in (("ctl", ccol), ("atl", acol)):
             if col and _num(row.get(col)) is not None:
                 d[key] = _num(row.get(col))
     return out
+
+
+def _workout(row: dict, tss: float, icol, hcol, ncol, ycol) -> dict | None:
+    """One workout of the export with its intensity: the IF column, else worked out from TSS and duration
+    (TSS = hours × IF² × 100). None for a workout without TSS (planned only, or no data)."""
+    if tss <= 0:
+        return None
+    hours = _num(row.get(hcol)) if hcol else None
+    intensity = _num(row.get(icol)) if icol else None
+    if not intensity and hours:
+        intensity = math.sqrt(tss / (hours * 100))
+    return {
+        "title": (row.get(ncol) or "").strip() if ncol else "",
+        "type": (row.get(ycol) or "").strip() if ycol else "",
+        "tss": round(tss, 1),
+        "minutes": round(hours * 60) if hours else None,
+        "if": round(intensity, 2) if intensity else None,
+    }
 
 
 def _num(v) -> float | None:
@@ -282,8 +312,103 @@ def _date(v: str) -> str | None:
     return None
 
 
-def compare(audit_days: list[dict], other: dict[str, dict]) -> dict:
-    """Day by day: CoachQuest's TSS (and CTL/ATL) against the other platform's, and where they part."""
+def _effective_if(x: dict) -> float | None:
+    """A CoachQuest session's intensity: power against FTP when scored by power, else the IF its TSS and
+    duration imply (TSS = hours × IF² × 100), which is what heart-rate scoring amounts to."""
+    if x["method"] == "power" and x.get("intensity"):
+        return x["intensity"]
+    hours = (x.get("minutes") or 0) / 60
+    return round(math.sqrt(x["counted_tss"] / (hours * 100)), 2) if hours and x["counted_tss"] > 0 else None
+
+
+def sessions(activities: list[dict], other: dict[str, dict], lo: str, hi: str) -> list[dict]:
+    """Each of the other platform's workouts beside the CoachQuest session it most likely is: the same day,
+    the closest duration (within a quarter, or 15 minutes). Unpaired ones are listed with one side empty."""
+    out = []
+    by_day: dict[str, list[dict]] = {}
+    for x in activities:
+        if x["status"] == "counted" and x["counted_tss"] > 0 and lo <= x["date"] <= hi:
+            by_day.setdefault(x["date"], []).append(x)
+    for day in sorted(set(by_day) | {d for d in other if lo <= d <= hi and other[d].get("workouts")}):
+        ours = sorted(by_day.get(day, []), key=lambda x: -x["counted_tss"])
+        theirs = sorted(other.get(day, {}).get("workouts", []), key=lambda w: -w["tss"])
+        used: set[int] = set()
+        timed = [w for w in theirs if w["minutes"] is not None]
+        untimed = [w for w in theirs if w["minutes"] is None]
+        for w in timed:
+            match = None
+            for i, x in enumerate(ours):
+                gap = abs(x["minutes"] - w["minutes"])
+                if i in used or gap > max(15, 0.25 * max(x["minutes"], w["minutes"])):
+                    continue
+                if match is None or gap < abs(ours[match]["minutes"] - w["minutes"]):
+                    match = i
+            if match is not None:
+                used.add(match)
+            out.append(_pair(day, ours[match] if match is not None else None, w))
+        # Without a duration there is nothing to go by: only one left on each side is taken as the same.
+        left = [i for i in range(len(ours)) if i not in used]
+        if len(untimed) == 1 and len(left) == 1:
+            used.add(left[0])
+            out.append(_pair(day, ours[left[0]], untimed[0]))
+        else:
+            out.extend(_pair(day, None, w) for w in untimed)
+        out.extend(_pair(day, x, None) for i, x in enumerate(ours) if i not in used)
+    return out
+
+
+def _pair(day: str, x: dict | None, w: dict | None) -> dict:
+    row = {"date": day}
+    if x:
+        row.update(
+            cq_name=x["name"],
+            cq_sport=x["sport"],
+            cq_method=x["method"],
+            cq_minutes=x["minutes"],
+            cq_tss=x["counted_tss"],
+            cq_if=_effective_if(x),
+            cq_power=x["power_w"] if x["method"] == "power" else None,
+            cq_ftp=x["ftp_w"] if x["method"] == "power" else None,
+        )
+    if w:
+        row.update(
+            other_title=w["title"] or w["type"],
+            other_minutes=w["minutes"],
+            other_tss=w["tss"],
+            other_if=w["if"],
+        )
+    # The FTP the other platform's IF implies for the same (normalized) power.
+    if x and w and row.get("cq_power") and w["if"]:
+        row["other_ftp"] = round(row["cq_power"] / w["if"])
+    return row
+
+
+def intensity_summary(pairs: list[dict]) -> dict | None:
+    """Where the TSS difference comes from, over the sessions on both sides: intensity (IF, squared in TSS)
+    or duration; and for rides scored by power, the FTP each platform used (median)."""
+    both = [p for p in pairs if p.get("cq_if") and p.get("other_if")]
+    if not both:
+        return None
+    timed = [p for p in both if p.get("cq_minutes") and p.get("other_minutes")]
+    power = [p for p in both if p.get("other_ftp") and p.get("cq_ftp")]
+    if_ratio = median(p["cq_if"] / p["other_if"] for p in both)
+    return {
+        "sessions": len(both),
+        "if_ratio": round(if_ratio, 2),
+        # TSS goes with IF squared: this much of the TSS ratio comes from intensity alone.
+        "tss_ratio_from_if": round(if_ratio**2, 2),
+        "duration_ratio": round(median(p["cq_minutes"] / p["other_minutes"] for p in timed), 2) if timed else None,
+        "power_sessions": len(power),
+        "cq_ftp": round(median(p["cq_ftp"] for p in power)) if power else None,
+        "other_ftp": round(median(p["other_ftp"] for p in power)) if power else None,
+        "unpaired_other": sum(1 for p in pairs if "other_tss" in p and "cq_tss" not in p),
+        "unpaired_cq": sum(1 for p in pairs if "cq_tss" in p and "other_tss" not in p),
+    }
+
+
+def compare(audit_days: list[dict], other: dict[str, dict], activities: list[dict] | None = None) -> dict:
+    """Day by day: CoachQuest's TSS (and CTL/ATL) against the other platform's, and where they part. With
+    the audit's activities, also session by session: intensity (IF) and duration on each side."""
     rows, first = [], None
     lo, hi = (min(other), max(other)) if other else ("", "")
     for d in audit_days:
@@ -301,6 +426,7 @@ def compare(audit_days: list[dict], other: dict[str, dict]) -> dict:
             first = d["date"]
     cq = sum(r["cq_tss"] for r in rows)
     ot = sum(r["other_tss"] for r in rows)
+    pairs = sessions(activities, other, lo, hi) if activities is not None and rows else []
     return {
         "days_compared": len(rows),
         "first_difference": first,
@@ -308,4 +434,6 @@ def compare(audit_days: list[dict], other: dict[str, dict]) -> dict:
         "other_tss": round(ot),
         "ratio": round(cq / ot, 2) if ot else None,
         "days": rows,
+        "sessions": pairs,
+        "intensity": intensity_summary(pairs),
     }

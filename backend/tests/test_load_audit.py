@@ -224,3 +224,44 @@ def test_compare_explains_the_workout_files_export(athlete):
     assert "Workout Summary" in r.json()["detail"]
     other = upload(["notes.txt"])
     assert other.status_code == 422 and "notes.txt" in other.json()["detail"]
+
+
+def test_compare_session_by_session_intensity(athlete):
+    """Per session: TrainingPeaks' IF beside CoachQuest's, and for a power ride the FTP each one used.
+
+    The 8 Aug MTB ride: TrainingPeaks 5:10:24 at IF 0.66 = 225 TSS. CoachQuest with FTP 200 and
+    NP 190 scores IF 0.95: TrainingPeaks' IF implies an FTP of 190 / 0.66 = 288 W."""
+    p, uid = athlete
+    day = date.today() - timedelta(days=2)
+    start = datetime.combine(day, datetime.min.time()) + timedelta(hours=5)
+    with SessionLocal() as db:
+        db.add(_act(uid, "garmin", "mtb", start, 310, 466.4, sport="mountain_biking", norm_power=190, avg_power=173))
+        db.add(_act(uid, "garmin", "spin", start + timedelta(hours=9), 30, 20, sport="Ride", norm_power=150))
+        db.commit()
+    d = day.isoformat()
+    text = (
+        "Title,WorkoutType,WorkoutDay,TimeTotalInHours,IF,TSS\n"
+        f"Mountain Biking,MTB,{d},5.1733,0.66,225\n"
+        f"Strength,Strength,{d},,,55.8\n"  # no duration or IF, and nothing in CoachQuest
+        f"Spin,Bike,{d},0.5,,14.1\n"  # no IF column value: from TSS and duration, sqrt(14.1/50) = 0.53
+    )
+    c = p.post("/api/athletes/me/load-audit/compare", json={"csv": text, "days": 7}).json()
+    rows = {r.get("other_title"): r for r in c["sessions"]}
+    mtb = rows["Mountain Biking"]
+    assert mtb["cq_tss"] == 466.4 and mtb["other_tss"] == 225
+    assert (mtb["cq_if"], mtb["other_if"]) == (0.95, 0.66)
+    assert (mtb["cq_ftp"], mtb["other_ftp"]) == (200, 288)
+    assert rows["Spin"]["other_if"] == 0.53 and rows["Spin"]["cq_minutes"] == 30
+    assert "cq_tss" not in rows["Strength"]  # TrainingPeaks only
+    s = c["intensity"]
+    assert s["sessions"] == 2 and s["power_sessions"] == 2 and s["unpaired_other"] == 1
+    assert s["cq_ftp"] == 200 and s["other_ftp"] > 250
+    assert s["tss_ratio_from_if"] > 1.5
+
+
+def test_compare_without_per_workout_columns_still_works(athlete):
+    """A day-by-day export (no IF, no durations) compares as before; sessions just carry no intensity."""
+    p, uid = athlete
+    d = (date.today() - timedelta(days=2)).isoformat()
+    c = p.post("/api/athletes/me/load-audit/compare", json={"csv": f"Date,TSS,CTL\n{d},50,40\n", "days": 7}).json()
+    assert c["other_tss"] == 50 and c["intensity"] is None

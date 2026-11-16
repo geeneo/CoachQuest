@@ -132,4 +132,5 @@ def compare(athlete: str, body: Other, user: User = Depends(current_user), db: D
             other = load_audit.parse_other(body.csv)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return load_audit.compare(load_audit.audit(db, a, body.days)["days"], other)
+    data = load_audit.audit(db, a, body.days)
+    return load_audit.compare(data["days"], other, data["activities"])
