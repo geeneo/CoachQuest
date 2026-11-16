@@ -82,13 +82,33 @@ def _csv_from_zip(b64: str) -> str:
         raise HTTPException(status_code=422, detail=f"Couldn't read that ZIP: {exc}") from exc
 
 
+# Session recordings: TrainingPeaks' "workout files" export (WorkoutFileExport-*.zip), often gzipped.
+_WORKOUT_FILE = (".fit", ".tcx", ".gpx", ".pwx", ".fit.gz", ".tcx.gz", ".gpx.gz", ".pwx.gz", ".gz")
+
+
+def _no_csv_message(names: list[str]) -> str:
+    """Why a ZIP has nothing to compare: most often the workout files export instead of the summary."""
+    files = [n for n in names if not n.endswith("/")]
+    if files and sum(n.lower().endswith(_WORKOUT_FILE) for n in files) * 2 >= len(files):
+        return (
+            f"That ZIP holds {len(files)} workout files (one recording per session), TrainingPeaks' workout "
+            "files export. The comparison needs the Workout Summary instead: in TrainingPeaks, your name "
+            "(top right) → Settings → Export Data → Workout Summary, the same dates as here."
+        )
+    shown = ", ".join(files[:5]) + (f" and {len(files) - 5} more" if len(files) > 5 else "")
+    return (
+        f"Couldn't read that ZIP: no CSV file in it ({shown or 'it is empty'}). Use TrainingPeaks' "
+        "Workout Summary export (Settings → Export Data → Workout Summary)."
+    )
+
+
 def _parse_zip(b64: str) -> dict[str, dict]:
     """The first CSV in a ZIP (TrainingPeaks' Workout Summary export), read row by row."""
     try:
         with zipfile.ZipFile(io.BytesIO(base64.b64decode(b64))) as z:
             info = next((i for i in z.infolist() if i.filename.lower().endswith(".csv")), None)
             if info is None:
-                raise ValueError("No CSV file in that ZIP")
+                raise HTTPException(status_code=422, detail=_no_csv_message(z.namelist()))
             if info.file_size > MAX_UNZIPPED_CSV:
                 raise ValueError(f"the CSV in it is {info.file_size // 1_000_000} MB unzipped; export a shorter range")
             with z.open(info) as raw:

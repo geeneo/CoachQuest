@@ -201,3 +201,26 @@ def test_compare_reads_long_comments(athlete):
     # A CSV the reader can't make sense of is a message, not a 500.
     bad = p.post("/api/athletes/me/load-audit/compare", json={"csv": 'WorkoutDay,TSS\n"a"b\x00,1\n', "days": 7})
     assert bad.status_code in (200, 422)
+
+
+def test_compare_explains_the_workout_files_export(athlete):
+    """TrainingPeaks' workout files export (a .gz per session) gets told apart from the summary."""
+    import base64
+    import io
+    import zipfile
+
+    p, uid = athlete
+
+    def upload(names):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            for n in names:
+                z.writestr(n, b"x")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return p.post("/api/athletes/me/load-audit/compare", json={"zip_b64": b64, "days": 7})
+
+    r = upload([f"tp-6752612.2026-11-15-20-23-02-{i}.fit.gz" for i in range(3)])
+    assert r.status_code == 422 and "3 workout files" in r.json()["detail"]
+    assert "Workout Summary" in r.json()["detail"]
+    other = upload(["notes.txt"])
+    assert other.status_code == 422 and "notes.txt" in other.json()["detail"]
