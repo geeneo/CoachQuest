@@ -58,6 +58,11 @@ server {
     # ---- internal: session check used by auth_request ----
     location = /_auth {
         internal;
+        # The subrequest is checked against this location's body limit too: with the 1m server default, an
+        # upload the route itself allows (load audit 45m, admin catalogs 40m) failed here with 413, which
+        # auth_request turns into a 500. The route's own limit was already enforced before this check runs,
+        # and no body is passed on from here.
+        client_max_body_size 0;
         proxy_pass http://cq_api/internal/auth/verify;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
