@@ -222,12 +222,14 @@ CTL_COLUMNS = ("ctl", "fitness")
 ATL_COLUMNS = ("atl", "fatigue")
 
 
-def parse_other(text: str) -> dict[str, dict]:
+def parse_other(text: str | io.TextIOBase) -> dict[str, dict]:
     """A day-by-day (or workout-by-workout) CSV from another platform: {date: {tss, ctl?, atl?}}.
 
     Finds the date column (WorkoutDay, Date, Day) and a TSS column (TSS, TrainingStressScore, Load);
     workouts on one day are added up. CTL / ATL (Fitness / Fatigue) are used when there."""
-    reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")))
+    # Text, or a text stream (a CSV read straight out of a ZIP, so a big export is never held whole).
+    src = io.StringIO(text.lstrip("\ufeff")) if isinstance(text, str) else text
+    reader = csv.DictReader(src)
     cols = {(c or "").strip().lower(): c for c in reader.fieldnames or []}
 
     def pick(names):

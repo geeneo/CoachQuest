@@ -161,3 +161,31 @@ def test_compare_takes_the_trainingpeaks_zip(athlete):
     assert c["other_tss"] == 55 and c["days_compared"] == 1
     bad = p.post("/api/athletes/me/load-audit/compare", json={"zip_b64": "bm90IGEgemlw", "days": 7})
     assert bad.status_code == 422 and "ZIP" in bad.json()["detail"]
+
+
+def test_compare_takes_a_big_trainingpeaks_zip(athlete, monkeypatch):
+    """Years of workouts: a ZIP over the old 6 MB limit is read row by row; a ZIP bomb is refused."""
+    import base64
+    import io
+    import random
+    import zipfile
+
+    from app.routers import load_audit as router
+
+    p, uid = athlete
+    d1 = date.today() - timedelta(days=2)
+    rng = random.Random(1)
+    noise = lambda: f"{rng.getrandbits(64):x}{rng.getrandbits(64):x}"  # noqa: E731 (keeps the ZIP big)
+    rows = [f"Ride {i},2015-01-01,{rng.randint(1, 300)},{noise()}" for i in range(400_000)]
+    csv_text = "Title,WorkoutDay,TSS,Notes\n" + "\n".join(rows) + f"\nRide,{d1.isoformat()},55,x\n"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("workouts.csv", csv_text)
+    assert buf.tell() > 7_000_000
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    c = p.post("/api/athletes/me/load-audit/compare", json={"zip_b64": b64, "days": 7}).json()
+    assert c["other_tss"] == 55  # only the window counts; the 400,000 rows from 2015 are read and left out
+
+    monkeypatch.setattr(router, "MAX_UNZIPPED_CSV", 1_000_000)
+    bad = p.post("/api/athletes/me/load-audit/compare", json={"zip_b64": b64, "days": 7})
+    assert bad.status_code == 422 and "unzipped" in bad.json()["detail"]

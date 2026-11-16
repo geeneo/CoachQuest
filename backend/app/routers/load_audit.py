@@ -56,15 +56,22 @@ def audit_csv(
     )
 
 
+# Uploads to compare with (nginx allows 45 MB for this route; the page checks the same sizes first).
+MAX_CSV_CHARS = 30_000_000
+MAX_ZIP_B64 = 40_000_000  # a 30 MB ZIP once base64
+# A CSV inside a ZIP is read as a stream, never whole; this only stops a ZIP bomb.
+MAX_UNZIPPED_CSV = 300_000_000
+
+
 class Other(BaseModel):
-    csv: str = Field(default="", max_length=5_000_000)
+    csv: str = Field(default="", max_length=MAX_CSV_CHARS)
     # TrainingPeaks' Export Data can hand the summary over as a ZIP: its bytes, base64.
-    zip_b64: str = Field(default="", max_length=8_000_000)
+    zip_b64: str = Field(default="", max_length=MAX_ZIP_B64)
     days: int = Field(default=180, ge=7, le=730)
 
 
 def _csv_from_zip(b64: str) -> str:
-    """The first CSV in a ZIP (TrainingPeaks' Workout Summary export)."""
+    """The first CSV in a ZIP, whole (athletes.py: TrainingPeaks thresholds, small files)."""
     try:
         with zipfile.ZipFile(io.BytesIO(base64.b64decode(b64))) as z:
             name = next((n for n in z.namelist() if n.lower().endswith(".csv")), None)
@@ -75,15 +82,34 @@ def _csv_from_zip(b64: str) -> str:
         raise HTTPException(status_code=422, detail=f"Couldn't read that ZIP: {exc}") from exc
 
 
+def _parse_zip(b64: str) -> dict[str, dict]:
+    """The first CSV in a ZIP (TrainingPeaks' Workout Summary export), read row by row."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(base64.b64decode(b64))) as z:
+            info = next((i for i in z.infolist() if i.filename.lower().endswith(".csv")), None)
+            if info is None:
+                raise ValueError("No CSV file in that ZIP")
+            if info.file_size > MAX_UNZIPPED_CSV:
+                raise ValueError(f"the CSV in it is {info.file_size // 1_000_000} MB unzipped; export a shorter range")
+            with z.open(info) as raw:
+                return load_audit.parse_other(io.TextIOWrapper(raw, encoding="utf-8-sig", errors="replace"))
+    except (zipfile.BadZipFile, binascii.Error) as exc:
+        raise HTTPException(status_code=422, detail=f"Couldn't read that ZIP: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Couldn't read that ZIP: {exc}") from exc
+
+
 @router.post("/compare")
 def compare(athlete: str, body: Other, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     """Day by day against another platform's export (TrainingPeaks workouts or PMC CSV)."""
     a = _athlete(db, user, athlete)
-    text = _csv_from_zip(body.zip_b64) if body.zip_b64 else body.csv
-    if len(text.strip()) < 10:
-        raise HTTPException(status_code=422, detail="That file is empty")
-    try:
-        other = load_audit.parse_other(text)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if body.zip_b64:
+        other = _parse_zip(body.zip_b64)
+    else:
+        if len(body.csv.strip()) < 10:
+            raise HTTPException(status_code=422, detail="That file is empty")
+        try:
+            other = load_audit.parse_other(body.csv)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     return load_audit.compare(load_audit.audit(db, a, body.days)["days"], other)
