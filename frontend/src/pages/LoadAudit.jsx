@@ -21,6 +21,15 @@ export default function LoadAudit() {
     try {
       // TrainingPeaks may hand the summary over as a ZIP: send it as it is (base64), the server opens it.
       const zip = /\.zip$/i.test(file.name) || file.type.includes("zip");
+      // The server's limits: 5 MB of CSV, or a ZIP of about 6 MB (8 MB once base64).
+      const limit = zip ? 6_000_000 : 5_000_000;
+      if (file.size > limit) {
+        setError(
+          `That file is ${(file.size / 1e6).toFixed(1)} MB; the most CoachQuest takes is ${limit / 1e6} MB. ` +
+            "Export a shorter date range from TrainingPeaks (the same dates as here) and try again.",
+        );
+        return;
+      }
       const body = zip ? { zip_b64: await toBase64(file), days } : { csv: await file.text(), days };
       setCmp(await api(`${base}/compare`, { method: "POST", body }));
     } catch (e) {

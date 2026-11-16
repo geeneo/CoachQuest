@@ -25,6 +25,12 @@ export async function api(path, { method = "GET", body } = {}) {
     data = text ? JSON.parse(text) : null;
   } catch {
     // An HTML error page from a proxy: the API is down, restarting or unreachable.
+    if (res.status === 413) {
+      throw new ApiError(
+        res.status,
+        "That file is too large for the server to accept (HTTP 413). Try a shorter date range or a smaller file.",
+      );
+    }
     throw new ApiError(
       res.status,
       `The server answered with an error page (HTTP ${res.status}). CoachQuest may be restarting or its API ` +

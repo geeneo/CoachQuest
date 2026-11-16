@@ -107,6 +107,20 @@ server {
         proxy_pass http://cq_api;
     }
 
+    # ---- training load audit: another platform's export (TrainingPeaks CSV or ZIP) to compare with ----
+    # The API takes up to 5 MB of CSV or an 8 MB ZIP as base64 in JSON; the 1m default turned these away (413).
+    location ~ ^/api/athletes/[^/]+/load-audit/compare$ {
+        auth_request /_auth;
+        auth_request_set $cq_user_id $upstream_http_x_auth_user_id;
+        error_page 401 = @unauthorized;
+        limit_req zone=cq_api burst=10 nodelay;
+        client_max_body_size 12m;
+        include /etc/nginx/conf.d/cq_proxy.inc;
+        proxy_set_header X-Auth-User-Id $cq_user_id;
+        proxy_read_timeout 120s;
+        proxy_pass http://cq_api;
+    }
+
     # ---- Strava and Intervals.icu send the browser back here; without a session, show a page, not JSON ----
     location ~ ^/api/connections/(strava|intervals)/callback$ {
         auth_request /_auth;
