@@ -10,6 +10,7 @@ it uses the customer endpoint. Forecasts are cached for an hour per place (round
 """
 
 import logging
+import math
 import time as clock
 from datetime import date, datetime, timedelta
 
@@ -247,7 +248,7 @@ def _ride_day(day: date, start: str, minutes: int, stretches, samples, hourlies,
     begin = datetime.combine(day, datetime.min.time()) + timedelta(hours=h, minutes=m)
     idxs = [_index(hr) for hr in hourlies]
     order = list(reversed(stretches)) if reverse else stretches
-    kinds, temps, rain_p, rain_mm, gusts, winds, codes = [], [], [], [], [], [], []
+    kinds, temps, rain_p, rain_mm, gusts, winds, codes, heads = [], [], [], [], [], [], [], []
     for n, s in enumerate(order):
         when = begin + timedelta(minutes=minutes * (n + 0.5) / len(order))
         k = s["near"]
@@ -259,6 +260,8 @@ def _ride_day(day: date, start: str, minutes: int, stretches, samples, hourlies,
         heading = (s["heading"] + 180) % 360 if reverse else s["heading"]
         kinds.append(wind_kind(wfrom, heading, speed))
         winds.append((speed, wfrom))
+        # The part of the wind against the rider (km/h, 10 m up): positive headwind, negative tailwind.
+        heads.append(round(speed * math.cos(math.radians(wfrom - heading)), 1))
         for lst, field in (
             (temps, "temperature_2m"),
             (rain_p, "precipitation_probability"),
@@ -298,6 +301,7 @@ def _ride_day(day: date, start: str, minutes: int, stretches, samples, hourlies,
         "first_half": half_says(kinds[:half]),
         "second_half": half_says(kinds[half:]),
         "stretches": kinds,  # in route order
+        "head_kmh": heads,  # the same stretches: headwind (+) or tailwind (-), race_analysis.wind_effect
     }
 
 

@@ -1,9 +1,10 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
-import { formatDate } from "../lib/format.js";
+import { dateTime, formatDate } from "../lib/format.js";
+import Markdown from "../components/Markdown.jsx";
 
 // After a race: the ride (elapsed, moving and stopped time), the post-race update, earlier years, the
 // segments, the weather each year had, and other riders (athletes who share with you, and riders you add).
@@ -68,22 +69,42 @@ function weatherLine(w) {
 
 export default function RaceReview() {
   const { raceId, athleteId } = useParams();
-  const base = `/api/athletes/${athleteId || "me"}/races/${raceId}/review`;
+  // A stage race is reviewed a day at a time (?stage=3, so a link opens that day).
+  const [search, setSearch] = useSearchParams();
+  const stage = Number(search.get("stage")) || null;
+  const q = stage ? `?stage=${stage}` : "";
+  const root = `/api/athletes/${athleteId || "me"}/races/${raceId}/review`;
+  const base = `${root}${q}`; // also the key of each part below: another race or day starts it afresh
   const res = useApi(base);
   // Each part below is keyed by `base`: moving to another race (a rider's review, say) starts them afresh,
   // so the rider columns, the form and the filters belong to the race shown.
   const [weather, setWeather] = useState(null);
   const [weatherError, setWeatherError] = useState(null);
+  const [pacing, setPacing] = useState(null);
   const d = res.data;
+
+  // The plan against the race: also slower (the route, and the race's track from Strava once).
+  useEffect(() => {
+    if (!d?.ride) return;
+    setPacing(null);
+    api(`${root}/pacing${q}`)
+      .then(setPacing)
+      .catch((e) => setPacing({ available: false, why: e.message }));
+  }, [base, d?.ride?.activity_id]);
 
   // The weather is slower (a request per ride): asked for after the rest is shown.
   useEffect(() => {
     if (!d?.ride && !d?.earlier?.length) return;
     setWeather(null);
-    api(`${base}/weather`)
+    api(`${root}/weather${q}`)
       .then(setWeather)
       .catch((e) => setWeatherError(e.message));
   }, [base, d?.ride?.activity_id, d?.earlier?.length]);
+
+  // A stage race opened without a day: its first day.
+  useEffect(() => {
+    if (!stage && d?.stages?.length) setSearch({ stage: String(d.stages[0].day) }, { replace: true });
+  }, [stage, d?.stages, setSearch]);
 
   if (res.loading && !d) return <p className="muted">Loading the race…</p>;
   if (res.error) return <div className="error">{res.error.message}</div>;
@@ -117,11 +138,29 @@ export default function RaceReview() {
         </p>
       ))}
 
+      {d.stages?.length > 0 && (
+        <div className="tabs stage-tabs" role="tablist" aria-label="Days of the race">
+          {d.stages.map((s) => (
+            <button
+              key={s.day}
+              role="tab"
+              aria-selected={stage === s.day}
+              className={stage === s.day ? "active" : ""}
+              onClick={() => setSearch({ stage: String(s.day) })}
+            >
+              Day {s.day}
+              {s.name ? ` · ${s.name}` : ""}
+              {s.distance_km ? ` · ${s.distance_km} km` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+
       {d.ride && (
         <section className="card">
-          <h2>Your ride</h2>
+          <h2>{d.stage ? `Day ${d.stage.day}: your ride` : "Your ride"}</h2>
           {d.own && d.candidates.length > 1 && (
-            <RidePicker key={`${base}#picker`} raceId={raceId} d={d} reload={res.reload} />
+            <RidePicker key={`${base}#picker`} raceId={raceId} stage={stage} d={d} reload={res.reload} />
           )}
           <RideStats r={d.ride} target={race.target_time} />
           <p className="small">
@@ -139,6 +178,24 @@ export default function RaceReview() {
         </section>
       )}
 
+      {d.ride && !stage && (
+        <section className="card">
+          <h2>Plan vs race</h2>
+          <PlanVsRace p={pacing} />
+        </section>
+      )}
+
+      {d.ride && (
+        <Debrief
+          key={`${base}#debrief`}
+          raceId={raceId}
+          stage={stage}
+          debrief={stage ? d.result.stage_debriefs?.[String(stage)] : d.result.debrief}
+          own={d.own}
+          reload={res.reload}
+        />
+      )}
+
       {d.own ? (
         <PostRaceForm key={`${base}#form`} raceId={raceId} result={d.result} reload={res.reload} />
       ) : (
@@ -152,50 +209,63 @@ export default function RaceReview() {
             Your rides of this race, found by date (within three weeks of it each year) and route. Elapsed is start to
             finish with stops; CTL is your fitness going in.
           </p>
-          <div className="table-wrap audit-table">
+          <div className="table-wrap audit-table year-table">
             <table>
               <thead>
                 <tr>
                   <th>Year</th>
                   <th className="num">Elapsed</th>
-                  <th className="num">Moving</th>
-                  <th className="num">Stopped</th>
                   <th className="num">km/h</th>
                   <th className="num">NP</th>
-                  <th className="num">Avg HR</th>
                   <th className="num">TSS</th>
                   <th className="num">CTL in</th>
-                  <th className="num">Temp</th>
-                  <th>Wind</th>
+                  <th>Weather</th>
+                  <th
+                    className="num"
+                    title="Time the wind cost (+) or gave (−) for the same steady power on flat ground, and the moving time without it: compare those across years"
+                  >
+                    Wind cost
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {rides.map((r) => (
-                  <tr key={r.activity_id}>
-                    <td>
-                      {r.year}
-                      {d.ride && r.activity_id === d.ride.activity_id ? " (this race)" : ""}
-                    </td>
-                    <td className="num">{hms(r.elapsed_s)}</td>
-                    <td className="num">{hms(r.moving_s)}</td>
-                    <td className="num">{hms(r.stopped_s)}</td>
-                    <td className="num">{fmt(r.speed_moving)}</td>
-                    <td className="num">{fmt(r.norm_power, " W")}</td>
-                    <td className="num">{fmt(r.avg_hr)}</td>
-                    <td className="num">{fmt(r.tss)}</td>
-                    <td className="num">{fmt(r.ctl_before)}</td>
-                    <td className="num">
-                      {r.device_temp != null
-                        ? `${r.device_temp}°`
-                        : w(r.activity_id) && !w(r.activity_id).error
-                          ? `${w(r.activity_id).temp_max}°`
-                          : "–"}
-                    </td>
-                    <td className="small" title={w(r.activity_id) ? windText(w(r.activity_id)) : ""}>
-                      {weatherError ? "–" : windShort(w(r.activity_id))}
-                    </td>
-                  </tr>
-                ))}
+                {rides.map((r) => {
+                  const wx = w(r.activity_id);
+                  const temp = r.device_temp ?? (wx && !wx.error ? wx.temp_max : null);
+                  const wind = wx?.wind;
+                  return (
+                    <tr key={r.activity_id}>
+                      <td>
+                        {r.year}
+                        {d.ride && r.activity_id === d.ride.activity_id && (
+                          <span className="seg-sub">this race</span>
+                        )}
+                      </td>
+                      <td className="num">
+                        {hms(r.elapsed_s)}
+                        <span className="seg-sub">
+                          moving {hms(r.moving_s)}
+                          {r.stopped_s ? ` · stops ${hms(r.stopped_s)}` : ""}
+                        </span>
+                      </td>
+                      <td className="num">{fmt(r.speed_moving)}</td>
+                      <td className="num">
+                        {fmt(r.norm_power, " W")}
+                        {r.avg_hr && <span className="seg-sub">{r.avg_hr} bpm</span>}
+                      </td>
+                      <td className="num">{fmt(r.tss)}</td>
+                      <td className="num">{fmt(r.ctl_before)}</td>
+                      <td className="small" title={wx ? windText(wx) : ""}>
+                        {temp != null ? `${temp}° · ` : ""}
+                        {weatherError ? "–" : windShort(wx)}
+                      </td>
+                      <td className={`num ${wind?.wind_s > 30 ? "bad-text" : wind?.wind_s < -30 ? "ok-text" : ""}`}>
+                        {wind ? gap(wind.wind_s) : "–"}
+                        {wind && <span className="seg-sub">calm {hms(wind.calm_moving_s)}</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -234,10 +304,332 @@ export default function RaceReview() {
         </section>
       )}
 
+      <OfficialResults key={`${base}#results`} raceId={raceId} own={d.own} results={d.results} reload={res.reload} />
+
       {(d.own || d.standings.length > 0) && (
         <Riders key={`${base}#riders`} raceId={raceId} d={d} reload={res.reload} />
       )}
     </>
+  );
+}
+
+// The pacing plan for the target time against the race as ridden: checkpoints and climbs.
+function PlanVsRace({ p }) {
+  if (!p) return <p className="muted small">Working out the plan against the race…</p>;
+  if (!p.available) return <p className="muted small">{p.why}</p>;
+  const verdict =
+    p.final_gap_s == null
+      ? null
+      : Math.abs(p.final_gap_s) <= 60
+        ? "on plan at the finish"
+        : p.final_gap_s > 0
+          ? `${hms(p.final_gap_s)} behind the plan at the finish`
+          : `${hms(-p.final_gap_s)} ahead of the plan at the finish`;
+  const gapCell = (g) => (
+    <td className={`num ${g > 60 ? "bad-text" : g < -60 ? "ok-text" : ""}`}>{gap(g)}</td>
+  );
+  return (
+    <>
+      <p>
+        <strong>
+          Target {p.target_time}
+          {verdict ? `: ${verdict}` : ""}.
+        </strong>{" "}
+        {p.off_plan_from_km != null && <>Off the plan from km {p.off_plan_from_km}. </>}
+        <span className="muted small">
+          The plan rides {p.base_power_w} W on the flat ({p.norm_power_w} W NP) with your {p.stops_min} min of stops,
+          so its finish is the target time.
+        </span>
+      </p>
+      <div className="plan-race">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th className="num">Km</th>
+                <th className="num">Plan</th>
+                <th className="num">Race</th>
+                <th className="num">Gap</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.checkpoints.map((c) => (
+                <tr key={c.km}>
+                  <td className="num">{c.km}</td>
+                  <td className="num">{hms(c.planned_s)}</td>
+                  <td className="num">{hms(c.actual_s)}</td>
+                  {gapCell(c.gap_s)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {p.climbs.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th className="num">Climb at km</th>
+                  <th className="num">Length</th>
+                  <th className="num">Target</th>
+                  <th className="num">Race</th>
+                  <th className="num">HR</th>
+                  <th className="num">Plan</th>
+                  <th className="num">Time</th>
+                  <th className="num">Gap</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p.climbs.map((c) => (
+                  <tr key={c.start_km}>
+                    <td className="num">{c.start_km}</td>
+                    <td className="num">
+                      {c.length_km} km · {c.grade_pct}%
+                    </td>
+                    <td className="num">{c.target_w} W</td>
+                    <td
+                      className={`num ${c.actual_w && c.actual_w > c.target_w * 1.1 ? "bad-text" : ""}`}
+                      title="More than 10% over the target is red: it costs later"
+                    >
+                      {fmt(c.actual_w, " W")}
+                    </td>
+                    <td className="num">{fmt(c.actual_hr)}</td>
+                    <td className="num">{hms(c.planned_s)}</td>
+                    <td className="num">{hms(c.actual_s)}</td>
+                    {gapCell(c.gap_s)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// The AI coach's debrief of the race (race_debrief.py): kept with the race, written again on request.
+function Debrief({ raceId, stage, debrief, own, reload }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const write = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/races/${raceId}/debrief${stage ? `?stage=${stage}` : ""}`, { method: "POST" });
+      reload();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!debrief && !own) return null;
+  return (
+    <section className="card">
+      <div className="row between">
+        <h2>AI debrief</h2>
+        {own && (
+          <button className="btn small" onClick={write} disabled={busy}>
+            <Sparkles size={14} className={busy ? "spin" : undefined} />{" "}
+            {busy ? "Writing…" : debrief ? "Write again" : "Write a debrief"}
+          </button>
+        )}
+      </div>
+      {!debrief && (
+        <p className="muted small">
+          The AI coach reads this review (your ride against the target and earlier years, the plan against the race,
+          the segments, the wind and your notes) and writes what went well, where time went, and what to change. The
+          lessons go into your next plans.
+        </p>
+      )}
+      {error && <div className="error">{error}</div>}
+      {debrief && (
+        <>
+          <Markdown>{debrief.md}</Markdown>
+          {debrief.key_points?.length > 0 && (
+            <>
+              <h3>For next time</h3>
+              <ul>
+                {debrief.key_points.map((k) => (
+                  <li key={k}>{k}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          <p className="muted small">Written {dateTime(debrief.at)}. General guidance, not medical advice.</p>
+        </>
+      )}
+    </section>
+  );
+}
+
+// The official results, pasted in (race_results.py): where the athlete placed, and the riders around them.
+function OfficialResults({ raceId, own, results, reload }) {
+  const [text, setText] = useState("");
+  const [pasting, setPasting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState(null);
+  const call = async (path, opts) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api(path, opts);
+      setPasting(false);
+      setText("");
+      setHits(null);
+      reload();
+      return r;
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const search = async () => {
+    setError(null);
+    try {
+      setHits(await api(`/api/races/${raceId}/results/search?q=${encodeURIComponent(q)}`));
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  if (!results && !own) return null;
+  const r = results;
+  const showPaste = own && (!r || pasting);
+  return (
+    <section className="card">
+      <div className="row between">
+        <h2>Official results</h2>
+        {own && r && !pasting && (
+          <span className="row tight">
+            <button className="btn small" onClick={() => setPasting(true)}>
+              Paste new results
+            </button>
+            <button
+              className="btn small"
+              disabled={busy}
+              onClick={() => call(`/api/races/${raceId}/results`, { method: "DELETE" })}
+            >
+              Remove
+            </button>
+          </span>
+        )}
+      </div>
+      {showPaste && (
+        <>
+          <p className="muted small">
+            On the race's results page, select the whole table (or open its CSV download and select all), copy, and paste
+            it here. CoachQuest finds the names, categories and times, finds you, and fills in your position and
+            category in the post-race update where they're empty.
+          </p>
+          <textarea
+            rows={6}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={"Pos\tName\tCategory\tTime\n1\tPieter van Wyk\tM40\t2:01:05\n…"}
+            aria-label="Results to paste"
+            className="results-paste"
+          />
+          <div className="row tight">
+            <button
+              className="btn small"
+              disabled={busy || !text.trim()}
+              onClick={() => call(`/api/races/${raceId}/results`, { method: "PUT", body: { text } })}
+            >
+              {busy ? "Reading…" : "Import the results"}
+            </button>
+            {pasting && (
+              <button className="btn small" onClick={() => setPasting(false)}>
+                Cancel
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      {error && <div className="error">{error}</div>}
+      {r && !pasting && (
+        <>
+          {r.position ? (
+            <p>
+              <strong>
+                {r.position} of {r.field}
+              </strong>{" "}
+              {r.percentile != null && <span className="muted">(ahead of {100 - r.percentile}% of finishers)</span>}
+              {r.category && r.category_position ? (
+                <>
+                  {" "}
+                  · <strong>{r.category}</strong>: {r.category_position} of {r.category_size}
+                </>
+              ) : null}
+              {r.gap_to_winner_s != null && r.winner && (
+                <>
+                  {" "}
+                  · {hms(r.gap_to_winner_s)} behind the winner ({r.winner.name}, {r.winner.time})
+                </>
+              )}
+            </p>
+          ) : (
+            <p className="muted small">
+              {r.field} finishers{r.winner ? `, won by ${r.winner.name} in ${r.winner.time}` : ""}.{" "}
+              {own ? "CoachQuest didn't find you in them: search for your name." : ""}
+            </p>
+          )}
+          {own && r.me == null && (
+            <div className="row tight">
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Your name as in the results" />
+              <button className="btn small" disabled={q.trim().length < 2} onClick={search}>
+                Search
+              </button>
+              {hits && hits.length === 0 && <span className="muted small">No one by that name.</span>}
+              {hits?.map((h) => (
+                <button
+                  key={h.index}
+                  className="btn small"
+                  onClick={() => call(`/api/races/${raceId}/results/me`, { method: "PUT", body: { index: h.index } })}
+                >
+                  That's me: {h.name} {h.category ? `(${h.category})` : ""} {h.time || ""}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th className="num">#</th>
+                  <th>Rider</th>
+                  <th>Category</th>
+                  <th className="num">Time</th>
+                  <th className="num">Gap</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.around.map((x) => (
+                  <tr key={x.index} className={x.me ? "diff" : ""}>
+                    <td className="num">{x.place ?? "–"}</td>
+                    <td>{x.name}</td>
+                    <td>{x.category || "–"}</td>
+                    <td className="num">{x.time || "DNF"}</td>
+                    <td className="num">{x.me ? "" : gap(x.gap_s)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {own && r.me != null && (
+            <button
+              className="link-btn small"
+              onClick={() => call(`/api/races/${raceId}/results/me`, { method: "PUT", body: { index: null } })}
+            >
+              Not you? Search again
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -266,12 +658,15 @@ function RideStats({ r, target }) {
   );
 }
 
-function RidePicker({ raceId, d, reload }) {
+function RidePicker({ raceId, stage, d, reload }) {
   const [error, setError] = useState(null);
   const pick = async (id) => {
     setError(null);
     try {
-      await api(`/api/races/${raceId}/result`, { method: "PUT", body: { activity_id: id ? Number(id) : null } });
+      await api(`/api/races/${raceId}/result${stage ? `?stage=${stage}` : ""}`, {
+        method: "PUT",
+        body: { activity_id: id ? Number(id) : null },
+      });
       reload();
     } catch (e) {
       setError(e.message);

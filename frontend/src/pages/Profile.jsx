@@ -39,6 +39,7 @@ export default function Profile() {
     notify_sharing: user.notify_sharing ?? true,
     notify_comments: user.notify_comments ?? true,
     notify_inactivity: user.notify_inactivity ?? true,
+    notify_races: user.notify_races ?? true,
     notify_news: user.notify_news ?? true,
     data_analysis: user.data_analysis ?? true,
     timezone: user.timezone || "",
@@ -94,6 +95,7 @@ export default function Profile() {
       notify_sharing: form.notify_sharing,
       notify_comments: form.notify_comments,
       notify_inactivity: form.notify_inactivity,
+      notify_races: form.notify_races,
       notify_news: form.notify_news,
       data_analysis: form.data_analysis,
       ...(form.timezone ? { timezone: form.timezone } : {}),
@@ -212,6 +214,15 @@ export default function Profile() {
             onChange={(e) => setForm({ ...form, notify_inactivity: e.target.checked })}
           />
           Email me a reminder when I haven't been on CoachQuest for a while (what's new since my last visit)
+        </label>
+        <label className="check wide">
+          <input
+            type="checkbox"
+            checked={form.notify_races}
+            disabled={user.emails_disabled}
+            onChange={(e) => setForm({ ...form, notify_races: e.target.checked })}
+          />
+          The day after a race, remind me to write my post-race update (while it's fresh)
         </label>
         <label className="check wide">
           <input

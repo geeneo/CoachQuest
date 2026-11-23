@@ -268,7 +268,7 @@ class CoachError(Exception):
 
 # What each AI call is for (AiCall.kind). "Short" kinds use the cheaper settings (anthropic_*_short).
 KINDS = ("plan", "replan", "day", "readiness", "weekly", "chat", "target")
-SHORT_KINDS = ("readiness", "weekly", "chat", "target")
+SHORT_KINDS = ("readiness", "weekly", "chat", "target", "debrief")
 # The instructions are the same for everyone, so they're cached (cache reads cost ~0.1x the input price).
 CACHED = {"type": "ephemeral"}
 

@@ -3176,3 +3176,39 @@ button.mini-day {
   align-self: center;
   margin-right: 0.15rem;
 }
+/* Race review: plan vs race, the checkpoints beside the climbs */
+.plan-race {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) 2fr;
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .plan-race {
+    grid-template-columns: 1fr;
+  }
+}
+.results-paste {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+.stage-tabs {
+  margin-bottom: 0.8rem;
+}
+/* Race review: the year-by-year table fits the card (the wind text wraps) */
+.year-table td.small {
+  white-space: normal;
+  min-width: 7rem;
+  max-width: 11rem;
+}
+.year-table td .seg-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.year-table td {
+  vertical-align: top;
+}

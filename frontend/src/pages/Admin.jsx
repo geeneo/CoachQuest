@@ -900,7 +900,7 @@ function UserDetail({ u, isMe, update, reload }) {
   );
 }
 
-const AI_KINDS = { plan: "Plans", replan: "Re-plans", day: "One-day re-plans", readiness: "Readiness notes", weekly: "Weekly reviews", chat: "Chat", target: "Race target CTL" };
+const AI_KINDS = { plan: "Plans", replan: "Re-plans", day: "One-day re-plans", readiness: "Readiness notes", weekly: "Weekly reviews", chat: "Chat", target: "Race target CTL", debrief: "Race debriefs" };
 
 // This month's AI use for one user, and the admin's switch and limit for it.
 function AiUse({ u, ai, update }) {

@@ -57,6 +57,7 @@ class ProfileUpdate(BaseModel):
     notify_comments: bool | None = None
     notify_inactivity: bool | None = None
     notify_news: bool | None = None
+    notify_races: bool | None = None
     data_analysis: bool | None = None
     timezone: str | None = Field(default=None, max_length=64)
     birth_date: date | None = None

@@ -19,6 +19,7 @@
 
 import logging
 from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
@@ -48,6 +49,47 @@ NEAR_LINE_M = 300  # a segment's start this close to the ride's line is on it
 MAX_DETAIL_FETCHES = 6  # per review: the ride and up to five earlier editions
 MAX_RIDER_DETAILS = 8  # other riders whose segment times are fetched (one request each, with their Strava)
 RUN_DISCIPLINES = {"Run", "Trail run", "Ultra"}
+
+
+# ---- one stage of a multi-day race ----
+
+
+def riding_stages(race: Race) -> list[dict]:
+    """A stage race's riding days (rest days left out), each with its date."""
+    return [s for s in race_stages.with_dates(race.stages, race.target_date) if s["kind"] != "rest"]
+
+
+def stage_view(race: Race, day: int):
+    """One stage seen as a one-day race: its date, distance, climbing and route, and the ride picked for it
+    (Race.result["stage_rides"]), so the review's parts work per stage unchanged. ValueError if no such
+    riding day."""
+    s = next((x for x in riding_stages(race) if x["day"] == day), None)
+    if s is None:
+        raise ValueError("No such stage")
+    picked = ((race.result or {}).get("stage_rides") or {}).get(str(day))
+    return SimpleNamespace(
+        id=race.id,
+        user_id=race.user_id,
+        name=f"{race.name}, day {day}" + (f": {s['name']}" if s.get("name") else ""),
+        code=race.code,
+        short_name=race.short_name,
+        target_date=date.fromisoformat(s["date"]) if s.get("date") else None,
+        days=1,
+        stages=None,
+        distance_km=s.get("distance_km"),
+        elevation_m=s.get("elevation_m"),
+        discipline=race.discipline,
+        riding=race.riding,
+        start_time=s.get("start_time") or race.start_time,
+        segment_id=s.get("segment_id"),
+        target_seconds=None,  # a target time is for the whole event
+        result={"activity_id": picked} if picked else {},
+        stage=s,
+    )
+
+
+def view_of(race: Race, stage: int | None):
+    return stage_view(race, stage) if stage else race
 
 
 # ---- the race's ride ----
@@ -285,7 +327,8 @@ async def fill_details(db: DbSession, athlete_id: int, acts: list[Activity]) -> 
     for c in todo:
         try:
             d = compact_detail(await strava.activity_detail(db, conn, c.external_id))
-            c.detail = d
+            kept = {k: v for k, v in (c.detail or {}).items() if k in ("track", "track_tried")}
+            c.detail = {**d, **kept}  # the race's track (race_analysis.py) is fetched on its own
             if d.get("elapsed_s"):
                 c.elapsed_s = int(d["elapsed_s"])
         except Exception as exc:  # rate limit, token, network, deleted on Strava
@@ -467,6 +510,7 @@ def post_race(race: Race | None) -> dict | None:
     res = dict((race.result if race else None) or {})
     res.pop("activity_id", None)
     res.pop("updated_at", None)
+    res.pop("results", None)  # the whole results list: not for other riders' view
     if not res:
         return None
     res["official_time"] = format_time(res.get("official_s"))
@@ -483,9 +527,12 @@ def their_race(db: DbSession, u: User, days: list[date], a: Activity) -> Race | 
     )
 
 
-def other_riders(db: DbSession, viewer: User, owner: User, race: Race, ride: Activity | None) -> list[dict]:
+def other_riders(
+    db: DbSession, viewer: User, owner: User, race: Race, ride: Activity | None, log_access: bool = True
+) -> list[dict]:
     """Other athletes who rode the same race (the same day(s), the same course) that `viewer` may see, with
-    their post-race update when they wrote one and `viewer` may read it (visible_riders)."""
+    their post-race update when they wrote one and `viewer` may read it (visible_riders). `log_access`:
+    write it to their access log (a person looking; not the background fetch, race_jobs.py)."""
     if ride is None:
         return []
     days = race_days(race)
@@ -501,13 +548,14 @@ def other_riders(db: DbSession, viewer: User, owner: User, race: Race, ride: Act
         if not theirs:
             continue
         a = min(theirs, key=lambda x: abs(x.distance_m - ride.distance_m))
-        db.add(AccessLog(athlete_id=u.id, viewer_id=viewer.id, resource="activities"))
+        if log_access:
+            db.add(AccessLog(athlete_id=u.id, viewer_id=viewer.id, resource="activities"))
         stats = ride_stats(db, a, tz)
         row = {**stats, "ride_name": stats["name"], "athlete_id": u.id, "name": u.display_name}
         if with_update:
             r = their_race(db, u, days, a)
             update = post_race(r)
-            if update:
+            if update and log_access:
                 db.add(AccessLog(athlete_id=u.id, viewer_id=viewer.id, resource="plans"))
                 row["post_race"] = update
                 row["race_id"] = r.id
@@ -598,6 +646,8 @@ def recent_results(db: DbSession, athlete_id: int, today: date, days: int = 365)
             + ("official_s", "position", "field_size", "category", "category_position", "category_size", "feeling")
         }
         fields = {k: v for k, v in fields.items() if v not in (None, "")}
+        if (res.get("debrief") or {}).get("key_points"):
+            fields["debrief_points"] = res["debrief"]["key_points"]
         if fields:
             out.append({"race": r.name, "date": r.target_date.isoformat(), **fields})
     return out
@@ -608,6 +658,7 @@ RESULT_TEXT = ("went_well", "went_badly", "nutrition", "problems", "next_time")
 PROMPT_RULE = (
     "- `recent_race_results` are the athlete's own post-race notes on races of the last year: official time "
     "(`official_s`, seconds), positions, `feeling` (1-5), what went well and badly, food, problems and what to "
-    "do differently (`next_time`). Build on them: if fuelling or pacing went wrong, plan for it (long rides that "
-    "practise race food, a steadier start); don't repeat them back at length."
+    "do differently (`next_time`), and `debrief_points`: the lessons of the race's debrief. Build on them: if "
+    "fuelling or pacing went wrong, plan for it (long rides that practise race food, a steadier start); don't "
+    "repeat them back at length."
 )

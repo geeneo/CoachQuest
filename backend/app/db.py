@@ -56,6 +56,8 @@ class User(Base):
     notify_inactivity: Mapped[bool] = mapped_column(Boolean, default=True)
     # Product news emails from the admins (news_email.py).
     notify_news: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The day after a race: a reminder to write the post-race update (race_jobs.py).
+    notify_races: Mapped[bool] = mapped_column(Boolean, default=True)
     # Deleting unused accounts (account_cleanup.py): an admin's "never delete", and the warnings sent.
     keep_account: Mapped[bool] = mapped_column(Boolean, default=False)
     # In the anonymised data for improving CoachQuest (data_export.py), unless the user opts out.
@@ -327,6 +329,8 @@ class Race(Base):
     # After the race (race_review.py): the ride it was, the official time and positions, how it went, and
     # riders to compare with that were typed in. None until the athlete fills it in.
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # When the athlete was reminded to write the post-race update (race_jobs.py): once per race.
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Plan(Base):
@@ -829,6 +833,7 @@ _ADDED_COLUMNS = {
         "notify_comments": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_inactivity": "BOOLEAN NOT NULL DEFAULT 1",
         "notify_news": "BOOLEAN NOT NULL DEFAULT 1",
+        "notify_races": "BOOLEAN NOT NULL DEFAULT 1",
         "keep_account": "BOOLEAN NOT NULL DEFAULT 0",
         "data_analysis": "BOOLEAN NOT NULL DEFAULT 1",
         "run_ftp_watts": "INTEGER",
@@ -865,6 +870,7 @@ _ADDED_COLUMNS = {
         "segment_id": "INTEGER",
         "riding": "VARCHAR(10)",
         "result": "JSON",
+        "reminded_at": "DATETIME",
     },
     "platform_workouts": {"collection": "VARCHAR(160) NOT NULL DEFAULT ''"},
     "grants": {"role": "VARCHAR(10) NOT NULL DEFAULT 'coach'"},

@@ -22,6 +22,7 @@ from . import (
     plan_approval,
     posts_seed,
     profile_sync,
+    race_jobs,
     runtime,
     storage_watch,
     sync_engine,
@@ -99,6 +100,8 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(auth_log.purge_job, "cron", hour=3, minute=20, id="log-retention")
         scheduler.add_job(storage_watch.daily, "cron", hour=4, minute=10, id="storage-watch")
         scheduler.add_job(inactivity.run, "cron", hour=8, minute=25, id="inactivity-emails")  # 10:25 in SA
+        # After race days: fetch what the race review needs, and the day-after reminder (race_jobs.py).
+        scheduler.add_job(race_jobs.run, "cron", hour="7,16", minute=40, id="race-reviews")  # 09:40, 18:40 in SA
         scheduler.add_job(account_cleanup.run, "cron", hour=8, minute=35, id="account-cleanup")
         scheduler.add_job(plan_approval.remind_job, "cron", minute=5, id="approval-reminders")  # hourly
         # The morning note at each athlete's own time, once last night's sleep is in (morning.py).
