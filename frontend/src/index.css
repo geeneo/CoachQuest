@@ -3074,6 +3074,38 @@ button.mini-day {
 .seg-table td {
   vertical-align: top;
 }
+/* Fit the card: names and the power / heart rate line wrap instead of widening the table */
+.seg-table th,
+.seg-table td {
+  white-space: normal;
+}
+.seg-table .seg-at {
+  width: 3.5rem;
+}
+.seg-table .seg-vs {
+  width: 4.5rem;
+  white-space: nowrap;
+}
+.seg-table .seg-name {
+  min-width: 10rem;
+}
+.seg-table .seg-name .seg-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.seg-table tr.seg-child td {
+  background: var(--panel-2);
+}
+.seg-table tr.seg-child .seg-name {
+  padding-left: 1.2rem;
+}
+.seg-controls .seg-sort {
+  flex-direction: row;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
 .seg-cell .seg-time {
   display: block;
   font-variant-numeric: tabular-nums;
@@ -3085,8 +3117,12 @@ button.mini-day {
   display: block;
   color: var(--muted);
   font-size: 0.75rem;
-  white-space: nowrap;
 }
 .badge.seg-climb {
   margin-left: 0.4rem;
+}
+.seg-name .link-btn {
+  display: inline;
+  padding: 0;
+  color: var(--accent);
 }
