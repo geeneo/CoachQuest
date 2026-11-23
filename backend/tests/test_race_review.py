@@ -256,3 +256,48 @@ def test_recent_results_for_the_ai_coach(racer):
     with SessionLocal() as db:
         out = race_review.recent_results(db, uid, date(2026, 11, 23))
     assert out == [{"race": "Knysna Classic", "date": "2026-10-04", "next_time": "Eat earlier", "official_s": 7800}]
+
+
+def test_segment_place_on_an_out_and_back_course():
+    """Start and finish are the same place: a segment starting there late in the ride is at the end, not
+    at km 0. Course order follows, and each time gets its speed."""
+    total = geo.length_m(geo.decode(LINE)) / 1000
+    d = race_review.compact_detail(
+        {
+            "start_date": "2026-10-04T05:00:00Z",
+            "elapsed_time": 7800,
+            "map": {"polyline": LINE},
+            "segment_efforts": [
+                {
+                    "segment": {"id": 8, "start_latlng": list(OUT[0]), "distance": 500},
+                    "elapsed_time": 60,
+                    "start_date": "2026-10-04T07:08:00Z",
+                    "start_index": 7600,
+                },  # the sprint to the finish
+                {
+                    "segment": {"id": 7, "start_latlng": list(OUT[0]), "distance": 30000},
+                    "elapsed_time": 3600,
+                    "start_date": "2026-10-04T05:00:30Z",
+                    "start_index": 30,
+                },  # the way out, from the start
+                {
+                    "segment": {"id": 9, "start_latlng": list(OUT[5]), "distance": 2000},
+                    "elapsed_time": 240,
+                    "start_date": "2026-10-04T05:30:00Z",
+                    "start_index": 1800,
+                },
+            ],
+        }
+    )
+    at = {s["id"]: s["start_km"] for s in d["segments"]}
+    assert at[7] == 0 and abs(at[9] - total / 4) < 1 and abs(at[8] - total) < 1
+    assert d["v"] == race_review.DETAIL_VERSION
+    table = race_review.segment_table([("2026", d)])
+    assert [r["id"] for r in table] == [7, 9, 8]
+    assert table[0]["times"]["2026"]["kmh"] == 30.0  # 30 km in an hour
+
+
+def test_old_detail_is_fetched_again_once():
+    old = Activity(detail={"segments": [], "fetched_at": "2026-10-05T00:00:00"})
+    new = Activity(detail={"segments": [], "fetched_at": "2026-10-05T00:00:00", "v": race_review.DETAIL_VERSION})
+    assert race_review._due(old) and not race_review._due(new)

@@ -3052,3 +3052,41 @@ button.mini-day {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Race review: segment table with time, power, heart rate and speed per year */
+.seg-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.seg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.seg-chips .btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.seg-table td {
+  vertical-align: top;
+}
+.seg-cell .seg-time {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+.seg-cell .seg-time.best {
+  font-weight: 700;
+}
+.seg-cell .seg-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.badge.seg-climb {
+  margin-left: 0.4rem;
+}

@@ -40,6 +40,10 @@ LENGTH_SHARE = 0.15
 GAP_M = 1000
 SHAPE_POINTS = 40
 DETAIL_RETRY = timedelta(hours=6)  # a failed detail request is tried again after this
+# 2: each segment's place on the course (start_km) and when it started (offset_s). Older details are
+# fetched again once (one Strava request per ride).
+DETAIL_VERSION = 2
+NEAR_LINE_M = 300  # a segment's start this close to the ride's line is on it
 MAX_DETAIL_FETCHES = 6  # per review: the ride and up to five earlier editions
 RUN_DISCIPLINES = {"Run", "Trail run", "Ultra"}
 
@@ -153,13 +157,49 @@ def editions(db: DbSession, athlete: User, race: Race, ride: Activity | None) ->
 # ---- Strava's detail (segments, laps, temperature) ----
 
 
+def _parse_time(v: str | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(v.replace("Z", "+00:00")) if v else None
+    except ValueError:
+        return None
+
+
+def start_km(line: list, cum: list[float], latlng, share: float | None) -> float | None:
+    """Where on the ride a segment starts, in km: the point of the line nearest its start. A course that
+    passes the same place twice (start and finish together, laps) has several; the one at about the same
+    share of the ride as the effort's start time is taken."""
+    if not latlng or len(latlng) != 2 or len(line) < 2:
+        return None
+    p = (latlng[0], latlng[1])
+    gaps = [geo.distance_m(p, q) for q in line]
+    near = [i for i, g in enumerate(gaps) if g <= NEAR_LINE_M]
+    if not near:
+        return None
+    total = cum[-1] or 1
+    if share is None:
+        i = min(near, key=lambda i: gaps[i])
+    else:
+        i = min(near, key=lambda i: (abs(cum[i] / total - share), gaps[i]))
+    return round(cum[i] / 1000, 1)
+
+
 def compact_detail(d: dict) -> dict:
     """What the review keeps of Strava's detailed activity."""
+    m = d.get("map") or {}
+    line = geo.decode(m.get("polyline") or m.get("summary_polyline"))
+    cum = [0.0]
+    for a, b in zip(line, line[1:], strict=False):
+        cum.append(cum[-1] + geo.distance_m(a, b))
+    begin = _parse_time(d.get("start_date"))
+    elapsed = d.get("elapsed_time") or 0
     segs = []
     for e in d.get("segment_efforts") or []:
         seg = e.get("segment") or {}
         if not seg.get("id"):
             continue
+        at = _parse_time(e.get("start_date"))
+        offset = round((at - begin).total_seconds()) if at and begin else None
+        share = offset / elapsed if offset is not None and elapsed else None
         segs.append(
             {
                 "id": seg["id"],
@@ -173,6 +213,8 @@ def compact_detail(d: dict) -> dict:
                 "watts": round(e["average_watts"]) if e.get("average_watts") and e.get("device_watts") else None,
                 "hr": round(e["average_heartrate"]) if e.get("average_heartrate") else None,
                 "pr_rank": e.get("pr_rank"),
+                "offset_s": offset,
+                "start_km": start_km(line, cum, seg.get("start_latlng"), share),
             }
         )
     segs.sort(key=lambda s: s["start_index"])
@@ -194,6 +236,7 @@ def compact_detail(d: dict) -> dict:
         "elapsed_s": d.get("elapsed_time"),
         "moving_s": d.get("moving_time"),
         "fetched_at": utcnow().isoformat(),
+        "v": DETAIL_VERSION,
     }
 
 
@@ -214,7 +257,7 @@ def strava_copy(db: DbSession, a: Activity) -> Activity | None:
 
 def _due(a: Activity) -> bool:
     d = a.detail or {}
-    if d.get("segments") is not None and not d.get("error"):
+    if d.get("segments") is not None and not d.get("error") and d.get("v", 1) >= DETAIL_VERSION:
         return False
     tried = d.get("tried_at")
     return not tried or datetime.fromisoformat(tried) < utcnow() - DETAIL_RETRY
@@ -309,8 +352,9 @@ def ride_stats(db: DbSession, a: Activity, tz, ctl: float | None = None) -> dict
 
 
 def segment_table(rows: list[tuple[str, dict | None]]) -> list[dict]:
-    """Each Strava segment of the course (in the order of the first ride that has it), with the time on it
-    in each ride: [(label, detail)], the race first. The best time per segment is marked."""
+    """Each Strava segment of the course, in course order (where it starts, then the shorter first), with
+    the time, speed, power and heart rate on it in each ride: [(label, detail)], the race first. The best
+    time per segment is marked."""
     order: list[int] = []
     info: dict[int, dict] = {}
     for _, d in rows:
@@ -325,7 +369,13 @@ def segment_table(rows: list[tuple[str, dict | None]]) -> list[dict]:
             efforts = [s for s in (d or {}).get("segments") or [] if s["id"] == sid]
             if efforts:  # ridden twice (a lap course): the faster one
                 e = min(efforts, key=lambda s: s["elapsed_s"] or 1e9)
-                times[label] = {"elapsed_s": e["elapsed_s"], "watts": e["watts"], "hr": e["hr"]}
+                secs = e["elapsed_s"]
+                times[label] = {
+                    "elapsed_s": secs,
+                    "watts": e["watts"],
+                    "hr": e["hr"],
+                    "kmh": round(e["distance_m"] / secs * 3.6, 1) if secs and e["distance_m"] else None,
+                }
         if len(times) < 1:
             continue
         valid = {k: v["elapsed_s"] for k, v in times.items() if v["elapsed_s"]}
@@ -333,10 +383,13 @@ def segment_table(rows: list[tuple[str, dict | None]]) -> list[dict]:
         first = rows[0][0]
         others = [v for k, v in valid.items() if k != first]
         s = info[sid]
+        # Where it starts: on the race's own ride when it has it, else the first ride that does.
+        at = [x.get("start_km") for _, d in rows for x in (d or {}).get("segments") or [] if x["id"] == sid]
         out.append(
             {
                 "id": sid,
                 "name": s["name"],
+                "start_km": next((k for k in at if k is not None), None),
                 "distance_m": s["distance_m"],
                 "grade": s["grade"],
                 "climb": s["climb"],
@@ -346,7 +399,9 @@ def segment_table(rows: list[tuple[str, dict | None]]) -> list[dict]:
                 "vs_best_before": valid[first] - min(others) if first in valid and others else None,
             }
         )
-    return out
+    # Course order; segments without a place (older detail, off the line) keep theirs, after the rest.
+    placed = sorted((r for r in out if r["start_km"] is not None), key=lambda r: (r["start_km"], r["distance_m"]))
+    return placed + [r for r in out if r["start_km"] is None]
 
 
 # ---- weather ----

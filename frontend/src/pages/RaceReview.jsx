@@ -427,22 +427,80 @@ function PostRaceForm({ raceId, result, reload }) {
   );
 }
 
+// Which segments to show, and in which order.
+const SEG_FILTERS = [
+  ["all", "All", () => true],
+  ["climbs", "Climbs", (s) => s.climb > 0 || (s.grade ?? 0) >= 3],
+  ["short", "Under 10 km", (s) => s.distance_m < 10000],
+  ["long", "10 km and more", (s) => s.distance_m >= 10000],
+];
+const SEG_SORTS = [
+  ["course", "Course order", null],
+  ["gained", "Most time gained", (a, b) => (a.vs_best_before ?? 1e9) - (b.vs_best_before ?? 1e9)],
+  ["lost", "Most time lost", (a, b) => (b.vs_best_before ?? -1e9) - (a.vs_best_before ?? -1e9)],
+];
+const SEG_FIRST = 15;
+
+function SegCell({ t, best }) {
+  if (!t) return <span className="muted">–</span>;
+  const sub = [t.watts && `${t.watts} W`, t.hr && `${t.hr} bpm`, t.kmh && `${t.kmh} km/h`].filter(Boolean);
+  return (
+    <>
+      <span className={best ? "seg-time best" : "seg-time"}>{hms(t.elapsed_s)}</span>
+      {sub.length > 0 && <span className="seg-sub">{sub.join(" · ")}</span>}
+    </>
+  );
+}
+
 function SegmentTable({ segments, rides }) {
   const years = rides.map((r) => String(r.year));
+  const [filter, setFilter] = useState("all");
+  const [sort, setSort] = useState("course");
+  const [all, setAll] = useState(false);
+  const keep = SEG_FILTERS.find(([k]) => k === filter)[2];
+  const order = SEG_SORTS.find(([k]) => k === sort)[2];
+  const shown = segments.filter(keep);
+  if (order) shown.sort(order);
+  const rows = all ? shown : shown.slice(0, SEG_FIRST);
   return (
     <section className="card">
       <h2>Segment by segment</h2>
       <p className="muted small">
-        Your time on each Strava segment of the course, each year; the best is in bold. "vs best" is this race against
-        your best earlier year: negative is faster.
+        Your time on each Strava segment of the course, each year, with your average power, heart rate and speed on it.
+        The best year is in bold; "vs best" is this race against your best earlier year (green: faster).
       </p>
-      <div className="table-wrap audit-table">
+      <div className="seg-controls">
+        <div className="seg-chips" role="group" aria-label="Show segments">
+          {SEG_FILTERS.map(([k, label, f]) => (
+            <button
+              key={k}
+              className={`btn small ${filter === k ? "active" : ""}`}
+              aria-pressed={filter === k}
+              onClick={() => setFilter(k)}
+            >
+              {label} <span className="muted">{segments.filter(f).length}</span>
+            </button>
+          ))}
+        </div>
+        <label className="small">
+          Sort{" "}
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            {SEG_SORTS.map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="table-wrap audit-table seg-table">
         <table>
           <thead>
             <tr>
+              <th className="num">At km</th>
               <th>Segment</th>
-              <th className="num">km</th>
-              <th className="num">%</th>
+              <th className="num">Length</th>
+              <th className="num">Grade</th>
               {years.map((y) => (
                 <th key={y} className="num">
                   {y}
@@ -452,30 +510,44 @@ function SegmentTable({ segments, rides }) {
             </tr>
           </thead>
           <tbody>
-            {segments.map((s) => (
-              <tr key={s.id} className={s.vs_best_before > 0 ? "diff" : ""}>
+            {rows.map((s) => (
+              <tr key={s.id}>
+                <td className="num">{s.start_km != null ? s.start_km.toFixed(1) : "–"}</td>
                 <td>
                   <a href={`https://www.strava.com/segments/${s.id}`} target="_blank" rel="noreferrer">
                     {s.name}
                   </a>
+                  {s.climb > 0 && <span className="badge seg-climb">Cat {s.climb === 5 ? "HC" : 5 - s.climb}</span>}
                 </td>
-                <td className="num">{(s.distance_m / 1000).toFixed(1)}</td>
-                <td className="num">{s.grade != null ? s.grade.toFixed(1) : "–"}</td>
-                {years.map((y) => {
-                  const t = s.times[y];
-                  const title = t ? [t.watts && `${t.watts} W`, t.hr && `${t.hr} bpm`].filter(Boolean).join(", ") : "";
-                  return (
-                    <td key={y} className="num" title={title}>
-                      {t ? s.best === y ? <strong>{hms(t.elapsed_s)}</strong> : hms(t.elapsed_s) : "–"}
-                    </td>
-                  );
-                })}
-                <td className="num">{gap(s.vs_best_before)}</td>
+                <td className="num">{(s.distance_m / 1000).toFixed(1)} km</td>
+                <td className="num">{s.grade != null ? `${s.grade.toFixed(1)}%` : "–"}</td>
+                {years.map((y) => (
+                  <td key={y} className="num seg-cell">
+                    <SegCell t={s.times[y]} best={s.best === y && Object.keys(s.times).length > 1} />
+                  </td>
+                ))}
+                <td
+                  className={`num ${s.vs_best_before < 0 ? "ok-text" : s.vs_best_before > 0 ? "bad-text" : ""}`}
+                >
+                  {gap(s.vs_best_before)}
+                </td>
               </tr>
             ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={years.length + 5} className="muted">
+                  No segments of this kind on the course.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+      {shown.length > SEG_FIRST && (
+        <button className="btn small" onClick={() => setAll(!all)}>
+          {all ? `Show the first ${SEG_FIRST}` : `Show all ${shown.length}`}
+        </button>
+      )}
     </section>
   );
 }
