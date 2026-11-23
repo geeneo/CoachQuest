@@ -301,3 +301,43 @@ def test_old_detail_is_fetched_again_once():
     old = Activity(detail={"segments": [], "fetched_at": "2026-10-05T00:00:00"})
     new = Activity(detail={"segments": [], "fetched_at": "2026-10-05T00:00:00", "v": race_review.DETAIL_VERSION})
     assert race_review._due(old) and not race_review._due(new)
+
+
+def test_admin_tags_another_athletes_activity_as_a_race(racer, make_user, monkeypatch):
+    """Admins change an activity's labels (here: its race) while they may view athletes' data; the
+    athlete's access log shows it. Without the setting, or as a plain user, it's not found."""
+    from app import runtime
+    from app.db import AccessLog
+
+    p, uid, rid = racer
+    admin = make_user("admin@example.com", "Admin")
+    aid = admin.get("/api/auth/me").json()["id"]
+    other = make_user("other@example.com", "Other")
+    with SessionLocal() as db:
+        db.get(User, aid).is_admin = True
+        db.add(_ride(uid, "me", RACE_DAY))
+        db.commit()
+        act = db.query(Activity).filter_by(external_id="me").one().id
+    real_get = runtime.get
+    setting = {"admin_view_data": "on"}
+    monkeypatch.setattr(runtime, "get", lambda k, *a, **kw: setting[k] if k in setting else real_get(k, *a, **kw))
+
+    r = admin.request("PATCH", f"/api/activities/{act}", json={"race_id": rid})
+    assert r.status_code == 200 and r.json()["race_id"] == rid
+    assert admin.get(f"/api/athletes/{uid}").json()["can_label"] is True
+    with SessionLocal() as db:
+        assert (
+            db.query(AccessLog).filter_by(athlete_id=uid, viewer_id=aid, resource="activities: labels changed").count()
+            == 1
+        )
+    # A race of another athlete can't be put on it.
+    with SessionLocal() as db:
+        oid = db.query(User).filter_by(email="admin@example.com").one().id
+        db.add(Race(user_id=oid, code="mine", name="Admin's race", target_date=RACE_DAY))
+        db.commit()
+        foreign = db.query(Race).filter_by(code="mine").one().id
+    assert admin.request("PATCH", f"/api/activities/{act}", json={"race_id": foreign}).status_code == 422
+    # Not an admin: not found. Setting off: not found either.
+    assert other.request("PATCH", f"/api/activities/{act}", json={"race_id": None}).status_code == 404
+    setting["admin_view_data"] = "off"
+    assert admin.request("PATCH", f"/api/activities/{act}", json={"race_id": None}).status_code == 404

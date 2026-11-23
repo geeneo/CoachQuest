@@ -56,7 +56,8 @@ export default function AthleteView({ self }) {
           </p>
           {s.admin_view ? (
             <p className="small muted">
-              Admin view, read only. Your looks are shown in this athlete's "Who looked at my data" log.
+              Admin view, read only, except the type, race and note tag of activities (Activities tab). Your
+              looks and changes are shown in this athlete's "Who looked at my data" log.
             </p>
           ) : (
             !self && (
@@ -85,7 +86,7 @@ export default function AthleteView({ self }) {
       {current === "overview" && !self && scopes.has("profile") && (
         <AthleteThresholds id={id} athlete={s} readOnly={!!(s.view_only || s.admin_view)} />
       )}
-      {current === "activities" && <Activities id={id} editable={!!self} />}
+      {current === "activities" && <Activities id={id} editable={!!self} labels={!!(self || s.can_label)} />}
       {current === "calendar" && <TrainingCalendar id={id} isMe={!!self} />}
       {current === "coach" && (
         <>

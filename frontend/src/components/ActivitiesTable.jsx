@@ -37,7 +37,9 @@ function reClass(re) {
   return re < 100 ? "re-low" : re <= 180 ? "re-mid" : "re-high";
 }
 
-export default function Activities({ id, editable }) {
+// `editable`: the athlete's own list (delete, restore, Strava notes). `labels`: the type, race and note
+// tag can be changed (the athlete, or an admin; the server says which with can_label).
+export default function Activities({ id, editable, labels = editable }) {
   const now = new Date();
   const [mode, setMode] = useState("range");
   const [range, setRange] = useState(30);
@@ -49,9 +51,9 @@ export default function Activities({ id, editable }) {
   const [allCols, setAllCols] = useState(false); // cadence and calories, hidden on smaller screens
   const [search, setSearch] = useState("");
   const res = useApi(`/api/athletes/${id}/activities?${periodQuery(mode, range, month, year)}`);
-  const races = useApi(editable ? "/api/athletes/me/races" : null);
-  const prefs = useApi(editable ? "/api/athletes/me/preferences" : null);
-  const types = useApi(editable ? "/api/activity-types" : null);
+  const races = useApi(labels ? `/api/athletes/${id}/races` : null);
+  const prefs = useApi(labels ? `/api/athletes/${id}/preferences` : null);
+  const types = useApi(labels ? "/api/activity-types" : null);
   const [rows, setRows] = useState([]);
   const [error, setError] = useState(null);
   useEffect(() => {
@@ -335,7 +337,7 @@ export default function Activities({ id, editable }) {
                   )}
                   <td className="nowrap">{formatDate(a.start_time)}</td>
                   <td>
-                    {editable ? (
+                    {labels ? (
                       <select
                         aria-label="Type"
                         value={a.category}
@@ -369,7 +371,7 @@ export default function Activities({ id, editable }) {
                     )}
                   </td>
                   <td>
-                    {editable ? (
+                    {labels ? (
                       <select aria-label="Race" value={a.race_id ?? ""} onChange={(e) => edit(a, "race_id", e.target.value ? Number(e.target.value) : null)}>
                         <option value="">—</option>
                         {(races.data || []).map((r) => (
@@ -383,7 +385,7 @@ export default function Activities({ id, editable }) {
                     )}
                   </td>
                   <td>
-                    {editable ? (
+                    {labels ? (
                       <select aria-label="Note" value={a.note_tag ?? ""} onChange={(e) => edit(a, "note_tag", e.target.value)}>
                         <option value="">—</option>
                         {[...new Set([...(prefs.data?.note_tags || []), ...(a.note_tag ? [a.note_tag] : [])])].map((t) => (

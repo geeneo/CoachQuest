@@ -24,7 +24,7 @@ from .. import (
 )
 from ..activity_types import CHOICES
 from ..datefmt import DATE_FORMATS, TIME_FORMATS
-from ..db import Activity, Connection, Grant, Race, User, WellnessDay, get_db, utcnow
+from ..db import AccessLog, Activity, Connection, Grant, Race, User, WellnessDay, get_db, utcnow
 from ..deps import active_grant, allowed_scopes, current_user, is_friend, require_scope, resolve_athlete_id
 from ..fitness import THRESHOLD_FIELDS
 from ..providers import garmin, strava
@@ -307,6 +307,7 @@ def athlete_summary(athlete: str, user: User = Depends(current_user), db: DbSess
         and runtime.get("admin_view_data") == "on"
         and active_grant(db, a.id, user.id) is None
     )
+    out["can_label"] = can_label(user, a.id)  # the activity labels (type, race, note tag) are editable
     out.update(profile_out(a, scopes))
     conns = db.scalars(
         select(Connection).where(Connection.user_id == a.id, Connection.provider.in_(("strava", "garmin")))
@@ -340,6 +341,12 @@ def activity_types(_: User = Depends(current_user)):
     return CHOICES
 
 
+def can_label(user: User, athlete_id: int) -> bool:
+    """Who may change an activity's labels (type, race, note tag): the athlete, and admins while
+    admin_view_data is on (the setting that lets them see athletes' data at all)."""
+    return user.id == athlete_id or (user.is_admin and runtime.get("admin_view_data") == "on")
+
+
 class ActivityEdit(BaseModel):
     type_override: str | None = None
     race_id: int | None = None
@@ -350,23 +357,27 @@ class ActivityEdit(BaseModel):
 def edit_activity(
     activity_id: int, body: ActivityEdit, user: User = Depends(current_user), db: DbSession = Depends(get_db)
 ):
-    """The athlete's own labels on an activity. Stored in CoachQuest only, never sent to Strava or Garmin."""
+    """Labels on an activity: the athlete's own, or an admin's (can_label). Stored in CoachQuest only, never
+    sent to Strava or Garmin. An admin's change is written to the athlete's access log."""
     act = db.get(Activity, activity_id)
-    if act is None or act.user_id != user.id:
+    if act is None or not can_label(user, act.user_id):
         raise HTTPException(status_code=404, detail="Activity not found")
+    owner = user if act.user_id == user.id else db.get(User, act.user_id)
     changes = body.model_dump(exclude_unset=True)
     if changes.get("type_override") and changes["type_override"] not in CHOICES:
         raise HTTPException(status_code=422, detail=f"Type must be one of: {', '.join(CHOICES)}")
     if changes.get("race_id") is not None:
         race = db.get(Race, changes["race_id"])
-        if race is None or race.user_id != user.id:
+        if race is None or race.user_id != owner.id:
             raise HTTPException(status_code=422, detail="Unknown race")
     if changes.get("note_tag"):
         changes["note_tag"] = changes["note_tag"].strip().lower()
-        if changes["note_tag"] not in preferences_out(user)["note_tags"]:
+        if changes["note_tag"] not in preferences_out(owner)["note_tags"]:
             raise HTTPException(status_code=422, detail="Add that tag under Profile → Activity note tags first")
     for key, value in changes.items():
         setattr(act, key, value or None)
+    if owner.id != user.id:
+        db.add(AccessLog(athlete_id=owner.id, viewer_id=user.id, resource="activities: labels changed"))
     db.commit()
     return activity_out(act)
 
