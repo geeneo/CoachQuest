@@ -341,3 +341,40 @@ def test_admin_tags_another_athletes_activity_as_a_race(racer, make_user, monkey
     assert other.request("PATCH", f"/api/activities/{act}", json={"race_id": None}).status_code == 404
     setting["admin_view_data"] = "off"
     assert admin.request("PATCH", f"/api/activities/{act}", json={"race_id": None}).status_code == 404
+
+
+def test_admin_sees_an_athletes_post_race_update(racer, make_user, monkeypatch):
+    """With admin_view_data on, an admin reads the athlete's race list (with the result in short) and the
+    whole review, read only; the athlete's access log shows it."""
+    from app import runtime
+    from app.db import AccessLog
+
+    p, uid, rid = racer
+    admin = make_user("admin@example.com", "Admin")
+    aid = admin.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        db.get(User, aid).is_admin = True
+        db.add(_ride(uid, "me", RACE_DAY))
+        db.commit()
+    p.request(
+        "PUT",
+        f"/api/races/{rid}/result",
+        json={"official_time": "2:09:30", "position": 41, "field_size": 380, "feeling": 4, "next_time": "Eat earlier"},
+    )
+    real_get = runtime.get
+    monkeypatch.setattr(runtime, "get", lambda k, *a, **kw: "on" if k == "admin_view_data" else real_get(k, *a, **kw))
+
+    races = admin.get(f"/api/athletes/{uid}/races").json()
+    res = races[0]["result"]
+    assert (res["official_time"], res["position"], res["feeling"], res["has_notes"]) == ("2:09:30", 41, 4, True)
+    r = admin.get(f"/api/athletes/{uid}/races/{rid}/review")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["own"] is False and d["athlete"]["name"] == "Rider"
+    assert d["result"]["next_time"] == "Eat earlier" and d["ride"]["external_id"] == "me"
+    assert admin.request("PUT", f"/api/races/{rid}/result", json={"position": 1}).status_code == 404  # read only
+    with SessionLocal() as db:
+        assert db.query(AccessLog).filter_by(athlete_id=uid, viewer_id=aid).count() >= 1
+    # Without the setting the admin sees nothing.
+    monkeypatch.setattr(runtime, "get", real_get)
+    assert admin.get(f"/api/athletes/{uid}/races/{rid}/review").status_code == 404

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import Activities from "../components/ActivitiesTable.jsx";
 import FitnessChart from "../components/FitnessChart.jsx";
 import AiCoach from "../components/AiCoach.jsx";
@@ -8,6 +8,7 @@ import AthleteNotes from "../components/AthleteNotes.jsx";
 import CoachInstructions from "../components/CoachInstructions.jsx";
 import TrainingCalendar from "../components/TrainingCalendar.jsx";
 import UpcomingRaces from "../components/UpcomingRaces.jsx";
+import AthleteRaces from "../components/AthleteRaces.jsx";
 import VolumeStats from "../components/VolumeStats.jsx";
 import WellnessPanel, { Stat } from "../components/WellnessPanel.jsx";
 import { useApi } from "../hooks/useApi.js";
@@ -26,6 +27,7 @@ const TABS = [
   { id: "calendar", label: "Calendar", needs: ["plans"] },
   { id: "coach", label: "AI coach", needs: ["plans"] },
   { id: "plans", label: "Plans", needs: ["plans"] },
+  { id: "races", label: "Races", needs: ["plans"] },
   { id: "health", label: "Data health", needs: ["activities"] },
 ];
 
@@ -33,7 +35,8 @@ export default function AthleteView({ self }) {
   const params = useParams();
   const id = self ? "me" : params.athleteId;
   const summary = useApi(`/api/athletes/${id}`);
-  const [tab, setTab] = useState("overview");
+  const [search] = useSearchParams();
+  const [tab, setTab] = useState(() => search.get("tab") || "overview");
 
   if (summary.loading) return <p className="muted">Loading…</p>;
   if (summary.error) return <div className="error">{summary.error.message}</div>;
@@ -86,6 +89,7 @@ export default function AthleteView({ self }) {
       {current === "overview" && !self && scopes.has("profile") && (
         <AthleteThresholds id={id} athlete={s} readOnly={!!(s.view_only || s.admin_view)} />
       )}
+      {current === "races" && <AthleteRaces id={id} isMe={!!self} />}
       {current === "activities" && <Activities id={id} editable={!!self} labels={!!(self || s.can_label)} />}
       {current === "calendar" && <TrainingCalendar id={id} isMe={!!self} />}
       {current === "coach" && (

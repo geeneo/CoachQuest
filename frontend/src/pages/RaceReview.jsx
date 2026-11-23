@@ -67,8 +67,8 @@ function weatherLine(w) {
 }
 
 export default function RaceReview() {
-  const { raceId } = useParams();
-  const base = `/api/athletes/me/races/${raceId}/review`;
+  const { raceId, athleteId } = useParams();
+  const base = `/api/athletes/${athleteId || "me"}/races/${raceId}/review`;
   const res = useApi(base);
   const [weather, setWeather] = useState(null);
   const [weatherError, setWeatherError] = useState(null);
@@ -94,11 +94,18 @@ export default function RaceReview() {
     <>
       <div className="page-head">
         <div>
-          <h1>{race.name}: after the race</h1>
+          <h1>
+            {race.name}: after the race{d.own ? "" : ` · ${d.athlete.name}`}
+          </h1>
           <p className="muted small">
             {race.target_date ? formatDate(race.target_date, { weekday: true }) : "No date"}
             {race.distance_km ? ` · ${race.distance_km} km` : ""}
-            {race.target_time ? ` · target ${race.target_time}` : ""} · <Link to="/races">Back to Races</Link>
+            {race.target_time ? ` · target ${race.target_time}` : ""} ·{" "}
+            {d.own ? (
+              <Link to="/races">Back to Races</Link>
+            ) : (
+              <Link to={`/athletes/${d.athlete.id}?tab=races`}>Back to {d.athlete.name}</Link>
+            )}
           </p>
         </div>
       </div>

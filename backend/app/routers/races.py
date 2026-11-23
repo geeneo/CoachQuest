@@ -106,6 +106,17 @@ def race_out(r: Race, today: date | None = None) -> dict:
     }
 
 
+def result_summary(r: Race) -> dict | None:
+    """The post-race update in short, for race lists (the whole of it is in the race review)."""
+    res = r.result or {}
+    keys = ("official_s", "position", "field_size", "category", "category_position", "category_size", "feeling")
+    out = {k: res[k] for k in keys if res.get(k) not in (None, "")}
+    out["official_time"] = format_time(res.get("official_s"))
+    out["has_notes"] = any(res.get(k) for k in ("went_well", "went_badly", "nutrition", "problems", "next_time"))
+    out["riders"] = len(res.get("riders") or [])
+    return out if len(out) > 3 or out["official_time"] or out["has_notes"] or out["riders"] else None
+
+
 def upcoming(db: DbSession, athlete_id: int, today: date | None = None) -> list[Race]:
     """Active races still to come, or under way (a stage race on its third day)."""
     today = today or date.today()
@@ -198,7 +209,7 @@ def list_races(athlete: str, user: User = Depends(current_user), db: DbSession =
         select(Race).where(Race.user_id == athlete_id).order_by(Race.target_date.is_(None), Race.target_date)
     ).all()
     # What the target time asks for (power, pace): the athlete's own view, as it uses their weight and FTP.
-    out = [race_out(r) for r in rows]
+    out = [{**race_out(r), "result": result_summary(r)} for r in rows]
     _logged(db, db.get(User, athlete_id), list(rows), out)
     if athlete_id == user.id:
         return [{**o, "estimate": estimate(r, user)} for o, r in zip(out, rows, strict=True)]

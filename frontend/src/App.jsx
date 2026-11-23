@@ -54,6 +54,7 @@ export default function App() {
         <Route path="diagnostics/:athleteId" element={<Diagnostics />} />
         <Route path="races" element={<Races />} />
         <Route path="races/:raceId/review" element={<RaceReview />} />
+        <Route path="athletes/:athleteId/races/:raceId/review" element={<RaceReview />} />
         <Route path="profile" element={<Profile />} />
         <Route path="glossary" element={<Glossary />} />
         <Route path="news" element={<News />} />

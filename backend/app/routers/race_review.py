@@ -64,6 +64,7 @@ async def review(athlete: str, race_id: int, user: User = Depends(current_user),
     return {
         "race": race_out(race, today),
         "own": own,
+        "athlete": {"id": owner.id, "name": owner.display_name},
         "result": result_out(race),
         "ride": me,
         "candidates": [
