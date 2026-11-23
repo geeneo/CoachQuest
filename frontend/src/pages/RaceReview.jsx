@@ -527,23 +527,37 @@ function SegRow({ s, cols, similar = 0, open, toggle, child }) {
 
 const RIDERS_SHOWN = 3; // rider columns at first; the chips add or remove them
 
+// The best of the athlete's years shown, and "vs best": the race against the best of the earlier years
+// shown (negative is faster). Hiding a year takes it out of both; riders never count.
+export function rescore(s, cols) {
+  const race = cols.find((c) => c.kind === "race")?.key;
+  const own = cols.filter((c) => c.kind === "race" || c.kind === "year").map((c) => c.key);
+  const t = (k) => s.times[k]?.elapsed_s;
+  const timed = own.filter((k) => t(k));
+  const best = timed.length > 1 ? timed.reduce((a, b) => (t(b) < t(a) ? b : a)) : null;
+  const earlier = timed.filter((k) => k !== race).map(t);
+  const vs = race && t(race) && earlier.length ? t(race) - Math.min(...earlier) : null;
+  return { ...s, best, vs_best_before: vs };
+}
+
 function SegmentTable({ segments, rides, columns }) {
   const allCols = columns || rides.map((r, i) => ({ key: String(r.year), label: String(r.year), kind: i ? "year" : "race" }));
   const riders = allCols.filter((c) => c.kind === "rider");
-  // Only the riders switched on or off by hand are kept; the rest follow the default (the first few shown),
-  // so it holds for whatever race's data is on screen.
+  const optional = allCols.filter((c) => c.kind !== "race"); // the race itself is always shown
+  // Only the columns switched on or off by hand are kept; the rest follow the default (every year, the first
+  // few riders), so it holds for whatever race's data is on screen.
   const [switched, setSwitched] = useState({});
-  const riderOn = (c) => switched[c.key] ?? riders.indexOf(c) < RIDERS_SHOWN;
-  const pickedRiders = new Set(riders.filter(riderOn).map((c) => c.key));
-  const cols = allCols.filter((c) => c.kind !== "rider" || pickedRiders.has(c.key));
-  const flip = (key) => setSwitched({ ...switched, [key]: !pickedRiders.has(key) });
+  const isOn = (c) =>
+    c.kind === "race" || (switched[c.key] ?? (c.kind === "year" || riders.indexOf(c) < RIDERS_SHOWN));
+  const cols = allCols.filter(isOn);
+  const flip = (c) => setSwitched({ ...switched, [c.key]: !isOn(c) });
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("course");
   const [all, setAll] = useState(false);
   const [opened, setOpened] = useState(() => new Set());
   const keep = SEG_FILTERS.find(([k]) => k === filter)[2];
   const order = SEG_SORTS.find(([k]) => k === sort)[2];
-  const shown = segments.filter(keep);
+  const shown = segments.map((s) => rescore(s, cols)).filter(keep);
   if (order) shown.sort(order);
   const groups = groupSimilar(shown);
   const rows = all ? groups : groups.slice(0, SEG_FIRST);
@@ -558,9 +572,9 @@ function SegmentTable({ segments, rides, columns }) {
       <h2>Segment by segment</h2>
       <p className="muted small">
         Your time on each Strava segment of the course, each year, with your average power, heart rate and speed on it.
-        The best year is in bold; "vs best" is this race against your best earlier year (green: faster). Other riders
-        on CoachQuest who rode it have their own column, with your gap to them. Segments over the same stretch are
-        folded together.
+        The best year is in bold; "vs best" is this race against your best earlier year (green: faster), of the years
+        shown: pick them under Columns. Other riders on CoachQuest who rode it have their own column, with your gap to
+        them. Segments over the same stretch are folded together.
       </p>
       <div className="seg-controls">
         <div className="seg-chips" role="group" aria-label="Show segments">
@@ -575,14 +589,16 @@ function SegmentTable({ segments, rides, columns }) {
             </button>
           ))}
         </div>
-        {riders.length > 0 && (
-          <div className="seg-chips" role="group" aria-label="Riders in the table">
-            {riders.map((c) => (
+        {optional.length > 0 && (
+          <div className="seg-chips" role="group" aria-label="Columns: years and riders">
+            <span className="small muted">Columns</span>
+            {optional.map((c) => (
               <button
                 key={c.key}
-                className={`btn small ${pickedRiders.has(c.key) ? "active" : ""}`}
-                aria-pressed={pickedRiders.has(c.key)}
-                onClick={() => flip(c.key)}
+                className={`btn small ${c.kind === "rider" ? "chip-rider" : ""} ${isOn(c) ? "active" : ""}`}
+                aria-pressed={isOn(c)}
+                title={c.kind === "rider" ? `${c.label}: show or hide` : `${c.label}: show or hide (also in "vs best")`}
+                onClick={() => flip(c)}
               >
                 {c.label}
               </button>

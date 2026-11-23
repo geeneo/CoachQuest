@@ -3169,3 +3169,10 @@ button.mini-day {
 .seg-cell .seg-sub.bad-text {
   color: var(--danger);
 }
+.seg-chips .chip-rider {
+  font-style: italic;
+}
+.seg-chips > .small.muted {
+  align-self: center;
+  margin-right: 0.15rem;
+}

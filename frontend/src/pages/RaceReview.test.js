@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gap, groupSimilar, hms } from "./RaceReview.jsx";
+import { gap, groupSimilar, hms, rescore } from "./RaceReview.jsx";
 
 describe("race times", () => {
   it("shows hours, minutes and seconds", () => {
@@ -35,5 +35,17 @@ describe("similar segments", () => {
       [3, []],
       [4, []],
     ]);
+  });
+});
+
+describe("years shown", () => {
+  const s = { times: { 2026: { elapsed_s: 600 }, 2025: { elapsed_s: 580 }, 2023: { elapsed_s: 640 }, "rider-1": { elapsed_s: 500 } } };
+  const col = (key, kind) => ({ key, kind });
+  it("best and vs best over the years shown, never a rider", () => {
+    const all = [col("2026", "race"), col("2025", "year"), col("2023", "year"), col("rider-1", "rider")];
+    expect(rescore(s, all)).toMatchObject({ best: "2025", vs_best_before: 20 });
+    const no2025 = [col("2026", "race"), col("2023", "year")];
+    expect(rescore(s, no2025)).toMatchObject({ best: "2026", vs_best_before: -40 });
+    expect(rescore(s, [col("2026", "race")])).toMatchObject({ best: null, vs_best_before: null });
   });
 });
