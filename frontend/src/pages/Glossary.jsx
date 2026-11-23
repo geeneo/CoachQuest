@@ -39,6 +39,12 @@ const TERMS = [
       "Races → gauge button: average speed and power, checkpoints every 25 km with the time of day, and each climb with a target power (up to 15% more on climbs, less on descents)."],
     ["Virtual Partner", "Garmin Edge: ahead or behind your plan",
       "The pacing course (.fit) has the planned time at every point; copied to your Edge (Garmin/NewFiles) its Virtual Partner rides your plan. ClimbPro on the Edge shows each climb's length and gradient."],
+    ["Elapsed / moving time", "Start to finish, or only while moving",
+      "Elapsed time runs from start to finish, stops included: it's what a race clock measures. Moving time leaves out the stops (feed zones, mechanicals, waiting); stopped time is the difference. Rides keep both from Strava, Garmin and Intervals.icu; rides synced before November 2026 only have moving time until they're shown in a race review."],
+    ["Race review", "After the race",
+      "Races → trophy button, once a race's date has come: your ride on the day (pick another if it guessed wrong), the post-race update (official time, positions, how it went, food, problems, next time; the AI coach reads it), your earlier years of the same race (within three weeks of its date, on the same route) with the fitness you started with, your time on each Strava segment year by year, and the wind (head, cross, tail), gusts, temperature and rain each year had, from Open-Meteo's weather history."],
+    ["Other riders", "Who else rode it",
+      "In a race review: athletes on CoachQuest who share their activities with you and rode the race the same day on the same route, and riders you add with their time from the results. Strava doesn't let apps read other riders' rides or segment leaderboards. The gap is to your official time when you've entered it, else your elapsed time."],
   ]],
   ["Effort and power", [
     ["RE", "Relative Effort",

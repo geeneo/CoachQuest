@@ -15,7 +15,18 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import athlete_notes, datefmt, health, instructions, race_stages, runtime, segments, strength, weather_ai
+from . import (
+    athlete_notes,
+    datefmt,
+    health,
+    instructions,
+    race_review,
+    race_stages,
+    runtime,
+    segments,
+    strength,
+    weather_ai,
+)
 from .db import AiCall, User, utcnow
 from .fitness import avg, readiness_flags, weekly_volume
 from .queries import activities_since, load_curve, profile_out, wellness_since
@@ -145,6 +156,8 @@ targets), duration in minutes, and intensity chips such as "Z2", "95-105% FTP" o
     + instructions.PROMPT_RULE
     + "\n\n"
     + athlete_notes.PROMPT_RULE
+    + "\n\n"
+    + race_review.PROMPT_RULE
 )
 
 
@@ -220,6 +233,9 @@ def build_facts(db: DbSession, athlete: User, scopes: set[str], request: dict, t
             {k: v for k, v in race_out(r, today).items() if k not in ("id", "active", "ctl_advice")}
             for r in upcoming(db, athlete.id, today)
         ][:5]
+        results = race_review.recent_results(db, athlete.id, today)
+        if results:
+            facts["recent_race_results"] = results[:5]
         standing = instructions.for_ai(db, athlete.id, today)
         if standing:
             facts["coach_instructions"] = standing

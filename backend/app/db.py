@@ -230,6 +230,11 @@ class Activity(Base):
     strava_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     # The route, as Strava's encoded summary polyline (outdoor Strava activities); see geo.py, ride_routes.py.
     polyline: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Start to finish, stops included (duration_s is the moving time). None from before it was kept.
+    elapsed_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Strava's detail of a race ride (race_review.py): segment efforts, laps, the device's temperature, and
+    # when it was fetched. Only fetched for races and their earlier editions (one request each).
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class DeletedActivity(Base):
@@ -319,6 +324,9 @@ class Race(Base):
     segment_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # After the race (race_review.py): the ride it was, the official time and positions, how it went, and
+    # riders to compare with that were typed in. None until the athlete fills it in.
+    result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class Plan(Base):
@@ -803,6 +811,8 @@ _ADDED_COLUMNS = {
         "strava_note": "TEXT",
         "polyline": "TEXT",
         "race_id": "INTEGER",
+        "elapsed_s": "INTEGER",
+        "detail": "JSON",
         "note_tag": "VARCHAR(40)",
     },
     "users": {
@@ -854,6 +864,7 @@ _ADDED_COLUMNS = {
         "stages": "JSON",
         "segment_id": "INTEGER",
         "riding": "VARCHAR(10)",
+        "result": "JSON",
     },
     "platform_workouts": {"collection": "VARCHAR(160) NOT NULL DEFAULT ''"},
     "grants": {"role": "VARCHAR(10) NOT NULL DEFAULT 'coach'"},

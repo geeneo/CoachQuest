@@ -1,6 +1,7 @@
-import { CalendarDays, Gauge, Sparkles, Trash2, X } from "lucide-react";
+import { CalendarDays, Gauge, Sparkles, Trash2, Trophy, X } from "lucide-react";
 import RacePacing from "../components/RacePacing.jsx";
 import { Fragment, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
 import { api } from "../lib/api.js";
 import RoutePicker from "../components/RoutePicker.jsx";
@@ -170,6 +171,16 @@ export default function Races() {
                       >
                         <Gauge size={16} />
                       </button>
+                    )}
+                    {r.days_to_go != null && r.days_to_go <= 0 && (
+                      <Link
+                        className="icon-btn"
+                        to={`/races/${r.id}/review`}
+                        title="After the race: your time, earlier years, segments, weather and other riders"
+                        aria-label={`After the race: ${r.name}`}
+                      >
+                        <Trophy size={16} />
+                      </Link>
                     )}
                     <button
                       className={`icon-btn ${openStages === r.id || r.stages.length ? "active" : ""}`}

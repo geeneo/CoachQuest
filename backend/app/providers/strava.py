@@ -218,6 +218,7 @@ def _upsert(db: DbSession, user: User, item: dict) -> None:
     act.sport = item.get("sport_type") or item.get("type") or "Other"
     act.start_time = _start(item)
     act.duration_s = int(item.get("moving_time") or 0)
+    act.elapsed_s = int(item.get("elapsed_time") or 0) or None
     act.distance_m = float(item.get("distance") or 0)
     act.elevation_m = float(item.get("total_elevation_gain") or 0)
     act.avg_hr = item.get("average_heartrate")
@@ -448,6 +449,11 @@ def can_write(conn: Connection) -> bool:
 
 async def get_activity(db: DbSession, conn: Connection, activity_id: str) -> dict:
     return await _get(db, conn, f"/activities/{activity_id}")
+
+
+async def activity_detail(db: DbSession, conn: Connection, activity_id: str) -> dict:
+    """The detailed activity with every segment effort (race_review.py): one request."""
+    return await _get(db, conn, f"/activities/{activity_id}", {"include_all_efforts": "true"})
 
 
 async def update_activity(db: DbSession, conn: Connection, activity_id: str, changes: dict) -> dict:

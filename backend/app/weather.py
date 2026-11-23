@@ -22,6 +22,12 @@ log = logging.getLogger("coachquest.weather")
 FREE_URL = "https://api.open-meteo.com/v1/forecast"
 PAID_URL = "https://customer-api.open-meteo.com/v1/forecast"
 PLACES_URL = "https://geocoding-api.open-meteo.com/v1/search"
+# Past weather (race_review.py): the archive (reanalysis, a few days behind), and the forecast endpoint for
+# the last few days, which keeps them.
+ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+PAID_ARCHIVE_URL = "https://customer-archive-api.open-meteo.com/v1/archive"
+ARCHIVE_LAG_DAYS = 6
+HISTORY_HOURLY = "temperature_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m"
 HOURLY = (
     "temperature_2m,precipitation,precipitation_probability,weather_code,"
     "wind_speed_10m,wind_direction_10m,wind_gusts_10m"
@@ -112,6 +118,66 @@ async def forecast(points: list[geo.Point]) -> list[dict]:
         for k, d in zip(missing, data if isinstance(data, list) else [data], strict=False):
             _cache[k] = (now, d["hourly"])
     return [_cache[k][1] for k in keys]
+
+
+_history: dict[tuple, dict] = {}  # past weather doesn't change: kept for good (per ~2 km square and day)
+
+
+async def history(points: list[geo.Point], day: date, today: date) -> list[dict]:
+    """Hourly weather on a past day for each point, in UTC (Open-Meteo). Includes the next day, so a ride
+    that runs past midnight UTC is covered."""
+    keys = [_key(p) for p in points]
+    missing = sorted({k for k in keys if (k, day) not in _history})
+    if missing:
+        api_key = runtime.get("open_meteo_key")
+        recent = (today - day).days < ARCHIVE_LAG_DAYS
+        if recent:
+            url = PAID_URL if api_key else FREE_URL
+        else:
+            url = PAID_ARCHIVE_URL if api_key else ARCHIVE_URL
+        params = {
+            "latitude": ",".join(f"{k[0]:.3f}" for k in missing),
+            "longitude": ",".join(f"{k[1]:.3f}" for k in missing),
+            "hourly": HISTORY_HOURLY,
+            "start_date": day.isoformat(),
+            "end_date": min(day + timedelta(days=1), today).isoformat(),
+            "timezone": "GMT",
+            "wind_speed_unit": "kmh",
+        }
+        if api_key:
+            params["apikey"] = api_key
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                r = await client.get(url, params=params)
+                r.raise_for_status()
+                data = r.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            log.warning("Open-Meteo history failed: %s", exc)
+            raise WeatherError("The weather service didn't answer; try again in a minute") from exc
+        for k, d in zip(missing, data if isinstance(data, list) else [data], strict=False):
+            _history[(k, day)] = d["hourly"]
+    return [_history[(k, day)] for k in keys]
+
+
+async def ride_weather(encoded: str, start_utc: datetime, minutes: int, today: date) -> dict:
+    """The weather a ride had: each stretch of its line with the wind at the hour it was ridden there (its
+    real start, spread evenly over its elapsed time), and the worst conditions anywhere on it."""
+    points = geo.decode(encoded)
+    if len(points) < 2:
+        raise WeatherError("This ride has no map line")
+    samples = geo.resample(points, SAMPLE_POINTS)
+    hourlies = await history(samples, start_utc.date(), today)
+    stretches = _stretches(points)
+    for s in stretches:
+        s["near"] = _nearest(s["mid"], samples)
+    ride = _ride_day(
+        start_utc.date(), start_utc.strftime("%H:%M"), max(15, minutes or 60), stretches, samples, hourlies
+    )
+    if ride is None:
+        raise WeatherError("No weather for that day yet")
+    ride.pop("finish", None)
+    ride.pop("start", None)  # in UTC here: the review shows the ride's own local start
+    return ride
 
 
 async def places(query: str) -> list[dict]:

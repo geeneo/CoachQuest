@@ -12,6 +12,7 @@ import Glossary from "./pages/Glossary.jsx";
 import News, { PostEditor, PostView } from "./pages/News.jsx";
 import Profile from "./pages/Profile.jsx";
 import Races from "./pages/Races.jsx";
+import RaceReview from "./pages/RaceReview.jsx";
 import RoutesPage from "./pages/Routes.jsx";
 import Sharing from "./pages/Sharing.jsx";
 import Weather from "./pages/Weather.jsx";
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="load-audit/:athleteId" element={<LoadAudit />} />
         <Route path="diagnostics/:athleteId" element={<Diagnostics />} />
         <Route path="races" element={<Races />} />
+        <Route path="races/:raceId/review" element={<RaceReview />} />
         <Route path="profile" element={<Profile />} />
         <Route path="glossary" element={<Glossary />} />
         <Route path="news" element={<News />} />

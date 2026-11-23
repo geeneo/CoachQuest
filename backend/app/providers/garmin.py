@@ -322,6 +322,7 @@ def _upsert_activity(db: DbSession, user: User, item: dict) -> None:
     act.sport = (item.get("activityType") or {}).get("typeKey", "other")
     act.start_time = datetime.fromisoformat(item["startTimeGMT"].replace(" ", "T"))
     act.duration_s = int(item.get("movingDuration") or item.get("duration") or 0)
+    act.elapsed_s = int(item.get("elapsedDuration") or item.get("duration") or 0) or None
     act.distance_m = float(item.get("distance") or 0)
     act.elevation_m = float(item.get("elevationGain") or 0)
     act.avg_hr = item.get("averageHR")

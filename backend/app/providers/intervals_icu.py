@@ -72,6 +72,7 @@ def upsert_activity(db: DbSession, user: User, item: dict) -> Activity | None:
     act.sport = (item.get("type") or "Other")[:40]  # same names as Strava's sport_type
     act.start_time = start
     act.duration_s = int(item.get("moving_time") or item.get("elapsed_time") or 0)
+    act.elapsed_s = int(item.get("elapsed_time") or 0) or None
     act.distance_m = float(item.get("distance") or 0)
     act.elevation_m = float(item.get("total_elevation_gain") or 0)
     act.avg_hr = item.get("average_heartrate")

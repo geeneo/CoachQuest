@@ -3030,3 +3030,25 @@ button.mini-day {
 .stat-btn.on {
   border-color: var(--accent);
 }
+
+/* Race review: two numbers side by side ("41 of 380"), and one line per rider added */
+.inline-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.inline-pair input {
+  width: 6rem;
+}
+.rider-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 2fr) minmax(6rem, 1fr) minmax(6rem, 1fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+@media (max-width: 600px) {
+  .rider-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
