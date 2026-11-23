@@ -633,11 +633,18 @@ function Riders({ raceId, d, reload }) {
   return (
     <section className="card">
       <h2>Other riders</h2>
-      <p className="muted small">
-        Athletes on CoachQuest who share their activities with you and rode this race (same day, same route), and riders
-        you add. Strava doesn't let apps read other riders' rides or segment leaderboards, so add the ones you want to
-        compare with from the results.
-      </p>
+      {d.own ? (
+        <p className="muted small">
+          Athletes on CoachQuest who share their activities with you and rode this race (same day, same route), with
+          their own post-race update when they share their plans too, and riders you add. Strava doesn't let apps read
+          other riders' rides or segment leaderboards, so add the ones you want to compare with from the results.
+        </p>
+      ) : (
+        <p className="muted small">
+          Everyone on CoachQuest you may see who rode this race (same day, same route), with their own post-race
+          update, and the riders {d.athlete.name} added.
+        </p>
+      )}
       {d.standings.length > 0 && (
         <div className="table-wrap audit-table">
           <table>
@@ -675,31 +682,64 @@ function Riders({ raceId, d, reload }) {
               <thead>
                 <tr>
                   <th>Rider</th>
+                  <th className="num">Official</th>
+                  <th>Position</th>
                   <th className="num">Elapsed</th>
                   <th className="num">Moving</th>
                   <th className="num">km/h</th>
                   <th className="num">NP</th>
                   <th className="num">Avg HR</th>
-                  <th className="num">TSS</th>
+                  <th>Felt</th>
                 </tr>
               </thead>
               <tbody>
-                {d.others.map((o) => (
-                  <tr key={o.athlete_id}>
-                    <td>
-                      <Link to={`/athletes/${o.athlete_id}`}>{o.name}</Link>
-                    </td>
-                    <td className="num">{hms(o.elapsed_s)}</td>
-                    <td className="num">{hms(o.moving_s)}</td>
-                    <td className="num">{fmt(o.speed_moving)}</td>
-                    <td className="num">{fmt(o.norm_power, " W")}</td>
-                    <td className="num">{fmt(o.avg_hr)}</td>
-                    <td className="num">{fmt(o.tss)}</td>
-                  </tr>
-                ))}
+                {d.others.map((o) => {
+                  const u = o.post_race || {};
+                  return (
+                    <tr key={o.athlete_id}>
+                      <td>
+                        <Link
+                          to={
+                            o.race_id ? `/athletes/${o.athlete_id}/races/${o.race_id}/review` : `/athletes/${o.athlete_id}`
+                          }
+                        >
+                          {o.name}
+                        </Link>
+                      </td>
+                      <td className="num">{u.official_time || "–"}</td>
+                      <td>
+                        {u.position ? `${u.position}${u.field_size ? ` of ${u.field_size}` : ""}` : "–"}
+                        {u.category_position ? ` · ${u.category || "cat"} ${u.category_position}` : ""}
+                      </td>
+                      <td className="num">{hms(o.elapsed_s)}</td>
+                      <td className="num">{hms(o.moving_s)}</td>
+                      <td className="num">{fmt(o.speed_moving)}</td>
+                      <td className="num">{fmt(o.norm_power, " W")}</td>
+                      <td className="num">{fmt(o.avg_hr)}</td>
+                      <td>{u.feeling ? FEELINGS[u.feeling - 1][1].split(" · ")[1] : "–"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          {d.others.some((o) => TEXTS.some(([k]) => o.post_race?.[k])) && (
+            <div className="other-updates">
+              <h3>Their post-race updates</h3>
+              {d.others
+                .filter((o) => TEXTS.some(([k]) => o.post_race?.[k]))
+                .map((o) => (
+                  <div key={o.athlete_id} className="other-update">
+                    <strong>{o.name}</strong>
+                    {TEXTS.filter(([k]) => o.post_race[k]).map(([k, label]) => (
+                      <p key={k} className="small">
+                        <span className="muted">{label}:</span> {o.post_race[k]}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+            </div>
+          )}
         </>
       )}
       {d.own && (

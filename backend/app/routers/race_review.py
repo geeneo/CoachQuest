@@ -5,9 +5,9 @@ look fetches anything from Strava (segment times, with their link) or lists othe
 them, not with the coach)."""
 
 import asyncio
-from datetime import date
+from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as DbSession
 
@@ -55,7 +55,7 @@ async def review(athlete: str, race_id: int, user: User = Depends(current_user),
     segments = race_review.segment_table(
         [(str(s["year"]), race_review.detail_of(db, a)) for s, a in zip(stats, rides, strict=True)]
     )
-    others = race_review.other_riders(db, owner, race, ride) if own else []
+    others = race_review.other_riders(db, user, owner, race, ride)
     result = race.result or {}
     if race.target_date and race.target_date > today:
         notes.insert(0, "The race is still to come: this fills in on the day.")
@@ -81,7 +81,7 @@ async def review(athlete: str, race_id: int, user: User = Depends(current_user),
         "segments": segments,
         "laps": (race_review.detail_of(db, ride) or {}).get("laps", []) if ride else [],
         "others": others,
-        "standings": race_review.standings(me, result, others),
+        "standings": race_review.standings(me, result, others, "You" if own else owner.display_name),
         "notes": notes,
     }
 
@@ -174,3 +174,22 @@ def save_result(race_id: int, body: PostRace, user: User = Depends(current_user)
     race.result = res
     db.commit()
     return result_out(race)
+
+
+@router.get("/admin/race-reviews")
+def admin_race_reviews(
+    days: int = Query(default=365, ge=7, le=3650),
+    only_updates: bool = True,
+    user: User = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Admin: every athlete's post-race updates (Admin → Race reviews). Only while admins may view athletes'
+    data (admin_view_data), like every other look at an athlete's data."""
+    if not user.is_admin:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not race_review.admin_sees_all(user):
+        raise HTTPException(
+            status_code=403, detail='Turn on "admins can view athletes\' data" (Admin → Settings) to see them'
+        )
+    today = date.today()
+    return race_review.all_reviews(db, user, today - timedelta(days=days), today, only_updates)

@@ -3126,3 +3126,33 @@ button.mini-day {
   padding: 0;
   color: var(--accent);
 }
+
+/* Race review: other riders' post-race updates */
+.other-updates {
+  margin-top: 0.8rem;
+}
+.other-update {
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.5rem;
+}
+.other-update p {
+  margin: 0.25rem 0 0;
+}
+.notes-cell {
+  white-space: normal;
+  min-width: 12rem;
+  max-width: 24rem;
+}
+.notes-cell .link-btn {
+  color: var(--accent);
+  padding: 0;
+  text-align: left;
+}
+.seg-controls .inline-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}

@@ -13,6 +13,7 @@ import DataExport from "../components/DataExport.jsx";
 import UpdateCoachQuest from "../components/UpdateCoachQuest.jsx";
 import AdminErrors from "../components/AdminErrors.jsx";
 import WelcomeAdmin from "../components/WelcomeAdmin.jsx";
+import AdminRaceReviews from "../components/AdminRaceReviews.jsx";
 import { Backfill } from "./Connections.jsx";
 
 const SOURCE = { web: "set here", env: "from .env", unset: "not set" };
@@ -26,6 +27,7 @@ const ADMIN_TABS = [
   ["info-page", "Information page"],
   ["ai", "AI usage"],
   ["storage", "Storage"],
+  ["race-reviews", "Race reviews"],
   ["sign-ins", "Sign-ins"],
   ["errors", "Errors"],
   ["email", "Email users", "super"],
@@ -65,6 +67,7 @@ export default function Admin() {
       {current === "info-page" && <WelcomeAdmin />}
       {current === "ai" && <AiUsage rev={rev} />}
       {current === "storage" && <Storage rev={rev} />}
+      {current === "race-reviews" && <AdminRaceReviews />}
       {current === "sign-ins" && <AdminSignIns />}
       {current === "errors" && <AdminErrors />}
       {current === "update" && <UpdateCoachQuest />}

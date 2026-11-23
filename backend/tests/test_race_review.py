@@ -378,3 +378,70 @@ def test_admin_sees_an_athletes_post_race_update(racer, make_user, monkeypatch):
     # Without the setting the admin sees nothing.
     monkeypatch.setattr(runtime, "get", real_get)
     assert admin.get(f"/api/athletes/{uid}/races/{rid}/review").status_code == 404
+
+
+def _admin_on(monkeypatch):
+    from app import runtime
+
+    real_get = runtime.get
+    monkeypatch.setattr(runtime, "get", lambda k, *a, **kw: "on" if k == "admin_view_data" else real_get(k, *a, **kw))
+    return real_get
+
+
+def test_other_riders_post_race_updates(racer, make_user):
+    """A rider who shares activities and plans: their post-race update shows beside theirs, and their
+    official time counts in the standings. Sharing only activities: the ride, not the update."""
+    p, uid, rid = racer
+    friend = make_user("friend@example.com", "Thandi")
+    fid = friend.get("/api/auth/me").json()["id"]
+    mate = make_user("mate@example.com", "Sipho")
+    mid = mate.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        db.add(_ride(uid, "me", RACE_DAY))
+        db.add(_ride(fid, "f1", RACE_DAY, elapsed=7500))
+        db.add(_ride(mid, "m1", RACE_DAY, elapsed=7600))
+        db.add(Race(user_id=fid, code="knysna", name="Knysna", target_date=RACE_DAY))
+        db.add(Race(user_id=mid, code="knysna", name="Knysna", target_date=RACE_DAY))
+        db.add(Grant(athlete_id=fid, coach_id=uid, scopes=["activities", "plans"], role="friend", status="active"))
+        db.add(Grant(athlete_id=mid, coach_id=uid, scopes=["activities"], role="friend", status="active"))
+        db.commit()
+        frace = db.query(Race).filter_by(user_id=fid).one().id
+        mrace = db.query(Race).filter_by(user_id=mid).one().id
+    friend.request("PUT", f"/api/races/{frace}/result", json={"official_time": "2:04:00", "went_well": "Sat in"})
+    mate.request("PUT", f"/api/races/{mrace}/result", json={"official_time": "2:00:00"})
+    r = p.get(f"/api/athletes/me/races/{rid}/review").json()
+    others = {o["name"]: o for o in r["others"]}
+    assert others["Thandi"]["post_race"]["went_well"] == "Sat in" and others["Thandi"]["race_id"] == frace
+    assert "post_race" not in others["Sipho"]  # shares activities only
+    times = {s["name"]: s["time_s"] for s in r["standings"]}
+    assert times["Thandi"] == 7440 and times["Sipho"] == 7600  # official time, else elapsed
+
+
+def test_admin_sees_every_rider_and_all_reviews(racer, make_user, monkeypatch):
+    p, uid, rid = racer
+    admin = make_user("admin@example.com", "Admin")
+    aid = admin.get("/api/auth/me").json()["id"]
+    other = make_user("other@example.com", "Lerato")
+    oid = other.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        db.get(User, aid).is_admin = True
+        db.add(_ride(uid, "me", RACE_DAY))
+        db.add(_ride(oid, "o1", RACE_DAY, elapsed=7000))  # shares nothing with anyone
+        db.add(Race(user_id=oid, code="k", name="Knysna", target_date=RACE_DAY))
+        db.commit()
+        orace = db.query(Race).filter_by(user_id=oid).one().id
+    other.request("PUT", f"/api/races/{orace}/result", json={"official_time": "1:58:00", "feeling": 5})
+    p.request("PUT", f"/api/races/{rid}/result", json={"official_time": "2:09:30"})
+
+    assert admin.get("/api/admin/race-reviews").status_code == 403  # setting off
+    assert p.get("/api/admin/race-reviews").status_code == 404  # not an admin
+    _admin_on(monkeypatch)
+
+    d = admin.get(f"/api/athletes/{uid}/races/{rid}/review").json()
+    assert [o["name"] for o in d["others"]] == ["Lerato"] and d["others"][0]["post_race"]["feeling"] == 5
+    assert [s["name"] for s in d["standings"]] == ["Lerato", "Rider"]  # the athlete under their own name
+    # The athlete themself doesn't see Lerato: she shares nothing with them.
+    assert p.get(f"/api/athletes/me/races/{rid}/review").json()["others"] == []
+
+    rows = admin.get("/api/admin/race-reviews?days=3650").json()
+    assert {(x["athlete"], x["post_race"]["official_time"]) for x in rows} == {("Rider", "2:09:30"), ("Lerato", "1:58")}

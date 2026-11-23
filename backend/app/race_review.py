@@ -23,11 +23,12 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import geo, localtime, race_stages, weather
+from . import geo, localtime, race_stages, runtime, weather
 from .activity_types import category, is_outdoor
 from .db import AccessLog, Activity, Connection, Grant, Race, User, utcnow
 from .fitness import RUNS, pmc, same_session
 from .queries import activities_since, daily_load, history_start
+from .race_estimate import format_time
 
 log = logging.getLogger("coachquest.race_review")
 
@@ -421,8 +422,21 @@ async def weather_for(db: DbSession, a: Activity, today: date) -> dict | None:
 # ---- other riders ----
 
 
-def sharing_athletes(db: DbSession, viewer: User) -> list[User]:
-    """Athletes who let `viewer` see their activities (as their coach or friend), active ones only."""
+def admin_sees_all(viewer: User) -> bool:
+    """An admin while admin_view_data is on: every athlete's data, read only (deps.allowed_scopes)."""
+    return viewer.is_admin and runtime.get("admin_view_data") == "on"
+
+
+def visible_riders(db: DbSession, viewer: User, owner: User) -> list[tuple[User, bool]]:
+    """Athletes whose rides `viewer` may set beside `owner`'s race, and whether their post-race update too:
+    an admin who sees all data, every active athlete (with their updates); the athlete themself, those who
+    share their activities with them (their updates when they share their plans too, where races live).
+    Anyone else (a coach looking at the athlete's race): none, as those athletes shared with the athlete."""
+    if viewer.id != owner.id:
+        if not admin_sees_all(viewer):
+            return []
+        users = db.scalars(select(User).where(User.id != owner.id, User.is_active)).all()
+        return [(u, True) for u in users]
     grants = db.scalars(select(Grant).where(Grant.coach_id == viewer.id, Grant.status == "active")).all()
     out = []
     for g in grants:
@@ -430,17 +444,39 @@ def sharing_athletes(db: DbSession, viewer: User) -> list[User]:
             continue
         u = db.get(User, g.athlete_id)
         if u is not None and u.is_active:
-            out.append(u)
+            out.append((u, "plans" in (g.scopes or [])))
     return out
 
 
-def other_riders(db: DbSession, viewer: User, race: Race, ride: Activity | None) -> list[dict]:
-    """Athletes sharing with `viewer` who rode the same race: the same day(s), the same course."""
+def post_race(race: Race | None) -> dict | None:
+    """A race's post-race update as others see it (times formatted), or None without one."""
+    res = dict((race.result if race else None) or {})
+    res.pop("activity_id", None)
+    res.pop("updated_at", None)
+    if not res:
+        return None
+    res["official_time"] = format_time(res.get("official_s"))
+    res["riders"] = [{**r, "time": format_time(r.get("time_s"))} for r in res.get("riders") or []]
+    return res
+
+
+def their_race(db: DbSession, u: User, days: list[date], a: Activity) -> Race | None:
+    """The other athlete's own race entry for the same event: theirs on the same day(s), the one their ride
+    is linked to first."""
+    rows = db.scalars(select(Race).where(Race.user_id == u.id, Race.target_date.in_(days))).all()
+    return next((r for r in rows if a.race_id == r.id or (r.result or {}).get("activity_id") == a.id), None) or (
+        rows[0] if rows else None
+    )
+
+
+def other_riders(db: DbSession, viewer: User, owner: User, race: Race, ride: Activity | None) -> list[dict]:
+    """Other athletes who rode the same race (the same day(s), the same course) that `viewer` may see, with
+    their post-race update when they wrote one and `viewer` may read it (visible_riders)."""
     if ride is None:
         return []
     days = race_days(race)
     out = []
-    for u in sharing_athletes(db, viewer):
+    for u, with_update in visible_riders(db, viewer, owner):
         tz = localtime.zone(u.timezone)
         since = datetime.combine(days[0] - timedelta(days=1), datetime.min.time())
         theirs = [
@@ -453,23 +489,68 @@ def other_riders(db: DbSession, viewer: User, race: Race, ride: Activity | None)
         a = min(theirs, key=lambda x: abs(x.distance_m - ride.distance_m))
         db.add(AccessLog(athlete_id=u.id, viewer_id=viewer.id, resource="activities"))
         stats = ride_stats(db, a, tz)
-        out.append({**stats, "ride_name": stats["name"], "athlete_id": u.id, "name": u.display_name})
+        row = {**stats, "ride_name": stats["name"], "athlete_id": u.id, "name": u.display_name}
+        if with_update:
+            r = their_race(db, u, days, a)
+            update = post_race(r)
+            if update:
+                db.add(AccessLog(athlete_id=u.id, viewer_id=viewer.id, resource="plans"))
+                row["post_race"] = update
+                row["race_id"] = r.id
+        out.append(row)
     if out:
         db.commit()
     return out
 
 
-def standings(me: dict | None, result: dict, others: list[dict]) -> list[dict]:
+def all_reviews(db: DbSession, viewer: User, since: date, today: date, only_updates: bool) -> list[dict]:
+    """Admin: every athlete's races from `since` to today with their post-race update, newest first. Each
+    athlete listed is written to their access log."""
+    rows = db.scalars(
+        select(Race).where(Race.target_date.is_not(None), Race.target_date >= since, Race.target_date <= today)
+    ).all()
+    out, seen = [], set()
+    for r in sorted(rows, key=lambda r: (r.target_date, r.id), reverse=True):
+        u = db.get(User, r.user_id)
+        if u is None or not u.is_active:
+            continue
+        update = post_race(r)
+        if only_updates and not update:
+            continue
+        seen.add(u.id)
+        out.append(
+            {
+                "athlete_id": u.id,
+                "athlete": u.display_name,
+                "race_id": r.id,
+                "race": r.name,
+                "date": r.target_date.isoformat(),
+                "distance_km": r.distance_km,
+                "target_time": format_time(r.target_seconds),
+                "post_race": update,
+            }
+        )
+    for uid in seen:
+        db.add(AccessLog(athlete_id=uid, viewer_id=viewer.id, resource="plans"))
+    db.commit()
+    return out
+
+
+def standings(me: dict | None, result: dict, others: list[dict], me_name: str = "You") -> list[dict]:
     """Everyone compared, fastest first, with the gap to the athlete: their official time when given, else
-    the ride's elapsed time; other athletes' elapsed time; typed-in riders' own times."""
+    the ride's elapsed time; other athletes' the same way; typed-in riders' own times."""
     rows = []
     if me is not None:
         t = result.get("official_s") or me.get("elapsed_s")
         if t:
-            rows.append({"name": "You", "time_s": t, "kind": "you", "category": result.get("category")})
+            rows.append({"name": me_name, "time_s": t, "kind": "you", "category": result.get("category")})
     for o in others:
-        if o.get("elapsed_s"):
-            rows.append({"name": o["name"], "time_s": o["elapsed_s"], "kind": "athlete", "athlete_id": o["athlete_id"]})
+        t = (o.get("post_race") or {}).get("official_s") or o.get("elapsed_s")
+        if t:
+            cat = (o.get("post_race") or {}).get("category")
+            rows.append(
+                {"name": o["name"], "time_s": t, "kind": "athlete", "athlete_id": o["athlete_id"], "category": cat}
+            )
     for r in result.get("riders") or []:
         if r.get("time_s"):
             rows.append({"name": r["name"], "time_s": r["time_s"], "kind": "typed", "category": r.get("category")})
