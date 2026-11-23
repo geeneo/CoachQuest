@@ -43,6 +43,41 @@ running_commit() {
   [[ -n $id ]] || return 0
   docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$id" 2>/dev/null | grep ^BUILD_COMMIT= | cut -d= -f2 || true
 }
+# The disk Docker keeps its images and build cache on (usually /), and how full it is.
+docker_root() { docker info -f '{{.DockerRootDir}}' 2>/dev/null || echo /var/lib/docker; }
+disk_use() { df -P "$(docker_root)" 2>/dev/null | awk 'NR==2 {gsub("%", "", $5); print $5}'; }
+disk_free_kb() { df -Pk "$(docker_root)" 2>/dev/null | awk 'NR==2 {print $4}'; }
+human_kb() { awk -v k="$1" 'BEGIN { if (k >= 1048576) printf "%.1f GB", k / 1048576; else printf "%d MB", k / 1024 }'; }
+
+# Option 9. Never touches volumes (the database), containers or images a container uses, so other projects
+# on this server are safe. Quick: images nothing uses that have no name (old builds) and build cache no
+# image uses. Deep: all build cache too (the next deploy builds from scratch: slower, nothing lost).
+cleanup() {
+  local before after used
+  before=$(disk_free_kb)
+  echo "Disk: $(disk_use)% used, $(human_kb "$before") free ($(docker_root))."
+  echo; docker system df; echo
+  echo "  q) Quick: old CoachQuest builds (unnamed images) and unused build cache. Safe."
+  echo "  d) Deep: also all build cache. The next deploy takes a few minutes longer."
+  echo "  x) Back to the menu"
+  read -rp "Clean up [q/d/x]: " how
+  case $how in
+    ""|q|Q) docker image prune -f; docker builder prune -f ;;
+    d|D) docker image prune -f; docker builder prune -a -f ;;
+    *) echo "Nothing removed."; return 0 ;;
+  esac
+  after=$(disk_free_kb)
+  used=$(( after - before ))
+  echo
+  if (( used > 0 )); then echo "${G}Freed $(human_kb "$used").${X} Disk: $(disk_use)% used, $(human_kb "$after") free."
+  else echo "Nothing to free. Disk: $(disk_use)% used, $(human_kb "$after") free."; fi
+  if (( $(disk_use) >= 90 )); then
+    echo "${Y}Still nearly full. Biggest folders on this disk (takes a moment):${X}"
+    du -xh --max-depth=2 / 2>/dev/null | sort -rh | head -8
+    echo "Backups are in $BACKUPS (the last 14 kept); Docker's own use is listed above."
+  fi
+}
+
 # One summary line: what's on disk, what's running, what's up, and whether GitHub had more at the last fetch.
 header() {
   local disk running up all behind line
@@ -61,6 +96,12 @@ header() {
   if (( all > 0 && up == all )); then printf ' containers %s%s/%s up%s' "$G" "$up" "$all" "$X"
   else printf ' containers %s%s/%s up%s' "$R" "$up" "$all" "$X"; fi
   (( behind > 0 )) && printf '   %s%s new on GitHub (at last check)%s' "$Y" "$behind" "$X"
+  local use; use=$(disk_use)
+  if [[ -n $use ]]; then
+    if (( use >= 90 )); then printf '   %sdisk %s%% full: run 9%s' "$R" "$use" "$X"
+    elif (( use >= 80 )); then printf '   %sdisk %s%% full%s' "$Y" "$use" "$X"
+    else printf '   disk %s%% full' "$use"; fi
+  fi
   echo; echo "$line"
 }
 section() { printf ' %s%s%s\n' "$D" "$1" "$X"; }
@@ -77,7 +118,7 @@ while true; do
   echo "   5) Logs: api         6) Logs: proxy         8) Status"
   section MAINTENANCE
   echo "   7) Back up data now (keeps last 14)"
-  echo "   9) Docker cleanup (dangling images)"
+  echo "   9) Free disk space (old builds and Docker build cache)"
   section AUTOMATION
   printf '  10) Nightly backup 02:17       %s\n' "$(nightly_status)"
   printf '  11) Updates from Admin page    %s\n' "$(agent_status)"
@@ -126,7 +167,7 @@ while true; do
           echo "Installed: every night at 02:17 (server time), log in $BACKUPS/backup.log. Making one now to test:"
           bash backup.sh
         fi ;;
-    9) docker image prune -f ;;
+    9) cleanup ;;
     *) echo "${Y}No option \"$choice\" - pick a number from the list.${X}"; exit 0 ;;
   esac
   )
