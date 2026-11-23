@@ -200,7 +200,7 @@ export default function RaceReview() {
         </section>
       )}
 
-      {d.segments.length > 0 && <SegmentTable segments={d.segments} rides={rides} />}
+      {d.segments.length > 0 && <SegmentTable segments={d.segments} rides={rides} columns={d.segment_columns} />}
 
       {d.laps.length > 0 && (
         <section className="card">
@@ -448,13 +448,19 @@ const SEG_SORTS = [
 ];
 const SEG_FIRST = 15;
 
-function SegCell({ t, best }) {
+// `mine`: the athlete's time on the segment in the race, for a rider's cell: the athlete's gap to them.
+function SegCell({ t, best, mine }) {
   if (!t) return <span className="muted">–</span>;
-  const sub = [t.watts && `${t.watts} W`, t.hr && `${t.hr} bpm`, t.kmh && `${t.kmh} km/h`].filter(Boolean);
+  const effort = [t.watts && `${t.watts} W`, t.hr && `${t.hr} bpm`].filter(Boolean);
+  const yours = mine != null && t.elapsed_s != null ? mine - t.elapsed_s : null;
   return (
     <>
       <span className={best ? "seg-time best" : "seg-time"}>{hms(t.elapsed_s)}</span>
-      {sub.length > 0 && <span className="seg-sub">{sub.join(" · ")}</span>}
+      {effort.length > 0 && <span className="seg-sub">{effort.join(" · ")}</span>}
+      {t.kmh && <span className="seg-sub">{t.kmh} km/h</span>}
+      {yours != null && (
+        <span className={`seg-sub ${yours < 0 ? "ok-text" : yours > 0 ? "bad-text" : ""}`}>you {gap(yours)}</span>
+      )}
     </>
   );
 }
@@ -479,7 +485,8 @@ export function groupSimilar(list) {
   });
 }
 
-function SegRow({ s, years, similar = 0, open, toggle, child }) {
+function SegRow({ s, cols, similar = 0, open, toggle, child }) {
+  const race = cols.find((c) => c.kind === "race")?.key;
   return (
     <tr className={child ? "seg-child" : undefined}>
       <td className="num seg-at">{s.start_km != null ? s.start_km.toFixed(1) : "–"}</td>
@@ -500,9 +507,13 @@ function SegRow({ s, years, similar = 0, open, toggle, child }) {
           )}
         </span>
       </td>
-      {years.map((y) => (
-        <td key={y} className="num seg-cell">
-          <SegCell t={s.times[y]} best={s.best === y && Object.keys(s.times).length > 1} />
+      {cols.map((c) => (
+        <td key={c.key} className={`num seg-cell ${c.kind === "rider" ? "seg-rider" : ""}`}>
+          <SegCell
+            t={s.times[c.key]}
+            best={c.kind !== "rider" && s.best === c.key && Object.keys(s.times).length > 1}
+            mine={c.kind === "rider" && race ? s.times[race]?.elapsed_s : null}
+          />
         </td>
       ))}
       <td className={`num seg-vs ${s.vs_best_before < 0 ? "ok-text" : s.vs_best_before > 0 ? "bad-text" : ""}`}>
@@ -512,8 +523,19 @@ function SegRow({ s, years, similar = 0, open, toggle, child }) {
   );
 }
 
-function SegmentTable({ segments, rides }) {
-  const years = rides.map((r) => String(r.year));
+const RIDERS_SHOWN = 3; // rider columns at first; the chips add or remove them
+
+function SegmentTable({ segments, rides, columns }) {
+  const allCols = columns || rides.map((r, i) => ({ key: String(r.year), label: String(r.year), kind: i ? "year" : "race" }));
+  const riders = allCols.filter((c) => c.kind === "rider");
+  const [pickedRiders, setPickedRiders] = useState(() => new Set(riders.slice(0, RIDERS_SHOWN).map((c) => c.key)));
+  const cols = allCols.filter((c) => c.kind !== "rider" || pickedRiders.has(c.key));
+  const flip = (key) => {
+    const next = new Set(pickedRiders);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setPickedRiders(next);
+  };
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("course");
   const [all, setAll] = useState(false);
@@ -535,8 +557,9 @@ function SegmentTable({ segments, rides }) {
       <h2>Segment by segment</h2>
       <p className="muted small">
         Your time on each Strava segment of the course, each year, with your average power, heart rate and speed on it.
-        The best year is in bold; "vs best" is this race against your best earlier year (green: faster). Segments over
-        the same stretch are folded together.
+        The best year is in bold; "vs best" is this race against your best earlier year (green: faster). Other riders
+        on CoachQuest who rode it have their own column, with your gap to them. Segments over the same stretch are
+        folded together.
       </p>
       <div className="seg-controls">
         <div className="seg-chips" role="group" aria-label="Show segments">
@@ -551,6 +574,20 @@ function SegmentTable({ segments, rides }) {
             </button>
           ))}
         </div>
+        {riders.length > 0 && (
+          <div className="seg-chips" role="group" aria-label="Riders in the table">
+            {riders.map((c) => (
+              <button
+                key={c.key}
+                className={`btn small ${pickedRiders.has(c.key) ? "active" : ""}`}
+                aria-pressed={pickedRiders.has(c.key)}
+                onClick={() => flip(c.key)}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
         <label className="small seg-sort">
           Sort
           <select value={sort} onChange={(e) => setSort(e.target.value)}>
@@ -568,9 +605,9 @@ function SegmentTable({ segments, rides }) {
             <tr>
               <th className="num seg-at">At km</th>
               <th>Segment</th>
-              {years.map((y) => (
-                <th key={y} className="num">
-                  {y}
+              {cols.map((c) => (
+                <th key={c.key} className={`num ${c.kind === "rider" ? "seg-rider" : ""}`}>
+                  {c.label}
                 </th>
               ))}
               <th className="num seg-vs">vs best</th>
@@ -581,17 +618,17 @@ function SegmentTable({ segments, rides }) {
               <Fragment key={lead.id}>
                 <SegRow
                   s={lead}
-                  years={years}
+                  cols={cols}
                   similar={similar.length}
                   open={opened.has(lead.id)}
                   toggle={() => toggle(lead.id)}
                 />
-                {opened.has(lead.id) && similar.map((s) => <SegRow key={s.id} s={s} years={years} child />)}
+                {opened.has(lead.id) && similar.map((s) => <SegRow key={s.id} s={s} cols={cols} child />)}
               </Fragment>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={years.length + 3} className="muted">
+                <td colSpan={cols.length + 3} className="muted">
                   No segments of this kind on the course.
                 </td>
               </tr>

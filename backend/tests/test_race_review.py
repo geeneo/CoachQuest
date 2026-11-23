@@ -445,3 +445,25 @@ def test_admin_sees_every_rider_and_all_reviews(racer, make_user, monkeypatch):
 
     rows = admin.get("/api/admin/race-reviews?days=3650").json()
     assert {(x["athlete"], x["post_race"]["official_time"]) for x in rows} == {("Rider", "2:09:30"), ("Lerato", "1:58")}
+
+
+def test_other_riders_in_the_segment_table(racer, make_user):
+    """A rider who shares with the athlete gets a column: their time on each segment the athlete rode (not
+    the ones only they rode). The athlete's best year and "vs best" stay the athlete's own."""
+    p, uid, rid = racer
+    friend = make_user("friend@example.com", "Thandi")
+    fid = friend.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        db.add(_ride(uid, "me", RACE_DAY, detail=_detail({1: 600, 2: 300})))
+        db.add(_ride(uid, "r25", date(2025, 10, 5), detail=_detail({1: 620, 2: 280})))
+        db.add(_ride(fid, "f1", RACE_DAY, detail=_detail({1: 550, 3: 90})))  # faster on 1; segment 3 only theirs
+        db.add(Grant(athlete_id=fid, coach_id=uid, scopes=["activities"], role="friend", status="active"))
+        db.commit()
+    r = p.get(f"/api/athletes/me/races/{rid}/review").json()
+    cols = [(c["label"], c["kind"]) for c in r["segment_columns"]]
+    assert cols == [("2026", "race"), ("2025", "year"), ("Thandi", "rider")]
+    key = r["segment_columns"][2]["key"]
+    segs = {s["id"]: s for s in r["segments"]}
+    assert set(segs) == {1, 2}  # not the segment only Thandi rode
+    assert segs[1]["times"][key]["elapsed_s"] == 550 and key not in segs[2]["times"]
+    assert segs[1]["best"] == "2026" and segs[1]["vs_best_before"] == -20  # the athlete's own years only

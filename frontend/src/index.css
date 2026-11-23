@@ -3156,3 +3156,16 @@ button.mini-day {
   align-items: center;
   gap: 0.4rem;
 }
+/* Race review: other riders' columns in the segment table */
+.seg-table .seg-rider {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.seg-cell .seg-sub {
+  white-space: nowrap;
+}
+.seg-cell .seg-sub.ok-text {
+  color: var(--ok);
+}
+.seg-cell .seg-sub.bad-text {
+  color: var(--danger);
+}

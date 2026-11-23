@@ -46,6 +46,7 @@ DETAIL_RETRY = timedelta(hours=6)  # a failed detail request is tried again afte
 DETAIL_VERSION = 2
 NEAR_LINE_M = 300  # a segment's start this close to the ride's line is on it
 MAX_DETAIL_FETCHES = 6  # per review: the ride and up to five earlier editions
+MAX_RIDER_DETAILS = 8  # other riders whose segment times are fetched (one request each, with their Strava)
 RUN_DISCIPLINES = {"Run", "Trail run", "Ultra"}
 
 
@@ -296,6 +297,15 @@ async def fill_details(db: DbSession, athlete_id: int, acts: list[Activity]) -> 
     return notes
 
 
+async def fill_rider_details(db: DbSession, others: list[dict]) -> None:
+    """Strava's detail of other riders' rides, each with their own Strava link (they share these rides with
+    the viewer): their segment times for the table. Failures are left out quietly."""
+    for o in others[:MAX_RIDER_DETAILS]:
+        a = db.get(Activity, o["activity_id"])
+        if a is not None:
+            await fill_details(db, o["athlete_id"], [a])
+
+
 def detail_of(db: DbSession, a: Activity) -> dict | None:
     c = strava_copy(db, a)
     d = c.detail if c is not None else None
@@ -352,10 +362,11 @@ def ride_stats(db: DbSession, a: Activity, tz, ctl: float | None = None) -> dict
     }
 
 
-def segment_table(rows: list[tuple[str, dict | None]]) -> list[dict]:
+def segment_table(rows: list[tuple[str, dict | None]], riders: list[tuple[str, dict | None]] = ()) -> list[dict]:
     """Each Strava segment of the course, in course order (where it starts, then the shorter first), with
-    the time, speed, power and heart rate on it in each ride: [(label, detail)], the race first. The best
-    time per segment is marked."""
+    the time, speed, power and heart rate on it in each of the athlete's rides ([(label, detail)], the race
+    first) and each other rider's ([(label, detail)]: only on segments the athlete rode). The athlete's best
+    year is marked; "vs best" is the race against their best earlier year."""
     order: list[int] = []
     info: dict[int, dict] = {}
     for _, d in rows:
@@ -363,10 +374,11 @@ def segment_table(rows: list[tuple[str, dict | None]]) -> list[dict]:
             if s["id"] not in info:
                 info[s["id"]] = s
                 order.append(s["id"])
+    own = {label for label, _ in rows}
     out = []
     for sid in order:
         times = {}
-        for label, d in rows:
+        for label, d in [*rows, *riders]:
             efforts = [s for s in (d or {}).get("segments") or [] if s["id"] == sid]
             if efforts:  # ridden twice (a lap course): the faster one
                 e = min(efforts, key=lambda s: s["elapsed_s"] or 1e9)
@@ -379,13 +391,15 @@ def segment_table(rows: list[tuple[str, dict | None]]) -> list[dict]:
                 }
         if len(times) < 1:
             continue
-        valid = {k: v["elapsed_s"] for k, v in times.items() if v["elapsed_s"]}
+        valid = {k: v["elapsed_s"] for k, v in times.items() if v["elapsed_s"] and k in own}
         best = min(valid, key=valid.get) if valid else None
         first = rows[0][0]
         others = [v for k, v in valid.items() if k != first]
         s = info[sid]
         # Where it starts: on the race's own ride when it has it, else the first ride that does.
         at = [x.get("start_km") for _, d in rows for x in (d or {}).get("segments") or [] if x["id"] == sid]
+        if not any(k in own for k in times):
+            continue
         out.append(
             {
                 "id": sid,

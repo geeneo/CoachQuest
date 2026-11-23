@@ -52,10 +52,22 @@ async def review(athlete: str, race_id: int, user: User = Depends(current_user),
     ctl = race_review.ctl_before(db, owner.id, [localtime.local_date(a.start_time, tz) for a in rides])
     stats = [race_review.ride_stats(db, a, tz, ctl.get(localtime.local_date(a.start_time, tz))) for a in rides]
     me = stats[0] if ride else None
-    segments = race_review.segment_table(
-        [(str(s["year"]), race_review.detail_of(db, a)) for s, a in zip(stats, rides, strict=True)]
-    )
     others = race_review.other_riders(db, user, owner, race, ride)
+    await race_review.fill_rider_details(db, others)
+    columns = [
+        {"key": str(s["year"]), "label": str(s["year"]), "kind": "race" if i == 0 and ride else "year"}
+        for i, s in enumerate(stats)
+    ]
+    rider_rows = []
+    for o in others:
+        d = race_review.detail_of(db, db.get(Activity, o["activity_id"]))
+        if d is not None:
+            key = f"rider-{o['athlete_id']}"
+            columns.append({"key": key, "label": o["name"], "kind": "rider"})
+            rider_rows.append((key, d))
+    segments = race_review.segment_table(
+        [(str(s["year"]), race_review.detail_of(db, a)) for s, a in zip(stats, rides, strict=True)], rider_rows
+    )
     result = race.result or {}
     if race.target_date and race.target_date > today:
         notes.insert(0, "The race is still to come: this fills in on the day.")
@@ -79,6 +91,7 @@ async def review(athlete: str, race_id: int, user: User = Depends(current_user),
         ],
         "earlier": stats[1:],
         "segments": segments,
+        "segment_columns": columns,
         "laps": (race_review.detail_of(db, ride) or {}).get("laps", []) if ride else [],
         "others": others,
         "standings": race_review.standings(me, result, others, "You" if own else owner.display_name),
