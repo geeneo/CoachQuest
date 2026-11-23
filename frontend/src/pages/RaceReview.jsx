@@ -70,6 +70,8 @@ export default function RaceReview() {
   const { raceId, athleteId } = useParams();
   const base = `/api/athletes/${athleteId || "me"}/races/${raceId}/review`;
   const res = useApi(base);
+  // Each part below is keyed by `base`: moving to another race (a rider's review, say) starts them afresh,
+  // so the rider columns, the form and the filters belong to the race shown.
   const [weather, setWeather] = useState(null);
   const [weatherError, setWeatherError] = useState(null);
   const d = res.data;
@@ -119,7 +121,7 @@ export default function RaceReview() {
         <section className="card">
           <h2>Your ride</h2>
           {d.own && d.candidates.length > 1 && (
-            <RidePicker raceId={raceId} d={d} reload={res.reload} />
+            <RidePicker key={`${base}#picker`} raceId={raceId} d={d} reload={res.reload} />
           )}
           <RideStats r={d.ride} target={race.target_time} />
           <p className="small">
@@ -138,7 +140,7 @@ export default function RaceReview() {
       )}
 
       {d.own ? (
-        <PostRaceForm raceId={raceId} result={d.result} reload={res.reload} />
+        <PostRaceForm key={`${base}#form`} raceId={raceId} result={d.result} reload={res.reload} />
       ) : (
         <PostRaceRead result={d.result} />
       )}
@@ -200,7 +202,7 @@ export default function RaceReview() {
         </section>
       )}
 
-      {d.segments.length > 0 && <SegmentTable segments={d.segments} rides={rides} columns={d.segment_columns} />}
+      {d.segments.length > 0 && <SegmentTable key={`${base}#segments`} segments={d.segments} rides={rides} columns={d.segment_columns} />}
 
       {d.laps.length > 0 && (
         <section className="card">
@@ -233,7 +235,7 @@ export default function RaceReview() {
       )}
 
       {(d.own || d.standings.length > 0) && (
-        <Riders raceId={raceId} d={d} reload={res.reload} />
+        <Riders key={`${base}#riders`} raceId={raceId} d={d} reload={res.reload} />
       )}
     </>
   );
@@ -528,14 +530,13 @@ const RIDERS_SHOWN = 3; // rider columns at first; the chips add or remove them
 function SegmentTable({ segments, rides, columns }) {
   const allCols = columns || rides.map((r, i) => ({ key: String(r.year), label: String(r.year), kind: i ? "year" : "race" }));
   const riders = allCols.filter((c) => c.kind === "rider");
-  const [pickedRiders, setPickedRiders] = useState(() => new Set(riders.slice(0, RIDERS_SHOWN).map((c) => c.key)));
+  // Only the riders switched on or off by hand are kept; the rest follow the default (the first few shown),
+  // so it holds for whatever race's data is on screen.
+  const [switched, setSwitched] = useState({});
+  const riderOn = (c) => switched[c.key] ?? riders.indexOf(c) < RIDERS_SHOWN;
+  const pickedRiders = new Set(riders.filter(riderOn).map((c) => c.key));
   const cols = allCols.filter((c) => c.kind !== "rider" || pickedRiders.has(c.key));
-  const flip = (key) => {
-    const next = new Set(pickedRiders);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    setPickedRiders(next);
-  };
+  const flip = (key) => setSwitched({ ...switched, [key]: !pickedRiders.has(key) });
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("course");
   const [all, setAll] = useState(false);

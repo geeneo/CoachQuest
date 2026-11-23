@@ -467,3 +467,33 @@ def test_other_riders_in_the_segment_table(racer, make_user):
     assert set(segs) == {1, 2}  # not the segment only Thandi rode
     assert segs[1]["times"][key]["elapsed_s"] == 550 and key not in segs[2]["times"]
     assert segs[1]["best"] == "2026" and segs[1]["vs_best_before"] == -20  # the athlete's own years only
+
+
+def test_earlier_years_are_fetched_when_an_admin_looks(racer, make_user, monkeypatch):
+    """The athlete never opened the review: when an admin does, the earlier years' segment times are
+    fetched with the athlete's Strava link, so the columns aren't empty."""
+    from app.db import Connection
+
+    p, uid, rid = racer
+    admin = make_user("admin@example.com", "Admin")
+    aid = admin.get("/api/auth/me").json()["id"]
+    with SessionLocal() as db:
+        db.get(User, aid).is_admin = True
+        db.add(_ride(uid, "r26", RACE_DAY))
+        db.add(_ride(uid, "r25", date(2025, 10, 5)))
+        db.add(Connection(user_id=uid, provider="strava", token_enc="x", status="active"))
+        db.commit()
+    asked = []
+
+    async def fake_detail(db, conn, ext):
+        asked.append((conn.user_id, ext))
+        t = 600 if ext == "r26" else 620
+        return {"segment_efforts": [{"segment": {"id": 1, "name": "Climb"}, "elapsed_time": t, "start_index": 1}]}
+
+    monkeypatch.setattr(strava, "activity_detail", fake_detail)
+    _admin_on(monkeypatch)
+    d = admin.get(f"/api/athletes/{uid}/races/{rid}/review").json()
+    assert sorted(asked) == [(uid, "r25"), (uid, "r26")]  # the athlete's own link, both years
+    times = d["segments"][0]["times"]
+    assert times["2026"]["elapsed_s"] == 600 and times["2025"]["elapsed_s"] == 620
+    assert d["notes"] == []  # notes like "link Strava" are the athlete's

@@ -1,8 +1,8 @@
 """After a race (race_review.py): the post-race update, earlier years, segments, weather and other riders.
 
-The athlete reads and writes; coaches with the plans and activities scopes read. Only the athlete's own
-look fetches anything from Strava (segment times, with their link) or lists other riders (who shared with
-them, not with the coach)."""
+The athlete reads and writes; coaches with the plans and activities scopes, and admins while they may view
+athletes' data, read. Segment times are fetched from Strava with each rider's own link, once, whoever looks.
+Other riders are those the viewer may see (race_review.visible_riders)."""
 
 import asyncio
 from datetime import date, timedelta
@@ -48,7 +48,11 @@ async def review(athlete: str, race_id: int, user: User = Depends(current_user),
     ride = race_review.pick_ride(race, cands)
     earlier = race_review.editions(db, owner, race, ride)
     rides = ([ride] if ride else []) + earlier
-    notes = await race_review.fill_details(db, owner.id, rides) if own and rides else []
+    # The segment times of the athlete's rides, with their Strava link, whoever looks (they may see them):
+    # otherwise earlier years stay empty until the athlete opens the review themself. The notes (e.g. "link
+    # Strava") are for the athlete.
+    fetched = await race_review.fill_details(db, owner.id, rides) if rides else []
+    notes = fetched if own else []
     ctl = race_review.ctl_before(db, owner.id, [localtime.local_date(a.start_time, tz) for a in rides])
     stats = [race_review.ride_stats(db, a, tz, ctl.get(localtime.local_date(a.start_time, tz))) for a in rides]
     me = stats[0] if ride else None
