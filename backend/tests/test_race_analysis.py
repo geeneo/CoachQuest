@@ -178,7 +178,7 @@ def test_debrief_facts_saved_and_for_the_coach(racer, make_user, monkeypatch):  
     assert r.status_code == 200, r.text
     assert r.json()["key_points"] == ["Eat every 30 min"] and seen["kind"] == "debrief"
     f = seen["facts"]
-    assert f["race_ride"]["elapsed_s"] == 7800 and f["post_race_update"]["nutrition"] == "Two gels only"
+    assert f["race_ride"]["elapsed_s"] == "2:10:00" and f["post_race_update"]["nutrition"] == "Two gels only"
     assert "Thandi" not in json.dumps(f) and {s["who"] for s in f["standings"]} == {"the athlete", "another rider"}
     review = p.get(f"/api/athletes/me/races/{rid}/review").json()
     assert review["result"]["debrief"]["md"].startswith("**Solid")
@@ -229,7 +229,7 @@ def test_stage_race_day_by_day(racer, monkeypatch):  # noqa: F811
     assert p.get(f"/api/athletes/me/races/{rid}/review/pacing?stage=3").json()["available"] is False
 
     async def fake_claude(db, viewer, athlete, system, content, output_format=None, kind="plan"):
-        assert json.loads(content)["race_ride"]["elapsed_s"] == 8100
+        assert json.loads(content)["race_ride"]["elapsed_s"] == "2:15:00"
         return json.dumps({"debrief_md": "Day 3 went well.", "key_points": ["Recover between days"]}), "m"
 
     async def no_weather(db, a, today):
@@ -264,3 +264,18 @@ def test_official_clock_starts_after_the_neutral_zone():
     last = out["checkpoints"][-1]
     assert last["planned_s"] == 1800 and abs(last["gap_s"]) <= 5  # the target time, met
     assert out["climbs"][0]["neutral"] is True
+
+
+def test_debrief_times_read_as_minutes_not_seconds():
+    """The AI coach gets every time as a clock time and every gap signed, so it doesn't write "1016 s"."""
+    from app.race_debrief import clock, readable
+
+    assert (clock(45), clock(1016), clock(33252)) == ("45 s", "16:56", "9:14:12")
+    assert (clock(1016, signed=True), clock(-454, signed=True), clock(0, signed=True)) == ("+16:56", "-7:34", "0 s")
+    facts = {"plan_vs_race": {"final_gap_s": 2511, "checkpoints": [{"km": 75, "gap_s": -1016, "planned_s": 11300}]}}
+    assert readable(facts) == {
+        "plan_vs_race": {
+            "final_gap_s": "+41:51",
+            "checkpoints": [{"km": 75, "gap_s": "-16:56", "planned_s": "3:08:20"}],
+        }
+    }
