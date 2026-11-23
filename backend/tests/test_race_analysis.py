@@ -54,11 +54,13 @@ def test_plan_against_the_race():
         "checkpoints": [{"km": 10.0, "elapsed": "0:20", "climbed_m": 50}, {"km": 20.0, "elapsed": "0:40"}],
         "climbs": [{"start_km": 12.0, "length_km": 3.0, "grade_pct": 4.0, "power_w": 260, "time": "0:06"}],
     }
-    out = ra.plan_vs_race(plan, track)
+    out = ra.plan_vs_race(plan, track)  # by the ride's clock
     first, last = out["checkpoints"]
     assert abs(first["gap_s"]) <= 3  # on plan at km 10 (the stop starts there)
     assert abs(last["gap_s"] - 300) <= 5  # 5 minutes behind at the end: the stop
-    assert out["final_gap_s"] == last["gap_s"] and out["off_plan_from_km"] == 20.0
+    assert out["final_gap_s"] == last["gap_s"] and out["behind_from_km"] == 20.0
+    moving = ra.plan_vs_race(plan, track, "moving")
+    assert abs(moving["final_gap_s"]) <= 3 and moving["behind_from_km"] is None  # the stop doesn't count
     climb = out["climbs"][0]
     assert climb["target_w"] == 260 and climb["actual_w"] == 240 and abs(climb["gap_s"]) <= 2
 
@@ -95,8 +97,10 @@ def test_pacing_endpoint(racer, monkeypatch):  # noqa: F811
         assert path.endswith("/streams")
         return _streams()
 
+    stops_asked = []
+
     async def fake_pacing(db, race, user, group, stops):
-        assert stops == 5  # the race's own stops
+        stops_asked.append(stops)
         return [], {
             "target_time": "0:40",
             "checkpoints": [{"km": 20.0, "elapsed": "0:40"}],
@@ -107,7 +111,11 @@ def test_pacing_endpoint(racer, monkeypatch):  # noqa: F811
     monkeypatch.setattr(strava, "_get", fake_get)
     monkeypatch.setattr(races_router, "_pacing", fake_pacing)
     r = p.get(f"/api/athletes/me/races/{rid}/review/pacing").json()
-    assert r["available"] is True and abs(r["checkpoints"][0]["gap_s"] - 300) <= 5
+    # No official time: by moving time (no stops in the plan), so the 5-minute stop doesn't count.
+    assert r["available"] is True and r["basis"] == "moving" and stops_asked == [0]
+    assert abs(r["checkpoints"][0]["gap_s"]) <= 5
+    r = p.get(f"/api/athletes/me/races/{rid}/review/pacing?basis=elapsed").json()
+    assert stops_asked[-1] == 5 and abs(r["checkpoints"][0]["gap_s"] - 300) <= 5  # the ride's clock
     with SessionLocal() as db:
         a = db.query(Activity).filter_by(external_id="me").one()
         assert a.detail["track"][-1][0] > 19.9  # kept: a second look doesn't ask Strava again
@@ -117,6 +125,17 @@ def test_pacing_endpoint(racer, monkeypatch):  # noqa: F811
 
     monkeypatch.setattr(strava, "_get", no_more)
     assert p.get(f"/api/athletes/me/races/{rid}/review/pacing").json()["available"] is True
+    # An official time: by the race's clock from the neutral zone's end; the choice and km can be saved.
+    p.request("PUT", f"/api/races/{rid}/result", json={"official_time": "0:35:00"})
+    r = p.get(f"/api/athletes/me/races/{rid}/review/pacing").json()
+    assert r["basis"] == "official" and r["start_found"] is True and 4.9 <= r["start_km"] <= 5.1  # 10 min in
+    saved = p.request("PUT", f"/api/races/{rid}/result", json={"pace_basis": "official", "neutral_km": 2.0})
+    assert saved.json()["neutral_km"] == 2.0
+    r = p.get(f"/api/athletes/me/races/{rid}/review/pacing").json()
+    assert r["start_km"] == 2.0 and r["start_found"] is False
+    p.request("PUT", f"/api/races/{rid}/result", json={"official_time": "1:30:00", "neutral_km": None})
+    r = p.get(f"/api/athletes/me/races/{rid}/review/pacing").json()
+    assert r["basis"] == "elapsed" and "longer than your ride" in r["notes"][0]
     # Without a target time there's nothing to compare.
     with SessionLocal() as db:
         db.get(Race, rid).target_seconds = None
@@ -222,3 +241,26 @@ def test_stage_race_day_by_day(racer, monkeypatch):  # noqa: F811
     assert p.request("POST", f"/api/races/{rid}/debrief?stage=3").status_code == 200
     res = p.get(f"/api/athletes/me/races/{rid}/review?stage=3").json()["result"]
     assert res["stage_debriefs"]["3"]["md"] == "Day 3 went well." and "debrief" not in res
+
+
+def test_official_clock_starts_after_the_neutral_zone():
+    """The official time is shorter than the ride: timing started where the ride's clock read its finish
+    minus the official time. Checkpoints before that are left out, and the plan from there is scaled to the
+    target time."""
+    track = ra.compact_track(_streams(stop_s=0))  # 20 km at 30 km/h: 40 minutes
+    plan = {
+        "checkpoints": [
+            {"km": 5.0, "elapsed": "0:10"},
+            {"km": 10.0, "elapsed": "0:20"},
+            {"km": 20.0, "elapsed": "0:40"},
+        ],
+        "climbs": [{"start_km": 2.0, "length_km": 1.0, "grade_pct": 4.0, "power_w": 250, "time": "0:02"}],
+    }
+    start_km = ra.km_at_elapsed(track, 2400 - 1800)  # official 30:00: timing from 10 minutes in
+    assert 4.9 <= start_km <= 5.1
+    at = ra.at_km(track, start_km)
+    out = ra.plan_vs_race(plan, track, "official", {"km": start_km, "elapsed": at[1], "moving": at[2]}, 1800)
+    assert [c["km"] for c in out["checkpoints"]] == [10.0, 20.0] and out["start_km"] == start_km
+    last = out["checkpoints"][-1]
+    assert last["planned_s"] == 1800 and abs(last["gap_s"]) <= 5  # the target time, met
+    assert out["climbs"][0]["neutral"] is True

@@ -83,14 +83,20 @@ export default function RaceReview() {
   const [pacing, setPacing] = useState(null);
   const d = res.data;
 
-  // The plan against the race: also slower (the route, and the race's track from Strava once).
+  // The plan against the race: also slower (the route, and the race's track from Strava once). `paceAsk`:
+  // the clock and neutral zone picked on the page (else the race's saved choice).
+  const [paceAsk, setPaceAsk] = useState({});
   useEffect(() => {
     if (!d?.ride) return;
     setPacing(null);
-    api(`${root}/pacing${q}`)
+    const params = new URLSearchParams(stage ? { stage: String(stage) } : {});
+    if (paceAsk.basis) params.set("basis", paceAsk.basis);
+    if (paceAsk.neutral_km !== undefined && paceAsk.neutral_km !== "") params.set("neutral_km", paceAsk.neutral_km);
+    const qs = params.toString();
+    api(`${root}/pacing${qs ? `?${qs}` : ""}`)
       .then(setPacing)
       .catch((e) => setPacing({ available: false, why: e.message }));
-  }, [base, d?.ride?.activity_id]);
+  }, [base, d?.ride?.activity_id, paceAsk]);
 
   // The weather is slower (a request per ride): asked for after the rest is shown.
   useEffect(() => {
@@ -181,7 +187,15 @@ export default function RaceReview() {
       {d.ride && !stage && (
         <section className="card">
           <h2>Plan vs race</h2>
-          <PlanVsRace p={pacing} />
+          <PlanVsRace
+            key={`${base}#plan`}
+            p={pacing}
+            own={d.own}
+            raceId={raceId}
+            ask={setPaceAsk}
+            saved={{ basis: d.result.pace_basis, neutral_km: d.result.neutral_km }}
+            reload={res.reload}
+          />
         </section>
       )}
 
@@ -314,8 +328,84 @@ export default function RaceReview() {
 }
 
 // The pacing plan for the target time against the race as ridden: checkpoints and climbs.
-function PlanVsRace({ p }) {
-  if (!p) return <p className="muted small">Working out the plan against the race…</p>;
+const BASES = [
+  ["official", "Official finish time"],
+  ["moving", "Moving time"],
+  ["elapsed", "Ride clock (elapsed)"],
+];
+
+function PlanVsRace({ p, own, raceId, ask, saved, reload }) {
+  const [basis, setBasis] = useState(saved.basis || "");
+  const [neutral, setNeutral] = useState(saved.neutral_km ?? "");
+  const [msg, setMsg] = useState(null);
+  const shown = p?.basis || basis;
+  const apply = (b, n) => ask({ basis: b || undefined, neutral_km: b === "official" ? n : "" });
+  const save = async () => {
+    setMsg(null);
+    try {
+      await api(`/api/races/${raceId}/result`, {
+        method: "PUT",
+        body: {
+          pace_basis: shown || null,
+          neutral_km: shown === "official" && neutral !== "" ? Number(neutral) : null,
+        },
+      });
+      setMsg("Saved for this race.");
+      reload();
+    } catch (e) {
+      setMsg(e.message);
+    }
+  };
+  const controls = p?.available !== false && (
+    <div className="seg-controls">
+      <label className="small seg-sort">
+        Compare by
+        <select
+          value={shown}
+          onChange={(e) => {
+            setBasis(e.target.value);
+            apply(e.target.value, neutral);
+          }}
+        >
+          {BASES.map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {shown === "official" && (
+        <label className="small seg-sort">
+          Timing starts at km
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            className="km-input"
+            value={neutral}
+            placeholder={p?.start_km != null ? String(p.start_km) : "auto"}
+            onChange={(e) => setNeutral(e.target.value)}
+            onBlur={() => apply("official", neutral)}
+            onKeyDown={(e) => e.key === "Enter" && apply("official", neutral)}
+            title="Where the race's timing started (the end of a neutral zone). Empty: worked out from your official time."
+          />
+        </label>
+      )}
+      {own && (
+        <button className="btn small" onClick={save}>
+          Save for this race
+        </button>
+      )}
+      {msg && <span className="small muted">{msg}</span>}
+    </div>
+  );
+  if (!p)
+    return (
+      <>
+        {controls}
+        <p className="muted small">Working out the plan against the race…</p>
+      </>
+    );
   if (!p.available) return <p className="muted small">{p.why}</p>;
   const verdict =
     p.final_gap_s == null
@@ -328,17 +418,32 @@ function PlanVsRace({ p }) {
   const gapCell = (g) => (
     <td className={`num ${g > 60 ? "bad-text" : g < -60 ? "ok-text" : ""}`}>{gap(g)}</td>
   );
+  const how = {
+    official:
+      p.start_km != null
+        ? `By the official time${p.official_time ? ` (${p.official_time})` : ""}, timed from km ${p.start_km}${
+            p.start_found ? " (worked out from it: the neutral zone before)" : ""
+          }; the plan from there is scaled to the target, with your ${p.stops_min} min of stops after it.`
+        : "By the official time.",
+    moving: "By moving time: stops and a neutral zone don't count, and the plan has no stops.",
+    elapsed: `By the ride's clock from its start, with your ${p.stops_min} min of stops in the plan.`,
+  }[p.basis];
   return (
     <>
+      {controls}
+      {p.notes?.map((n) => (
+        <p key={n} className="notice small">
+          {n}
+        </p>
+      ))}
       <p>
         <strong>
           Target {p.target_time}
           {verdict ? `: ${verdict}` : ""}.
         </strong>{" "}
-        {p.off_plan_from_km != null && <>Off the plan from km {p.off_plan_from_km}. </>}
+        {p.behind_from_km != null && <>Behind the plan from km {p.behind_from_km}. </>}
         <span className="muted small">
-          The plan rides {p.base_power_w} W on the flat ({p.norm_power_w} W NP) with your {p.stops_min} min of stops,
-          so its finish is the target time.
+          {how} The plan rides {p.base_power_w} W on the flat ({p.norm_power_w} W NP).
         </span>
       </p>
       <div className="plan-race">
@@ -381,8 +486,11 @@ function PlanVsRace({ p }) {
               </thead>
               <tbody>
                 {p.climbs.map((c) => (
-                  <tr key={c.start_km}>
-                    <td className="num">{c.start_km}</td>
+                  <tr key={c.start_km} className={c.neutral ? "muted" : undefined}>
+                    <td className="num">
+                      {c.start_km}
+                      {c.neutral && <span className="seg-sub">neutral zone</span>}
+                    </td>
                     <td className="num">
                       {c.length_km} km · {c.grade_pct}%
                     </td>

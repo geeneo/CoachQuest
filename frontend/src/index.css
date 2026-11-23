@@ -3212,3 +3212,11 @@ button.mini-day {
 .year-table td {
   vertical-align: top;
 }
+.km-input {
+  width: 6rem;
+}
+.plan-race .seg-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}

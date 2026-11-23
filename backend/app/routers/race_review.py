@@ -158,6 +158,8 @@ async def review_pacing(
     athlete: str,
     race_id: int,
     stage: int | None = Stage,
+    basis: str | None = Query(default=None, pattern="^(official|moving|elapsed)$"),
+    neutral_km: float | None = Query(default=None, ge=0, le=500),
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),
 ):
@@ -168,10 +170,16 @@ async def review_pacing(
     if stage:
         _view(race, stage)
         return {"available": False, "why": "A pacing plan is for a one-day race's target time, not a stage."}
-    return await _plan_vs_race(db, race, owner)
+    return await _plan_vs_race(db, race, owner, basis, neutral_km)
 
 
-async def _plan_vs_race(db: DbSession, race: Race, owner: User) -> dict:
+async def _plan_vs_race(
+    db: DbSession, race: Race, owner: User, basis: str | None = None, neutral_km: float | None = None
+) -> dict:
+    """The plan against the race by one of three clocks (race_analysis.plan_vs_race). The race's saved
+    choice when none is asked for, else the official finish time when there is one, else moving time.
+    For the official clock, timing starts at the neutral zone's end: the km given, else where the ride's
+    clock read its finish time minus the official time."""
     from .races import _pacing
 
     ride = race_review.pick_ride(race, race_review.candidates(db, owner, race))
@@ -184,12 +192,46 @@ async def _plan_vs_race(db: DbSession, race: Race, owner: User) -> dict:
     track = (copy.detail or {}).get("track") if copy is not None else None
     if not track:
         return {"available": False, "why": note or "The race's power and timing come from Strava: link it."}
-    stopped = max(0, (ride.elapsed_s or ride.duration_s or 0) - (ride.duration_s or 0))
+    res = race.result or {}
+    basis = basis or res.get("pace_basis") or ("official" if res.get("official_s") else "moving")
+    neutral = neutral_km if neutral_km is not None else res.get("neutral_km")
+    end, notes, start = track[-1], [], None
+    if basis == "official":
+        official = res.get("official_s")
+        if not official:
+            basis = "moving"
+            notes.append("No official time in the post-race update: compared by moving time.")
+        elif neutral is not None:
+            at = race_analysis.at_km(track, float(neutral))
+            if at is None:
+                notes.append(f"Your ride doesn't reach km {neutral}: timing taken from the start.")
+                at = [0.0, 0, 0]
+            start = {"km": float(neutral), "elapsed": at[1], "moving": at[2]}
+        elif end[1] - official < 0:
+            basis = "elapsed"
+            notes.append(
+                f"The official time ({format_time(official)}) is longer than your ride ({format_time(end[1])}): "
+                "compared by the ride's clock. Check the official time in the post-race update."
+            )
+        else:
+            km = race_analysis.km_at_elapsed(track, end[1] - official) or 0.0
+            at = race_analysis.at_km(track, km)
+            start = {"km": km, "elapsed": at[1], "moving": at[2], "found": True}
+    if basis == "official" and start:
+        stops = (end[1] - start["elapsed"]) - (end[2] - start["moving"])
+    elif basis == "moving":
+        stops = 0
+    else:
+        stops = end[1] - end[2]
     try:
-        _, plan = await _pacing(db, race, owner, None, min(600, round(stopped / 60)))
+        _, plan = await _pacing(db, race, owner, None, min(600, max(0, round(stops / 60))))
     except HTTPException as exc:
         return {"available": False, "why": exc.detail}
-    return {"available": True, **race_analysis.plan_vs_race(plan, track)}
+    out = race_analysis.plan_vs_race(plan, track, basis, start, race.target_seconds)
+    out["start_found"] = bool(start and start.get("found"))
+    out["official_time"] = format_time(res.get("official_s"))
+    out["notes"] = notes
+    return {"available": True, **out}
 
 
 class TypedRider(BaseModel):
@@ -220,6 +262,9 @@ class PostRace(BaseModel):
     problems: str | None = Field(default=None, max_length=2000)
     next_time: str | None = Field(default=None, max_length=2000)
     riders: list[TypedRider] | None = Field(default=None, max_length=50)
+    # Plan vs race: which clock to compare by, and where official timing started (after a neutral zone).
+    pace_basis: str | None = Field(default=None, pattern="^(official|moving|elapsed)$")
+    neutral_km: float | None = Field(default=None, ge=0, le=500)
 
     @field_validator("official_time")
     @classmethod

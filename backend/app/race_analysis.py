@@ -128,20 +128,60 @@ def between(track: list[list], km0: float, km1: float) -> dict:
 # ---- the plan against the race ----
 
 
-def plan_vs_race(plan: dict, track: list[list], start_clock: str | None = None) -> dict:
-    """The pacing plan's checkpoints and climbs beside the race as ridden (the track)."""
+BASES = ("official", "moving", "elapsed")
+
+
+def km_at_elapsed(track: list[list], secs: float) -> float | None:
+    """Where on the track the ride's clock read `secs` (the first point it got there)."""
+    if not track or secs < 0 or secs > track[-1][1]:
+        return None
+    for a, b in zip(track, track[1:], strict=False):
+        if b[1] >= secs:
+            f = 0 if b[1] == a[1] else (secs - a[1]) / (b[1] - a[1])
+            return round(a[0] + f * (b[0] - a[0]), 1)
+    return track[-1][0]
+
+
+def _plan_at(points: list[tuple[float, float]], km: float) -> float:
+    """The plan's time at `km`, between its checkpoints (from 0 at the start)."""
+    for (k0, t0), (k1, t1) in zip(points, points[1:], strict=False):
+        if k1 >= km:
+            return t0 + (0 if k1 == k0 else (km - k0) / (k1 - k0) * (t1 - t0))
+    return points[-1][1]
+
+
+def plan_vs_race(
+    plan: dict, track: list[list], basis: str = "elapsed", start: dict | None = None, target_s: int | None = None
+) -> dict:
+    """The pacing plan's checkpoints and climbs beside the race as ridden (the track), by one of three clocks:
+
+    - elapsed: the ride's own clock from its start, stops included (the plan has the stops made);
+    - moving: moving time only (the plan has no stops): stops and a neutral zone don't count;
+    - official: the race's clock, from where timing started (`start`: its km and the ride's elapsed and
+      moving time there, e.g. after a neutral zone) to the finish; the plan from there is scaled so its
+      finish is the target time."""
+    marks = [(c["km"], parse_time(c["elapsed"]) or 0) for c in plan.get("checkpoints") or []]
+    points = [(0.0, 0.0), *marks]
+    scale, p0 = 1.0, 0.0
+    if basis == "official" and start and target_s and points[-1][1]:
+        p0 = _plan_at(points, start["km"])
+        scale = target_s / max(1.0, points[-1][1] - p0)
     checkpoints = []
-    for c in plan.get("checkpoints") or []:
-        planned = parse_time(c["elapsed"])
-        actual = at_km(track, c["km"])
+    for km, planned in marks:
+        actual = at_km(track, km)
+        if basis == "official" and start:
+            if km <= start["km"]:
+                continue  # before timing started: the neutral zone
+            planned = round((planned - p0) * scale)
+            real = actual[1] - start["elapsed"] if actual else None
+        else:
+            real = (actual[2] if basis == "moving" else actual[1]) if actual else None
         checkpoints.append(
             {
-                "km": c["km"],
+                "km": km,
                 "planned_s": planned,
-                "actual_s": round(actual[1]) if actual else None,
-                # Positive: behind the plan.
-                "gap_s": round(actual[1]) - planned if actual and planned is not None else None,
-                "climbed_m": c.get("climbed_m"),
+                "actual_s": round(real) if real is not None else None,
+                "gap_s": round(real) - planned if real is not None else None,  # positive: behind the plan
             }
         )
     climbs = []
@@ -159,15 +199,18 @@ def plan_vs_race(plan: dict, track: list[list], start_clock: str | None = None) 
                 "actual_hr": real.get("hr"),
                 "actual_s": real.get("elapsed_s"),
                 "gap_s": real["elapsed_s"] - planned if real.get("elapsed_s") and planned else None,
+                "neutral": bool(basis == "official" and start and c["start_km"] < start["km"]),
             }
         )
     last = next((c for c in reversed(checkpoints) if c["gap_s"] is not None), None)
-    # Where the race went from the plan: the first checkpoint more than 2 minutes and 3% off it.
-    off = next(
-        (c for c in checkpoints if c["gap_s"] is not None and abs(c["gap_s"]) > max(120, 0.03 * c["planned_s"])),
+    # Where the race fell behind the plan: the first checkpoint more than 2 minutes and 3% behind it.
+    behind = next(
+        (c for c in checkpoints if c["gap_s"] is not None and c["gap_s"] > max(120, 0.03 * c["planned_s"])),
         None,
     )
     return {
+        "basis": basis,
+        "start_km": start["km"] if basis == "official" and start else None,
         "target_time": plan.get("target_time"),
         "base_power_w": plan.get("base_power_w"),
         "norm_power_w": plan.get("norm_power_w"),
@@ -176,7 +219,7 @@ def plan_vs_race(plan: dict, track: list[list], start_clock: str | None = None) 
         "checkpoints": checkpoints,
         "climbs": climbs,
         "final_gap_s": last["gap_s"] if last else None,
-        "off_plan_from_km": off["km"] if off else None,
+        "behind_from_km": behind["km"] if behind else None,
     }
 
 
